@@ -1,93 +1,126 @@
-# SeeDNAP
+# README
 
+## Install
 
+You need to install `cutadapt`, `R` and the R packages `tidyverse`, `dada2`, `Biostrings`.  
 
-## Getting started
+Depending on the taxonomic assignment that you use, you might need the following installed: 
+- **decipher** : R package `decipher` 
+- **blast** : `ncbi-blast`, `python` (>= 3.6), and the python packages `pandas`, `numpy` and `argparse`
+- **ecotag** : the `obitools` toolkit (v1)  
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+For use on the ETH eDNA server, everything is already installed within conda image `metabarcoding`. 
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Usage 
 
-## Add your files
+Here is a prototype pipeline to prepare input data for DADA2 processing from ETHZ in-house GDC platform to then processing using dada2. 
+It also comes with a script to convert the output you get into a ready file for input into the GBIF creation pipeline, which you can specify in the config. For the moment, it is only ready for dada2 type. 
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/ee/gitlab-basics/add-file.html#add-a-file-using-the-command-line) or push an existing Git repository with the following command:
+To process one marker, you need to edit its configfile, e.g. `config/config_teleo.sh` 
+To launch the script, you need to do this: 
+
+``` sh
+bash main.sh path/to/config.sh
+```
+
+The content of the config file is as follows: it contains infos on paths and marker name
+
+``` sh
+# Config parameters
+marker="teleo" # No uppercase here
+raw_path="/home/shared/edna/raw/ma_ga_akand_2024/"
+primer_F="ACACCGCCCGTCACTCT"
+primer_R="CTTCCGGTACACTTACCATG"
+method_demultiplex="" # among: primer_trim / ligation_trim - not ready yet
+convert_for_GBIF="TRUE" # values= TRUE or FALSE
+
+# Assignment parameters
+method_assignment="dada2" # among: "dada2 / decipher / ecotag / blast" # Note: blast is in development
+
+# For blast below
+path_blast_fasta="/home/shared/edna/reference_database/2024/teleo/blast_db/refdb_all_fish_teleo.fasta" # If not already created, it will create the accompanying files in the same folder (ndb;nhr;nin etc)
+
+# For ecotag below
+path_ecotag_tree="/home/shared/edna/reference_database/2023_06/teleo_custom_embl/customtaxonomy/" # Directory not file # Caution: here it needs to be the path to the tree (NCBI tree ; -t ecotag option not -d)
+path_ecotag_fasta="/home/shared/edna/reference_database/2023_06/teleo_custom_embl/db_teleo_custom_and_embl.fasta"
+
+# For dada2 below
+path_dada_all="utils/teleo_crabs_dada2_all.fasta"
+path_dada_species="utils/teleo_crabs_dada2_species.fasta"
+
+# For decipher below
+path_decipher_trained="utils/teleo_trained.rds"
+
+# General
+CORES=12
+```
+
+**marker** is the marker name (lowercase)
+
+**raw_path** is the location of the raw data  
+
+**convert_for_GBIF** TRUE/FALSE: create an alternative output file. This would be the correct input format for creating the GBIF processed file. 
+
+**CORES** indicates the number of cores to be used for a single cutadapt command
+
+Some parameters are still in development. 
+Note that to use the `ecotag` assignment option, you need to have a conda image containing the obitools named `obitools` or handle this part manually.  
+This is because the obitools are not compatible with cutadapt within the same conda due to python version conflicts. 
+
+## Content 
+
+The script first cuts the primers from the sequences. It always cuts on the 5' end, and will primers on the 3' if they are present (but will not discard reads if there are no primers present in the 3' end).
+
+Reads will be discarded is **no** ends are trimmed. If only trimmed on the 5', only trimmed on the 3' end, or trimmed on both, the reads will be kept. 
+ 
+See the cutadapt documentation for more details: https://cutadapt.readthedocs.io/en/stable/guide.html
+
+No direction precaution is taken as the samples are not prepared via a ligation protocol (checks were done and not reads were in the opposite direction)
+Samples are already demultiplexed so we directly cut the primers (not anchorage since parts of the tags remain)
+
+Next part of the script is launching dada2 in R. For now it processes all together, later dev will handle it on a library basis. 
+
+Taxonomic assignment is done either with dada2, decipher, ecotag or blast (in dev). 
+
+## Ligation-based compatibility
+
+If necessary, the script demultiplex_ligation.sh can now be used to demultiplex and re-order reads from a pooled library created using the ligation method ("SPYGEN" type). Final output is saved in the original raw path, by creating a sub-directory `raw_for_dada2` in fastq format (not zipped). 
+
+This script can be executed like this: 
 
 ```
-cd existing_repo
-git remote add origin https://gitlab.ethz.ch/ele-projects/edna/edna-app/seednap.git
-git branch -M main
-git push -uf origin main
+bash scripts/demultiplex_ligation.sh [path_to_folder_with_libraries] [path_to_lab_file] [path_to_config.sh]
 ```
 
-## Integrate with your tools
+For for example: 
 
-- [ ] [Set up project integrations](https://gitlab.ethz.ch/ele-projects/edna/edna-app/seednap/-/settings/integrations)
+```
+bash scripts/demultiplex_ligation.sh /home/shared/edna/raw/MA_Calanques_2023/ /home/shared/edna/raw/MA_Calanques_2023/metadata/metadata_lab_ma_fr_calanq_2023.csv config_teleo.sh
+```
 
-## Collaborate with your team
+Config is the same as for the normal pipeline execution, and the metadata lab file is the one from our internal standards. Expected structure is: 
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/ee/user/project/merge_requests/merge_when_pipeline_succeeds.html)
 
-## Test and Deploy
+```
+| `eventID`   | `tag_demultiplex` | `library`             | `pcr_primer_name_forward` | `pcr_primer_name_reverse` | `pcr_primer_forward`   | `pcr_primer_reverse`    |
+|-------------|------------------|------------------------|----------------------------|----------------------------|------------------------|--------------------------|
+| CNEG03_01   | aattgccg         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
+| CNEG03_10   | ttaggcac         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
+| CNEG03_11   | gtgttgga         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
+| CNEG03_12   | aacgcgat         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
+| CNEG03_02   | atgcttgg         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
+| CNEG03_03   | atggaggt         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
+| CNEG03_04   | tgaggaca         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
+| CNEG03_05   | acaagacc         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
+| CNEG03_06   | agttccac         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
+```
 
-Use the built-in continuous integration in GitLab.
+## Issues with pattern recognition 
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/index.html)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+We have now implemented that the match of the sample name is strict, meaning that the script will only work if your input files are named [sample_name]_R1.fastq (or R2). Characters between sample name and R1/2 are no longer allowed, as this was too flexible and causing issues with diluted samples (with a pattern of sample_named). If you wish to use the older more flexible pattern, this is the code to replace in the main script
 
-***
+```
+  r1_in=$(ls "${raw_path}" | grep "^${s}.*_R1\.fastq\.gz$")
+  r2_in=$(ls "${raw_path}" | grep "^${s}.*_R2\.fastq\.gz$")
+```
 
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.

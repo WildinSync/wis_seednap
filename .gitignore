@@ -1,0 +1,13 @@
+#**/raw/*
+raw/*/*
+.Rproj.user
+report/**
+tests/**
+#!outputs/
+outputs/*csv
+outputs/*/*
+outputs/*/*/*
+raw/*/*
+raw/*/*gz
+logs/*
+.claude
