@@ -193,6 +193,7 @@ def run(ctx: click.Context, config_file: Path, resume_from: Optional[str], dry_r
 @click.option(
     "--format",
     "-f",
+    "format_type",
     type=click.Choice(["dada2", "ecotag"]),
     required=True,
     help="Input format type",
@@ -201,19 +202,64 @@ def run(ctx: click.Context, config_file: Path, resume_from: Optional[str], dry_r
     "--output",
     "-o",
     type=click.Path(path_type=Path),
-    help="Output file path (default: input_file with _gbif suffix)",
+    help="Output file path (default: input_file with _gbif_input suffix)",
 )
-def format_gbif(input_file: Path, format: str, output: Optional[Path]) -> None:
+@click.pass_context
+def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: Optional[Path]) -> None:
     """
     Convert taxonomic assignment results to GBIF format.
 
     INPUT_FILE: Path to the taxonomic assignment CSV file.
 
     Transforms the wide-format table to long-format GBIF-compatible output.
+    Adds 'rank' and 'taxon' columns, filters zero counts, and renames columns
+    to match GBIF standards (eventID instead of filter_code).
     """
-    print_warning("GBIF formatting not yet implemented (Phase 1)")
-    console.print("\nThis command will be available after Phase 1 implementation.")
-    sys.exit(1)
+    from seednap.steps.format_gbif import format_dada2_to_gbif, format_ecotag_to_gbif
+
+    console.print(f"\n[bold]Converting to GBIF format:[/bold] {input_file}")
+    console.print(f"Input format: {format_type}\n")
+
+    try:
+        # Determine output path if not provided
+        if output is None:
+            output = input_file.parent / f"{input_file.stem}_gbif_input.csv"
+
+        # Call appropriate formatter
+        if format_type == "dada2":
+            df_out = format_dada2_to_gbif(input_file, output)
+        elif format_type == "ecotag":
+            df_out = format_ecotag_to_gbif(input_file, output)
+        else:
+            print_error(f"Unknown format type: {format_type}")
+            sys.exit(1)
+
+        # Print success message with stats
+        print_success(f"Converted to GBIF format!")
+        console.print(f"\nOutput file: [cyan]{output}[/cyan]")
+        console.print(f"Total records: [green]{len(df_out)}[/green]")
+        console.print(f"Unique eventIDs: [green]{df_out['eventID'].nunique()}[/green]")
+
+        # Show rank distribution
+        if "rank" in df_out.columns:
+            rank_counts = df_out["rank"].value_counts()
+            console.print("\n[bold]Rank distribution:[/bold]")
+            for rank, count in rank_counts.items():
+                console.print(f"  {rank}: {count}")
+
+    except FileNotFoundError as e:
+        print_error(str(e))
+        sys.exit(1)
+    except ValueError as e:
+        print_error(f"Invalid input file: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"Failed to convert file: {e}")
+        if ctx.obj.get("verbose"):
+            import traceback
+
+            console.print(traceback.format_exc())
+        sys.exit(1)
 
 
 @main.command()
