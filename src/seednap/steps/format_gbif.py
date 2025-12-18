@@ -67,7 +67,7 @@ def add_taxon_dada(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
 
-    def get_taxon(row: pd.Series) -> str | None:
+    def get_taxon(row: pd.Series) -> Union[str, None]:
         rank = row.get("rank")
 
         if rank == "species":
@@ -88,7 +88,7 @@ def add_taxon_dada(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def format_dada2_to_gbif(input_path: Union[str, Path], output_path: Union[str, Path] | None = None) -> pd.DataFrame:
+def format_dada2_to_gbif(input_path: Union[str, Path], output_path: Union[str, Path, None] = None) -> pd.DataFrame:
     """
     Convert DADA2 taxonomic assignment output to GBIF-compatible format.
 
@@ -183,7 +183,7 @@ def format_dada2_to_gbif(input_path: Union[str, Path], output_path: Union[str, P
     return df_out
 
 
-def format_ecotag_to_gbif(input_path: Union[str, Path], output_path: Union[str, Path] | None = None) -> pd.DataFrame:
+def format_ecotag_to_gbif(input_path: Union[str, Path], output_path: Union[str, Path, None] = None) -> pd.DataFrame:
     """
     Convert Ecotag taxonomic assignment output to GBIF-compatible format.
 

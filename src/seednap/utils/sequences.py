@@ -36,7 +36,7 @@ def df_to_fasta(
     output_path: Union[str, Path],
     id_col: str = "id",
     seq_col: str = "sequence",
-    description_col: str | None = None,
+    description_col: Union[str, None] = None,
 ) -> None:
     """
     Convert DataFrame to FASTA file.
