@@ -1,0 +1,125 @@
+# Seednap Pipeline Configuration for Teleo Marker
+# Configuration format version
+version: "0.1.0"
+
+# Marker-specific configuration
+marker:
+  name: "teleo"
+  description: "Teleost fish eDNA metabarcoding using 12S rRNA"
+  primers:
+    forward: "ACACCGCCCGTCACTCT"
+    reverse: "CTTCCGGTACACTTACCATG"
+    name: "Teleo"
+    target: "12S rRNA"
+    amplicon_length: [100, 200]
+
+# File paths configuration
+paths:
+  raw_data: "/home/shared/edna/raw/ma_dj_djibou_2023/"
+  output: "outputs"
+  logs: "logs"
+  references: "/home/shared/edna/reference_database"
+
+# Demultiplexing configuration
+demultiplex:
+  enabled: false
+  protocol: "none"  # Options: "ligation", "standard", "none"
+  # metadata: "metadata/lab_metadata.csv"  # Uncomment if using demultiplexing
+
+# Primer trimming configuration (cutadapt)
+trimming:
+  tool: "cutadapt"
+  min_length: 20
+  max_error_rate: 0.1
+  cores: 12
+  discard_untrimmed: true
+  overlap: 3
+
+# DADA2 processing configuration
+dada2:
+  filter:
+    max_ee: 2.0
+    trunc_q: 11
+    max_n: 0
+    rm_phix: true
+    # min_len: 100  # Optional: minimum read length
+    # max_len: 200  # Optional: maximum read length
+  merge:
+    min_overlap: 20
+    max_mismatch: 0
+  chimera:
+    method: "consensus"  # Options: "consensus", "pooled", "none"
+  pool: false
+  multithread: true
+
+# Taxonomic assignment configuration
+taxonomy:
+  method: "dada2"  # Options: "dada2", "decipher", "ecotag", "blast"
+
+  # Database paths for each method
+  databases:
+    # DADA2 taxonomic assignment
+    dada2:
+      all: "/home/shared/edna/reference_database/2025/teleo/CRABS_MITOFISH_MIDORI2_GB265_teleo_dada2_all.fasta"
+      species: "/home/shared/edna/reference_database/2025/teleo/CRABS_MITOFISH_MIDORI2_GB265_teleo_dada2_species.fasta"
+
+    # BLAST + LCA taxonomic assignment
+    blast:
+      fasta: "/home/shared/edna/reference_database/2024/teleo/blast_db/refdb_all_fish_teleo.fasta"
+      perc_identity: 80.0
+      qcov_hsp_perc: 80.0
+      evalue: 1.0e-25
+      max_target_seqs: 5
+      # Thresholds for taxonomic rank assignment by percent identity
+      threshold_species: 98.0
+      threshold_genus: 96.0
+      threshold_family: 86.5
+
+    # Ecotag (OBITools) taxonomic assignment
+    ecotag:
+      tree: "/home/shared/edna/reference_database/2023_06/teleo_custom_embl/customtaxonomy/"
+      fasta: "/home/shared/edna/reference_database/2023_06/teleo_custom_embl/db_teleo_custom_and_embl.fasta"
+
+    # DECIPHER taxonomic assignment (no longer maintained)
+    decipher:
+      trained: "/home/shared/edna/reference_database/decipher/teleo_trained.rds"
+
+# Export configuration
+export:
+  formats:
+    - "csv"
+  gbif:
+    enabled: true
+    add_rank: true
+    add_taxon: true
+
+# Quality control metrics configuration
+metrics:
+  generate_plots: true
+  plot_format: "png"  # Options: "png", "pdf", "svg"
+  metrics:
+    - "read_counts"
+    - "quality_scores"
+    - "length_distribution"
+
+# Logging configuration
+logging:
+  level: "INFO"  # Options: "DEBUG", "INFO", "WARNING", "ERROR"
+  format: "detailed"  # Options: "simple", "detailed", "json"
+  file: true
+  console: true
+
+# Computational resources
+resources:
+  max_cores: 12
+  memory_limit: "32G"
+  parallel_samples: 4
+
+# Pipeline execution steps
+pipeline:
+  steps:
+    - "trim"
+    - "dada2"
+    - "taxonomy"
+    - "export"
+  skip: []  # List steps to skip, e.g., ["trim"] if data is already trimmed

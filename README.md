@@ -1,25 +1,183 @@
-# README
+# seednap
 
-## Install
+Modern eDNA metabarcoding pipeline with DADA2.
 
-You need to install `cutadapt`, `R` and the R packages `tidyverse`, `dada2`, `Biostrings`.  
+A Python-first pipeline for processing eDNA metabarcoding data with support for multiple taxonomic assignment methods (DADA2, DECIPHER, Ecotag, BLAST).
 
-Depending on the taxonomic assignment that you use, you might need the following installed: 
-- **decipher** : R package `decipher` 
-- **blast** : `ncbi-blast`, `python` (>= 3.6), and the python packages `pandas`, `numpy` and `argparse`
-- **ecotag** : the `obitools` toolkit (v1)  
+**Version:** 0.1.0 (Phase 0 - Infrastructure Complete)
 
-For use on the ETH eDNA server, everything is already installed within conda image `metabarcoding`. 
+---
 
-## Usage 
+## Installation
 
-Here is a prototype pipeline to prepare input data for DADA2 processing from ETHZ in-house GDC platform to then processing using dada2. 
-It also comes with a script to convert the output you get into a ready file for input into the GBIF creation pipeline, which you can specify in the config. For the moment, it is only ready for dada2 type. 
+### Requirements
 
-To process one marker, you need to edit its configfile, e.g. `config/config_teleo.sh` 
-To launch the script, you need to do this: 
+**Python:** >= 3.9
 
-``` sh
+**System dependencies:**
+- `cutadapt` (>= 4.0)
+- `R` (>= 4.0)
+- R packages: `tidyverse`, `dada2`, `Biostrings`
+
+**Optional (depending on taxonomic assignment method):**
+- **DECIPHER:** R package `decipher`
+- **BLAST:** `ncbi-blast` (makeblastdb, blastn)
+- **Ecotag:** `obitools` toolkit (v1)
+
+### Install from Source
+
+1. Clone the repository:
+```bash
+git clone https://github.com/eth-edna/seednap.git
+cd seednap
+```
+
+2. Install the package in development mode:
+```bash
+pip install -e .
+```
+
+3. Verify installation:
+```bash
+seednap --version
+```
+
+### Install for Development
+
+To install with development dependencies:
+
+```bash
+pip install -e ".[dev]"
+```
+
+This includes pytest, black, ruff, mypy, and other development tools.
+
+### Conda Environment (Recommended)
+
+A conda environment specification is coming soon. For now, install dependencies manually:
+
+```bash
+conda create -n seednap python=3.9 cutadapt r-base r-tidyverse r-dada2
+conda activate seednap
+pip install -e .
+```
+
+**For ETH eDNA server users:** The existing conda image `metabarcoding` contains all necessary dependencies. 
+
+## Quick Start
+
+### 1. Create a Configuration File
+
+Generate an example configuration file:
+
+```bash
+seednap init --marker teleo --output config/markers/my_analysis.yaml
+```
+
+Or use the provided example:
+
+```bash
+cp config/markers/teleo.yaml config/markers/my_analysis.yaml
+```
+
+Edit the configuration file to match your analysis:
+- Update `paths.raw_data` to point to your FASTQ files
+- Choose `taxonomy.method` (dada2, blast, ecotag, or decipher)
+- Update database paths for your chosen method
+- Adjust computational resources (`resources.max_cores`)
+
+### 2. Validate Your Configuration
+
+```bash
+seednap validate config/markers/my_analysis.yaml
+```
+
+This checks that:
+- YAML syntax is valid
+- All required fields are present
+- Values are within valid ranges
+- Configuration is internally consistent
+
+### 3. Run the Pipeline
+
+**Note:** Full pipeline execution will be available after Phase 6. For now, use the legacy `main.sh` script.
+
+```bash
+# Coming soon in Phase 6:
+seednap run config/markers/my_analysis.yaml
+
+# For now, use the legacy script:
+bash main.sh config/config_teleo.sh
+```
+
+## CLI Commands
+
+### `seednap init`
+
+Create an example configuration file:
+
+```bash
+seednap init --marker teleo --output config/markers/example.yaml
+```
+
+Options:
+- `--marker, -m`: Marker name (default: teleo)
+- `--output, -o`: Output path (default: config/markers/example.yaml)
+- `--force, -f`: Overwrite existing file
+
+### `seednap validate`
+
+Validate a configuration file:
+
+```bash
+seednap validate config/markers/my_analysis.yaml
+```
+
+### `seednap version`
+
+Show version information:
+
+```bash
+seednap version
+```
+
+### `seednap run` (Coming in Phase 6)
+
+Run the full pipeline:
+
+```bash
+seednap run config/markers/my_analysis.yaml
+```
+
+Options:
+- `--resume-from`: Resume from a specific step (trim, dada2, taxonomy, export)
+- `--dry-run`: Show what would be run without executing
+
+## Configuration
+
+Configuration files use YAML format with the following main sections:
+
+- **marker**: Marker name, primers, and description
+- **paths**: Input/output directory paths
+- **demultiplex**: Demultiplexing settings (if applicable)
+- **trimming**: Cutadapt primer trimming parameters
+- **dada2**: DADA2 filtering, merging, and chimera removal settings
+- **taxonomy**: Taxonomic assignment method and database paths
+- **export**: Output formats (CSV, GBIF)
+- **metrics**: Quality control metrics configuration
+- **logging**: Logging level and format
+- **resources**: CPU cores, memory limits
+- **pipeline**: Steps to execute
+
+See [config/markers/teleo.yaml](config/markers/teleo.yaml) for a complete example with detailed comments.
+
+---
+
+## Legacy Usage (Shell Scripts)
+
+The original shell-script based pipeline is still available during the migration. To process one marker, edit its config file (e.g., `config/config_teleo.sh`) and run:
+
+```bash
 bash main.sh path/to/config.sh
 ```
 
