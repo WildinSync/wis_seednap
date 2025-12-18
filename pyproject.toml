@@ -7,7 +7,7 @@ name = "seednap"
 version = "0.1.0"
 description = "Modern eDNA metabarcoding pipeline with DADA2"
 authors = [
-    {name = "ETH ELE Lab", website = "https://ele.ethz.ch/"}
+    {name = "ETH ELE Lab", email = "rzendehdel@ethz.ch"},
 ]
 readme = "README.md"
 requires-python = ">=3.9"
