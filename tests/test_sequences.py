@@ -34,7 +34,7 @@ class TestReverseComplement:
         # D (A, G, or T) -> H (A, C, or T)
         # N (any) -> N (any)
 
-        assert reverse_complement("RYMKSWHBVDN") == "NHVBDWSMKYR"
+        assert reverse_complement("RYMKSWHBVDN") == "NHBVDWSMKRY"
 
     def test_case_insensitive(self) -> None:
         """Test that lowercase input is handled correctly."""

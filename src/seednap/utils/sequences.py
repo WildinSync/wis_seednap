@@ -19,7 +19,7 @@ def reverse_complement(sequence: str) -> str:
         >>> reverse_complement("ATCG")
         'CGAT'
         >>> reverse_complement("ATCGRYMKSWHBVDN")
-        'NHVBDWSMKRYCGAT'
+        'NHBVDWSMKRYCGAT'
     """
     seq = Seq(sequence.upper())
     return str(seq.reverse_complement())
