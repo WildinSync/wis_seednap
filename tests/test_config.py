@@ -29,20 +29,20 @@ class TestPrimerConfig:
 
     def test_primer_sequences_converted_to_uppercase(self) -> None:
         """Test that primer sequences are converted to uppercase."""
-        config = PrimerConfig(forward="atcg", reverse="gcta")
-        assert config.forward == "ATCG"
-        assert config.reverse == "GCTA"
+        config = PrimerConfig(forward="acaccgcccgtcactct", reverse="cttccggtacacttaccatg")
+        assert config.forward == "ACACCGCCCGTCACTCT"
+        assert config.reverse == "CTTCCGGTACACTTACCATG"
 
     def test_invalid_dna_sequence_rejected(self) -> None:
         """Test that invalid DNA sequences are rejected."""
         with pytest.raises(ValidationError) as exc_info:
-            PrimerConfig(forward="ATCGXYZ", reverse="GCTA")
+            PrimerConfig(forward="ACACGCCCGTCACTCT", reverse="CTTCCGGTACXCTTACCATG")
 
         assert "Invalid DNA sequence" in str(exc_info.value)
 
     def test_ambiguous_bases_accepted(self) -> None:
         """Test that IUPAC ambiguity codes are accepted."""
-        config = PrimerConfig(forward="ATCGRYMKSWHBVDN", reverse="GCTA")
+        config = PrimerConfig(forward="ATCGRYMKSWHBVDN", reverse="GCTASWKMRYN")
         assert config.forward == "ATCGRYMKSWHBVDN"
 
     def test_minimum_length_enforced(self) -> None:
