@@ -146,7 +146,12 @@ class TestBlastLCAResolver:
             "qseqid": ["ASV1"],
             "bitscore": [200],
             "kingdom": ["Animalia"],
-            "species": ["Species1"],
+            "phylum": ["Chordata"],
+            "class": ["Actinopteri"],
+            "order": ["Perciformes"],
+            "family": ["Sparidae"],
+            "genus": ["Diplodus"],
+            "species": ["Diplodus_sargus"],
         })
 
         resolver = BlastLCAResolver()
@@ -161,7 +166,12 @@ class TestBlastLCAResolver:
             "qseqid": ["ASV1", "ASV1"],
             "bitscore": [200, 200],
             "kingdom": ["Animalia", "Animalia"],
-            "species": ["Species1", "Species1"],
+            "phylum": ["Chordata", "Chordata"],
+            "class": ["Actinopteri", "Actinopteri"],
+            "order": ["Perciformes", "Perciformes"],
+            "family": ["Sparidae", "Sparidae"],
+            "genus": ["Diplodus", "Diplodus"],
+            "species": ["Diplodus_sargus", "Diplodus_sargus"],
         })
 
         resolver = BlastLCAResolver()
@@ -177,6 +187,10 @@ class TestBlastLCAResolver:
             "qseqid": ["ASV1", "ASV1"],
             "bitscore": [200, 200],  # Same score = ambiguous
             "kingdom": ["Animalia", "Animalia"],
+            "phylum": ["Chordata", "Chordata"],
+            "class": ["Actinopteri", "Actinopteri"],
+            "order": ["Perciformes", "Perciformes"],
+            "family": ["Sparidae", "Sparidae"],
             "genus": ["Diplodus", "Diplodus"],
             "species": ["Diplodus_sargus", "Diplodus_vulgaris"],  # Different species
         })
@@ -198,7 +212,13 @@ class TestBlastLCAResolver:
         df = pd.DataFrame({
             "qseqid": ["ASV1", "ASV1"],
             "bitscore": [200, 190],  # Different scores
-            "species": ["Species1", "Species2"],
+            "kingdom": ["Animalia", "Animalia"],
+            "phylum": ["Chordata", "Chordata"],
+            "class": ["Actinopteri", "Actinopteri"],
+            "order": ["Perciformes", "Perciformes"],
+            "family": ["Sparidae", "Sparidae"],
+            "genus": ["Diplodus", "Diplodus"],
+            "species": ["Diplodus_sargus", "Diplodus_vulgaris"],
         })
 
         resolver = BlastLCAResolver()
@@ -207,7 +227,7 @@ class TestBlastLCAResolver:
         # Only best hit should be kept
         kept = result[result["keep_for_analysis"] == True]  # noqa: E712
         assert len(kept) == 1
-        assert kept.iloc[0]["species"] == "Species1"
+        assert kept.iloc[0]["species"] == "Diplodus_sargus"
 
 
 class TestBlastRunner:
