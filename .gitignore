@@ -11,3 +11,10 @@ raw/*/*gz
 logs/*
 .claude
 .vscode
+pycache/
+__pycache__/
+*.pyc
+.ipynb_checkpoints
+.DS_Store
+*.log
+*.aux

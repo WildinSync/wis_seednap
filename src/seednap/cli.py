@@ -263,6 +263,156 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
 
 
 @main.command()
+@click.argument("query_fasta", type=click.Path(exists=True, path_type=Path))
+@click.argument("ref_fasta", type=click.Path(exists=True, path_type=Path))
+@click.argument("asv_count", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output CSV file path (default: query_fasta with _blast_taxonomy suffix)",
+)
+@click.option(
+    "--perc-identity",
+    default=80.0,
+    type=float,
+    help="Minimum percent identity for BLAST hits (default: 80.0)",
+)
+@click.option(
+    "--qcov-hsp-perc",
+    default=80.0,
+    type=float,
+    help="Minimum query coverage per HSP (default: 80.0)",
+)
+@click.option(
+    "--evalue",
+    default=1e-25,
+    type=float,
+    help="Maximum e-value for BLAST hits (default: 1e-25)",
+)
+@click.option(
+    "--threshold-species",
+    default=98.0,
+    type=float,
+    help="Minimum percent identity for species-level assignment (default: 98.0)",
+)
+@click.option(
+    "--threshold-genus",
+    default=96.0,
+    type=float,
+    help="Minimum percent identity for genus-level assignment (default: 96.0)",
+)
+@click.option(
+    "--threshold-family",
+    default=86.5,
+    type=float,
+    help="Minimum percent identity for family-level assignment (default: 86.5)",
+)
+@click.pass_context
+def blast(
+    ctx: click.Context,
+    query_fasta: Path,
+    ref_fasta: Path,
+    asv_count: Path,
+    output: Optional[Path],
+    perc_identity: float,
+    qcov_hsp_perc: float,
+    evalue: float,
+    threshold_species: float,
+    threshold_genus: float,
+    threshold_family: float,
+) -> None:
+    """
+    Run BLAST taxonomic assignment with LCA resolution.
+
+    QUERY_FASTA: Path to query sequences (ASVs from DADA2, e.g., query.fasta)
+    REF_FASTA: Path to reference database FASTA file
+    ASV_COUNT: Path to ASV count table CSV (seqtab_clean.csv from DADA2)
+
+    This command:
+    1. Creates BLAST database (if needed) from reference FASTA
+    2. Runs blastn search with configurable parameters
+    3. Extracts phylogeny from reference database headers
+    4. Filters hits by percent identity thresholds (species/genus/family)
+    5. Resolves ambiguous hits using LCA (Lowest Common Ancestor)
+    6. Merges taxonomy with ASV abundance table
+    7. Outputs final table with taxonomy and counts
+    """
+    from seednap.steps.taxonomic_assignment import BlastRunner, BlastTaxonomicAssigner
+
+    console.print(f"\n[bold]Running BLAST taxonomic assignment[/bold]")
+    console.print(f"Query: {query_fasta}")
+    console.print(f"Reference: {ref_fasta}")
+    console.print(f"ASV counts: {asv_count}\n")
+
+    try:
+        # Determine output path
+        if output is None:
+            output = query_fasta.parent / f"{query_fasta.stem}_blast_taxonomy.csv"
+
+        # Create temporary directory for BLAST output
+        blast_output_dir = query_fasta.parent / "blast_temp"
+        blast_output_dir.mkdir(exist_ok=True)
+
+        # Run BLAST search
+        console.print("[cyan]Step 1/3:[/cyan] Running BLAST search...")
+        runner = BlastRunner(
+            perc_identity=perc_identity, qcov_hsp_perc=qcov_hsp_perc, evalue=evalue
+        )
+
+        blast_tsv = runner.run_blast_pipeline(
+            query_fasta=query_fasta,
+            db_fasta=ref_fasta,
+            output_dir=blast_output_dir,
+            marker="temp",
+        )
+
+        # Run taxonomic assignment
+        console.print("[cyan]Step 2/3:[/cyan] Processing BLAST results...")
+        assigner = BlastTaxonomicAssigner(
+            reference_fasta=ref_fasta,
+            threshold_species=threshold_species,
+            threshold_genus=threshold_genus,
+            threshold_family=threshold_family,
+        )
+
+        result = assigner.assign_taxonomy(
+            blast_tsv=blast_tsv, asv_count_csv=asv_count, asv_fasta=query_fasta, output_path=output
+        )
+
+        # Print summary
+        console.print("[cyan]Step 3/3:[/cyan] Finalizing results...")
+        print_success("BLAST taxonomic assignment completed!")
+        console.print(f"\nOutput file: [cyan]{output}[/cyan]")
+        console.print(f"Total ASVs with taxonomy: [green]{len(result)}[/green]")
+
+        # Show taxonomic resolution summary
+        taxonomic_ranks = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
+        console.print("\n[bold]Taxonomic resolution:[/bold]")
+        for rank in taxonomic_ranks:
+            if rank in result.columns:
+                n_assigned = result[rank].notna().sum()
+                pct = (n_assigned / len(result)) * 100
+                console.print(f"  {rank.capitalize()}: {n_assigned} ({pct:.1f}%)")
+
+        # Clean up temporary directory
+        import shutil
+
+        shutil.rmtree(blast_output_dir, ignore_errors=True)
+
+    except FileNotFoundError as e:
+        print_error(str(e))
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"BLAST assignment failed: {e}")
+        if ctx.obj.get("verbose"):
+            import traceback
+
+            console.print(traceback.format_exc())
+        sys.exit(1)
+
+
+@main.command()
 @click.argument("input_dir", type=click.Path(exists=True, path_type=Path))
 @click.option(
     "--forward-primer",
