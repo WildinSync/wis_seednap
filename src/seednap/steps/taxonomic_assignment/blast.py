@@ -309,8 +309,7 @@ class BlastTaxonomicAssigner:
 
         # Resolve ambiguous hits with LCA
         filtered = (
-            filtered.set_index("qseqid")
-            .groupby("qseqid", group_keys=False)
+            filtered.groupby("qseqid", group_keys=False)
             .apply(self.lca_resolver.resolve_ambiguous_hits)
         )
 
