@@ -18,3 +18,5 @@ __pycache__/
 .DS_Store
 *.log
 *.aux
+.coverage
+seednap.egg-info/

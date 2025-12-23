@@ -1,0 +1,208 @@
+"""Generate cutadapt tag files from metadata for demultiplexing.
+
+This module provides Python replacements for the R scripts that generate
+cutadapt adapter files from metadata CSV files.
+"""
+
+import logging
+from pathlib import Path
+from typing import Union
+
+import pandas as pd
+
+from seednap.utils.sequences import reverse_complement
+
+logger = logging.getLogger(__name__)
+
+
+class TagFileGenerator:
+    """Generate cutadapt tag files for demultiplexing.
+
+    This class replaces the R scripts (generate_cutadapt.R and generate_cutadapt_ligation.R)
+    that create FASTA files with tag sequences for cutadapt demultiplexing.
+    """
+
+    def __init__(self, min_overlap: int = 8):
+        """
+        Initialize tag file generator.
+
+        Args:
+            min_overlap: Minimum overlap required for tag matching (default: 8)
+        """
+        self.min_overlap = min_overlap
+
+    def _format_tag_sequence(self, tag: str) -> str:
+        """
+        Format tag sequence for cutadapt file adapter specification.
+
+        The format tells cutadapt to match either the tag or its reverse complement
+        with a specified minimum overlap.
+
+        Args:
+            tag: Tag sequence (DNA)
+
+        Returns:
+            Formatted tag string: "TAG;min_overlap=N...RC_TAG;min_overlap=N"
+        """
+        tag = tag.upper()
+        tag_rc = reverse_complement(tag).lower()
+
+        return f"{tag};min_overlap={self.min_overlap}...{tag_rc};min_overlap={self.min_overlap}"
+
+    def _write_fasta(self, df: pd.DataFrame, output_path: Union[str, Path]) -> None:
+        """
+        Write DataFrame to FASTA file for cutadapt.
+
+        Args:
+            df: DataFrame with columns 'sample_name' and 'tag_formatted'
+            output_path: Path to output FASTA file
+        """
+        output_path = Path(output_path)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(output_path, "w") as f:
+            for _, row in df.iterrows():
+                f.write(f">{row['sample_name']}\n")
+                f.write(f"{row['tag_formatted']}\n")
+
+        logger.info(f"Wrote tag file with {len(df)} samples to {output_path}")
+
+    def generate_standard_tag_files(
+        self,
+        metadata_csv: Union[str, Path],
+        output_dir: Union[str, Path],
+        sample_col: str = "sample_name",
+        tag_col: str = "tag",
+        run_col: str = "run",
+    ) -> dict:
+        """
+        Generate tag files for standard (non-ligation) demultiplexing.
+
+        This replaces generate_cutadapt.R. Creates one tag file per sequencing run/library.
+
+        Expected metadata columns:
+        - sample_name (or specified by sample_col): Sample identifier
+        - tag (or specified by tag_col): Tag sequence
+        - run (or specified by run_col): Sequencing run/library identifier
+
+        Args:
+            metadata_csv: Path to metadata CSV file
+            output_dir: Directory for output tag files
+            sample_col: Name of sample name column (default: 'sample_name')
+            tag_col: Name of tag column (default: 'tag')
+            run_col: Name of run column (default: 'run')
+
+        Returns:
+            Dictionary mapping run names to output file paths
+
+        Raises:
+            FileNotFoundError: If metadata CSV doesn't exist
+            ValueError: If required columns are missing
+        """
+        # Read metadata
+        metadata_csv = Path(metadata_csv)
+        if not metadata_csv.exists():
+            raise FileNotFoundError(f"Metadata CSV not found: {metadata_csv}")
+
+        df = pd.read_csv(metadata_csv)
+
+        # Validate columns
+        required_cols = [sample_col, tag_col, run_col]
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            raise ValueError(f"Missing required columns: {missing_cols}")
+
+        logger.info(f"Loaded metadata with {len(df)} samples from {metadata_csv}")
+
+        # Standardize column names
+        df = df.rename(
+            columns={sample_col: "sample_name", tag_col: "tag", run_col: "run"}
+        )
+
+        # Format tags
+        df["tag_formatted"] = df["tag"].apply(self._format_tag_sequence)
+
+        # Split by run/library
+        output_dir = Path(output_dir)
+        output_files = {}
+
+        for run_name, run_df in df.groupby("run"):
+            output_path = output_dir / f"{run_name}.fasta"
+            self._write_fasta(run_df[["sample_name", "tag_formatted"]], output_path)
+            output_files[run_name] = output_path
+
+        logger.info(f"Generated {len(output_files)} tag files in {output_dir}")
+        return output_files
+
+    def generate_ligation_tag_files(
+        self,
+        metadata_csv: Union[str, Path],
+        output_dir: Union[str, Path],
+        sample_col: str = "eventID",
+        tag_col: str = "tag_demultiplex",
+        library_col: str = "library",
+    ) -> dict:
+        """
+        Generate tag files for ligation-based demultiplexing.
+
+        This replaces generate_cutadapt_ligation.R. Creates one tag file per library.
+
+        Expected metadata columns:
+        - eventID (or specified by sample_col): Sample/event identifier
+        - tag_demultiplex (or specified by tag_col): Tag sequence
+        - library (or specified by library_col): Library identifier
+
+        Args:
+            metadata_csv: Path to metadata CSV file
+            output_dir: Directory for output tag files (default: outputs/00_demultiplex_ligation/cutadapt_tags/)
+            sample_col: Name of sample column (default: 'eventID')
+            tag_col: Name of tag column (default: 'tag_demultiplex')
+            library_col: Name of library column (default: 'library')
+
+        Returns:
+            Dictionary mapping library names to output file paths
+
+        Raises:
+            FileNotFoundError: If metadata CSV doesn't exist
+            ValueError: If required columns are missing
+        """
+        # Read metadata
+        metadata_csv = Path(metadata_csv)
+        if not metadata_csv.exists():
+            raise FileNotFoundError(f"Metadata CSV not found: {metadata_csv}")
+
+        df = pd.read_csv(metadata_csv)
+
+        # Validate columns
+        required_cols = [sample_col, tag_col, library_col]
+        missing_cols = [col for col in required_cols if col not in df.columns]
+        if missing_cols:
+            raise ValueError(f"Missing required columns: {missing_cols}")
+
+        logger.info(f"Loaded ligation metadata with {len(df)} samples from {metadata_csv}")
+
+        # Standardize column names
+        df = df.rename(
+            columns={
+                sample_col: "sample_name",
+                tag_col: "tag",
+                library_col: "library",
+            }
+        )
+
+        # Format tags
+        df["tag_formatted"] = df["tag"].apply(self._format_tag_sequence)
+
+        # Split by library
+        output_dir = Path(output_dir)
+        output_files = {}
+
+        for library_name, library_df in df.groupby("library"):
+            output_path = output_dir / f"{library_name}.fasta"
+            self._write_fasta(
+                library_df[["sample_name", "tag_formatted"]], output_path
+            )
+            output_files[library_name] = output_path
+
+        logger.info(f"Generated {len(output_files)} ligation tag files in {output_dir}")
+        return output_files

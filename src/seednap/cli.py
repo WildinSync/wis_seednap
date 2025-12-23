@@ -450,9 +450,122 @@ def trim(
     1. Remove 5' primers (anchored search)
     2. Remove 3' primers from pass 1 output
     """
-    print_warning("Primer trimming not yet implemented (Phase 3)")
-    console.print("\nThis command will be available after Phase 3 implementation.")
-    sys.exit(1)
+    from seednap.steps.trimming import StandardTrimmer
+
+    console.print(f"\n[bold]Trimming primers from:[/bold] {input_dir}")
+    console.print(f"Forward primer: {forward_primer}")
+    console.print(f"Reverse primer: {reverse_primer}")
+    console.print(f"Output directory: {output_dir}")
+    console.print(f"Cores: {cores}\n")
+
+    try:
+        trimmer = StandardTrimmer(cores=cores)
+
+        results = trimmer.trim_directory(
+            raw_reads_dir=input_dir,
+            output_dir=output_dir,
+            forward_primer=forward_primer,
+            reverse_primer=reverse_primer,
+            keep_untrimmed=False,
+        )
+
+        print_success(f"\nCompleted trimming {len(results)} samples!")
+        console.print(f"Trimmed reads saved to: {output_dir}\n")
+
+    except Exception as e:
+        print_error(f"Trimming failed: {str(e)}")
+        sys.exit(1)
+
+
+@main.command()
+@click.argument("raw_reads_dir", type=click.Path(exists=True, path_type=Path))
+@click.argument("library_name", type=str)
+@click.argument("metadata_csv", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--forward-primer",
+    "-f",
+    required=True,
+    type=str,
+    help="Forward primer sequence",
+)
+@click.option(
+    "--reverse-primer",
+    "-r",
+    required=True,
+    type=str,
+    help="Reverse primer sequence",
+)
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Output base directory",
+)
+@click.option(
+    "--cores",
+    "-c",
+    default=1,
+    type=int,
+    help="Number of CPU cores to use",
+)
+@click.option(
+    "--no-gunzip",
+    is_flag=True,
+    help="Keep output files gzipped (default: gunzip)",
+)
+def demultiplex(
+    raw_reads_dir: Path,
+    library_name: str,
+    metadata_csv: Path,
+    forward_primer: str,
+    reverse_primer: str,
+    output_dir: Path,
+    cores: int,
+    no_gunzip: bool,
+) -> None:
+    """
+    Demultiplex and trim ligation-based libraries.
+
+    RAW_READS_DIR: Directory containing raw library FASTQ files.
+    LIBRARY_NAME: Library identifier (matches filename prefix).
+    METADATA_CSV: Metadata CSV with eventID, tag_demultiplex, and library columns.
+
+    This command performs the complete ligation-based workflow:
+    1. Generate tag files from metadata
+    2. Demultiplex reads by tags
+    3. Detect primers (both orientations)
+    4. Merge and realign reads
+    """
+    from seednap.steps.trimming import LigationTrimmer
+
+    console.print(f"\n[bold]Demultiplexing ligation library:[/bold] {library_name}")
+    console.print(f"Raw reads: {raw_reads_dir}")
+    console.print(f"Metadata: {metadata_csv}")
+    console.print(f"Forward primer: {forward_primer}")
+    console.print(f"Reverse primer: {reverse_primer}")
+    console.print(f"Output directory: {output_dir}")
+    console.print(f"Cores: {cores}\n")
+
+    try:
+        trimmer = LigationTrimmer(cores=cores)
+
+        realigned_dir = trimmer.process_library(
+            raw_reads_dir=raw_reads_dir,
+            library_name=library_name,
+            metadata_csv=metadata_csv,
+            output_base_dir=output_dir,
+            forward_primer=forward_primer,
+            reverse_primer=reverse_primer,
+            gunzip_output=not no_gunzip,
+        )
+
+        print_success("\nCompleted ligation library processing!")
+        console.print(f"Realigned reads saved to: {realigned_dir}\n")
+
+    except Exception as e:
+        print_error(f"Demultiplexing failed: {str(e)}")
+        sys.exit(1)
 
 
 @main.command()
