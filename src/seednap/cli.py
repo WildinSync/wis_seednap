@@ -569,11 +569,143 @@ def demultiplex(
 
 
 @main.command()
+@click.argument("marker", type=str)
+@click.argument("trimmed_reads_dir", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=Path("outputs"),
+    help="Base output directory (default: outputs/)",
+)
+@click.option(
+    "--max-ee",
+    default=2,
+    type=int,
+    help="Maximum expected errors for filtering (default: 2)",
+)
+@click.option(
+    "--trunc-q",
+    default=11,
+    type=int,
+    help="Truncate reads at first base with quality below this (default: 11)",
+)
+@click.option(
+    "--min-overlap",
+    default=20,
+    type=int,
+    help="Minimum overlap for merging paired reads (default: 20)",
+)
+@click.option(
+    "--assign-taxonomy",
+    is_flag=True,
+    help="Run taxonomic assignment with DADA2 (requires --rdp-db and --species-db)",
+)
+@click.option(
+    "--rdp-db",
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to RDP-formatted taxonomy database (genus-level)",
+)
+@click.option(
+    "--species-db",
+    type=click.Path(exists=True, path_type=Path),
+    help="Path to species-level taxonomy database",
+)
+def dada2(
+    marker: str,
+    trimmed_reads_dir: Path,
+    output_dir: Path,
+    max_ee: int,
+    trunc_q: int,
+    min_overlap: int,
+    assign_taxonomy: bool,
+    rdp_db: Optional[Path],
+    species_db: Optional[Path],
+) -> None:
+    """
+    Run DADA2 processing on trimmed reads.
+
+    MARKER: Marker name (e.g., teleo, amph).
+    TRIMMED_READS_DIR: Directory containing primer-trimmed FASTQ files.
+
+    This command performs:
+    1. Quality control (before/after filtering)
+    2. Filter and trim
+    3. Error learning
+    4. Denoising and sample inference
+    5. Merge paired-end reads
+    6. Chimera removal
+    7. ASV table generation
+    8. Metrics collection and reporting
+
+    Optional: Taxonomic assignment using DADA2's naive Bayesian classifier
+    """
+    from seednap.steps.dada2 import Dada2Processor
+
+    console.print(f"\n[bold]Running DADA2 processing:[/bold]")
+    console.print(f"Marker: {marker}")
+    console.print(f"Trimmed reads: {trimmed_reads_dir}")
+    console.print(f"Output directory: {output_dir}")
+    console.print(f"Parameters: maxEE={max_ee}, truncQ={trunc_q}, minOverlap={min_overlap}\n")
+
+    try:
+        # Initialize processor
+        processor = Dada2Processor(
+            marker=marker,
+            trimmed_reads_dir=trimmed_reads_dir,
+            output_base_dir=output_dir,
+        )
+
+        # Run DADA2 processing
+        console.print("[bold]Running DADA2 workflow...[/bold]")
+        outputs = processor.process(
+            max_ee=max_ee,
+            trunc_q=trunc_q,
+            min_overlap=min_overlap,
+            collect_metrics=True,
+        )
+
+        print_success("\nDADA2 processing completed successfully!")
+        console.print(f"\nOutput files:")
+        console.print(f"  Sequence table: {outputs['seqtab_clean']}")
+        console.print(f"  Query FASTA: {outputs['query_fasta']}")
+        console.print(f"  ASV correspondence: {outputs['corresp_seq']}")
+        console.print(f"  Metrics: {outputs['metrics_dir']}")
+
+        # Run taxonomy assignment if requested
+        if assign_taxonomy:
+            if not rdp_db or not species_db:
+                print_error("--rdp-db and --species-db are required for taxonomy assignment")
+                sys.exit(1)
+
+            console.print("\n[bold]Running taxonomic assignment...[/bold]")
+            taxo_outputs = processor.assign_taxonomy(
+                rdp_db_path=rdp_db,
+                species_db_path=species_db,
+            )
+
+            print_success("\nTaxonomic assignment completed!")
+            console.print(f"  Taxonomy table: {taxo_outputs['complete']}")
+
+        console.print()
+
+    except FileNotFoundError as e:
+        print_error(str(e))
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"DADA2 processing failed: {e}")
+        import traceback
+
+        console.print(traceback.format_exc())
+        sys.exit(1)
+
+
+@main.command()
 def version() -> None:
     """Show version information."""
     console.print(f"\n[bold]seednap[/bold] version [cyan]{__version__}[/cyan]\n")
     console.print("eDNA metabarcoding pipeline with DADA2")
-    console.print("Repository: https://github.com/eth-edna/seednap\n")
+    console.print("Repository: https://gitlab.ethz.ch/ele-projects/edna/edna-app/seednap\n")
 
 
 if __name__ == "__main__":
