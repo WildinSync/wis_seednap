@@ -327,8 +327,20 @@ class TestStandardTrimmer:
 
         output_dir = temp_dir / "trimmed"
 
-        # Mock cutadapt calls
-        mock_trim.return_value = "Cutadapt output"
+        # Mock cutadapt calls - create the output files it expects
+        def mock_trim_side_effect(*args, **kwargs):
+            # Create the output files that trim_primers would create
+            r1_out = kwargs.get("r1_output")
+            r2_out = kwargs.get("r2_output")
+            if r1_out:
+                r1_out.parent.mkdir(parents=True, exist_ok=True)
+                r1_out.write_text("@read1\nATCG\n+\nIIII\n")
+            if r2_out:
+                r2_out.parent.mkdir(parents=True, exist_ok=True)
+                r2_out.write_text("@read1\nGCTA\n+\nIIII\n")
+            return "Cutadapt output"
+
+        mock_trim.side_effect = mock_trim_side_effect
 
         trimmer = StandardTrimmer()
         r1_out, r2_out = trimmer.trim_sample(
@@ -366,8 +378,19 @@ class TestStandardTrimmer:
 
         output_dir = temp_dir / "trimmed"
 
-        # Mock cutadapt
-        mock_trim.return_value = "Cutadapt output"
+        # Mock cutadapt - create output files
+        def mock_trim_side_effect(*args, **kwargs):
+            r1_out = kwargs.get("r1_output")
+            r2_out = kwargs.get("r2_output")
+            if r1_out:
+                r1_out.parent.mkdir(parents=True, exist_ok=True)
+                r1_out.write_text("@read1\nATCG\n+\nIIII\n")
+            if r2_out:
+                r2_out.parent.mkdir(parents=True, exist_ok=True)
+                r2_out.write_text("@read1\nGCTA\n+\nIIII\n")
+            return "Cutadapt output"
+
+        mock_trim.side_effect = mock_trim_side_effect
 
         trimmer = StandardTrimmer()
         results = trimmer.trim_directory(
