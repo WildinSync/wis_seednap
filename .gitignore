@@ -20,3 +20,6 @@ __pycache__/
 *.aux
 .coverage
 seednap.egg-info/
+/docs
+mkdocs.yml
+README.md.backup

@@ -1,10 +1,83 @@
 # seednap
 
-Modern eDNA metabarcoding pipeline with DADA2.
+**Modern eDNA metabarcoding pipeline with DADA2**
 
-A Python-first pipeline for processing eDNA metabarcoding data with support for multiple taxonomic assignment methods (DADA2, DECIPHER, Ecotag, BLAST).
+[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](tests/)
 
-**Version:** 0.1.0 (Phase 0 - Infrastructure Complete)
+A production-ready Python pipeline for processing environmental DNA (eDNA) metabarcoding data with support for multiple taxonomic assignment methods (DADA2, BLAST, DECIPHER, ecotag).
+
+**Version:** 0.1.0
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Complete Pipeline](#complete-pipeline)
+  - [Individual Steps](#individual-steps)
+- [CLI Reference](#cli-reference)
+- [Configuration](#configuration)
+- [Pipeline Steps](#pipeline-steps)
+- [Taxonomic Assignment Methods](#taxonomic-assignment-methods)
+- [Testing](#testing)
+- [Architecture](#architecture)
+- [Contributing](#contributing)
+- [Citation](#citation)
+
+---
+
+## Pipeline Steps
+1. **Trimming** (cutadapt): Remove primers and adapters
+2. **DADA2**: Quality filtering, denoising, ASV detection, chimera removal
+3. **Taxonomic Assignment**: BLAST, DADA2, DECIPHER, or ecotag
+4. **Export**: GBIF-compatible format with rank determination
+
+---
+
+## Quick Start
+
+### 1. Installation
+
+```bash
+# Clone repository
+git clone https://gitlab.ethz.ch/ele-projects/edna/edna-app/seednap.git
+
+cd seednap
+
+# Install with pip
+pip install -e .
+
+# Verify installation
+seednap --version
+```
+
+### 2. Create Configuration
+
+```bash
+# Generate example config
+seednap init --marker teleo --output my_analysis.yaml
+
+# Validate configuration
+seednap validate my_analysis.yaml
+```
+
+### 3. Run Pipeline
+
+```bash
+# Run complete pipeline
+seednap run-pipeline my_analysis.yaml
+
+# Resume from failed step
+seednap run-pipeline my_analysis.yaml --resume
+
+# Stop on first error (default) or continue
+seednap run-pipeline my_analysis.yaml --continue-on-error
+```
 
 ---
 
@@ -19,266 +92,670 @@ A Python-first pipeline for processing eDNA metabarcoding data with support for 
 - `R` (>= 4.0)
 - R packages: `tidyverse`, `dada2`, `Biostrings`
 
-**Optional (depending on taxonomic assignment method):**
-- **DECIPHER:** R package `decipher`
-- **BLAST:** `ncbi-blast` (makeblastdb, blastn)
-- **Ecotag:** `obitools` toolkit (v1)
+**Optional (for specific taxonomic methods):**
+- **BLAST:** `ncbi-blast+` (makeblastdb, blastn)
+- **DECIPHER:** R package `DECIPHER`
+- **Ecotag:** `obitools` v1 (requires separate conda environment)
 
 ### Install from Source
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/eth-edna/seednap.git
+# Clone repository
+git clone https://gitlab.ethz.ch/ele-projects/edna/edna-app/seednap.git
 cd seednap
-```
 
-2. Install the package in development mode:
-```bash
+# Install in development mode
 pip install -e .
-```
 
-3. Verify installation:
-```bash
-seednap --version
-```
-
-### Install for Development
-
-To install with development dependencies:
-
-```bash
+# Install with development dependencies
 pip install -e ".[dev]"
 ```
 
-This includes pytest, black, ruff, mypy, and other development tools.
-
 ### Conda Environment (Recommended)
 
-A conda environment specification is coming soon. For now, install dependencies manually:
-
 ```bash
-conda create -n seednap python=3.9 cutadapt r-base r-tidyverse r-dada2
+# Create conda environment
+conda env create -f environment.yml
 conda activate seednap
+
+# Install seednap
 pip install -e .
 ```
 
-**For ETH eDNA server users:** The existing conda image `metabarcoding` contains all necessary dependencies. 
+**NOTE**: **For ETH eDNA server users:** Use the existing `metabarcoding` conda environment which contains all dependencies.
 
-## Quick Start
+---
 
-### 1. Create a Configuration File
+## Usage
 
-Generate an example configuration file:
+### Complete Pipeline
 
-```bash
-seednap init --marker teleo --output config/markers/my_analysis.yaml
-```
-
-Or use the provided example:
+Run the entire pipeline end-to-end:
 
 ```bash
-cp config/markers/teleo.yaml config/markers/my_analysis.yaml
+# Basic usage
+seednap run-pipeline config.yaml
+
+# Resume from previous run
+seednap run-pipeline config.yaml --resume
+
+# Specify custom state file
+seednap run-pipeline config.yaml --state-file pipeline_state.json
+
+# Continue on errors (don't stop pipeline if one step fails)
+seednap run-pipeline config.yaml --continue-on-error
 ```
 
-Edit the configuration file to match your analysis:
-- Update `paths.raw_data` to point to your FASTQ files
-- Choose `taxonomy.method` (dada2, blast, ecotag, or decipher)
-- Update database paths for your chosen method
-- Adjust computational resources (`resources.max_cores`)
+**Output:**
+- Trimmed FASTQ files
+- DADA2 ASV table and sequences
+- Taxonomic assignments
+- GBIF-formatted export
+- Quality plots and metrics
+- Pipeline state file for resumability
 
-### 2. Validate Your Configuration
+### Individual Steps
+
+Run pipeline steps separately:
+
+#### 1. Primer Trimming
 
 ```bash
-seednap validate config/markers/my_analysis.yaml
+seednap trim config.yaml
 ```
 
-This checks that:
-- YAML syntax is valid
-- All required fields are present
-- Values are within valid ranges
-- Configuration is internally consistent
+Options:
+- `--cores`: Number of CPU cores (default: from config)
+- `--output-dir`: Output directory (default: from config)
 
-### 3. Run the Pipeline
-
-**Note:** Full pipeline execution will be available after Phase 6. For now, use the legacy `main.sh` script.
+#### 2. DADA2 Processing
 
 ```bash
-# Coming soon in Phase 6:
-seednap run config/markers/my_analysis.yaml
-
-# For now, use the legacy script:
-bash main.sh config/config_teleo.sh
+seednap dada2 config.yaml
 ```
 
-## CLI Commands
+Performs:
+- Quality filtering (maxEE, truncQ, maxN)
+- Denoising and error learning
+- Read merging
+- Chimera removal
+- ASV table generation
 
-### `seednap init`
+#### 3. Taxonomic Assignment
+
+**BLAST:**
+```bash
+seednap blast config.yaml
+```
+
+**DADA2 RDP Classifier:**
+```bash
+seednap assign-taxonomy config.yaml --method dada2
+```
+
+**DECIPHER:**
+```bash
+seednap assign-taxonomy config.yaml --method decipher
+```
+
+**Ecotag:**
+```bash
+seednap assign-taxonomy config.yaml --method ecotag
+```
+
+#### 4. GBIF Formatting
+
+```bash
+seednap format-gbif input.csv output.csv --method dada2
+```
+
+Options:
+- `--method`: Source method (dada2, blast, decipher, ecotag)
+- `--add-rank/--no-add-rank`: Add rank column
+- `--add-taxon/--no-add-taxon`: Add taxon column
+
+---
+
+## CLI Reference
+
+### Global Options
+
+```bash
+seednap --help              # Show help
+seednap --version           # Show version
+seednap -v [command]        # Verbose output (DEBUG level)
+seednap -q [command]        # Quiet mode (errors only)
+```
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `init` | Create example configuration file |
+| `validate` | Validate configuration file |
+| `run-pipeline` | Run complete pipeline (trim → dada2 → taxonomy → export) |
+| `trim` | Run primer trimming with cutadapt |
+| `dada2` | Run DADA2 quality filtering and ASV detection |
+| `blast` | Run BLAST taxonomic assignment with LCA resolution |
+| `assign-taxonomy` | Run taxonomic assignment (dada2/decipher/ecotag) |
+| `format-gbif` | Convert outputs to GBIF format |
+| `demultiplex` | Demultiplex pooled libraries |
+| `version` | Show detailed version information |
+
+### Command Details
+
+#### `seednap init`
 
 Create an example configuration file:
 
 ```bash
-seednap init --marker teleo --output config/markers/example.yaml
-```
+seednap init [OPTIONS]
 
 Options:
-- `--marker, -m`: Marker name (default: teleo)
-- `--output, -o`: Output path (default: config/markers/example.yaml)
-- `--force, -f`: Overwrite existing file
+  -m, --marker TEXT     Marker name (default: teleo)
+  -o, --output PATH     Output path (default: config/markers/example.yaml)
+  -f, --force           Overwrite existing file
+```
 
-### `seednap validate`
+#### `seednap validate`
 
 Validate a configuration file:
 
 ```bash
-seednap validate config/markers/my_analysis.yaml
+seednap validate CONFIG_FILE
+
+Checks:
+  - YAML syntax validity
+  - Required fields present
+  - Field types and values correct
+  - Referenced paths exist
 ```
 
-### `seednap version`
+#### `seednap run-pipeline`
 
-Show version information:
+Run the complete pipeline:
 
 ```bash
-seednap version
-```
-
-### `seednap run` (Coming in Phase 6)
-
-Run the full pipeline:
-
-```bash
-seednap run config/markers/my_analysis.yaml
-```
+seednap run-pipeline CONFIG_FILE [OPTIONS]
 
 Options:
-- `--resume-from`: Resume from a specific step (trim, dada2, taxonomy, export)
-- `--dry-run`: Show what would be run without executing
+  --resume                    Resume from previous run
+  --state-file PATH           Custom state file path
+  --stop-on-error            Stop on first error (default)
+  --continue-on-error        Continue pipeline if step fails
+```
 
-## Configuration
+#### `seednap trim`
 
-Configuration files use YAML format with the following main sections:
+Run primer trimming:
 
-- **marker**: Marker name, primers, and description
-- **paths**: Input/output directory paths
-- **demultiplex**: Demultiplexing settings (if applicable)
-- **trimming**: Cutadapt primer trimming parameters
-- **dada2**: DADA2 filtering, merging, and chimera removal settings
-- **taxonomy**: Taxonomic assignment method and database paths
-- **export**: Output formats (CSV, GBIF)
-- **metrics**: Quality control metrics configuration
-- **logging**: Logging level and format
-- **resources**: CPU cores, memory limits
-- **pipeline**: Steps to execute
+```bash
+seednap trim CONFIG_FILE [OPTIONS]
 
-See [config/markers/teleo.yaml](config/markers/teleo.yaml) for a complete example with detailed comments.
+Options:
+  --cores INTEGER       Number of CPU cores
+  --output-dir PATH     Output directory
+```
+
+#### `seednap dada2`
+
+Run DADA2 processing:
+
+```bash
+seednap dada2 CONFIG_FILE [OPTIONS]
+
+Options:
+  --input-dir PATH      Input directory (default: from config)
+  --output-dir PATH     Output directory (default: from config)
+```
+
+#### `seednap blast`
+
+Run BLAST taxonomic assignment:
+
+```bash
+seednap blast CONFIG_FILE [OPTIONS]
+
+Options:
+  --input PATH          ASV sequences file
+  --database PATH       BLAST database FASTA
+  --output PATH         Output CSV file
+```
+
+#### `seednap format-gbif`
+
+Convert to GBIF format:
+
+```bash
+seednap format-gbif INPUT OUTPUT [OPTIONS]
+
+Options:
+  --method TEXT               Source method (dada2/blast/ecotag/decipher)
+  --add-rank/--no-add-rank   Add rank column (default: yes)
+  --add-taxon/--no-add-taxon Add taxon column (default: yes)
+```
 
 ---
 
-## Legacy Usage (Shell Scripts)
+## Configuration
 
-The original shell-script based pipeline is still available during the migration. To process one marker, edit its config file (e.g., `config/config_teleo.sh`) and run:
+Configuration files use YAML format with the following structure:
+
+### Example Configuration
+
+```yaml
+# Pipeline version
+version: "0.1.0"
+
+# Marker information
+marker:
+  name: "teleo"
+  description: "Teleost fish eDNA metabarcoding using 12S rRNA"
+  primers:
+    forward: "ACACCGCCCGTCACTCT"
+    reverse: "CTTCCGGTACACTTACCATG"
+    name: "Teleo"
+    target: "12S rRNA"
+    amplicon_length: [100, 200]
+
+# File paths
+paths:
+  raw_data: "/path/to/raw/fastq/files"
+  output: "outputs"
+  logs: "logs"
+  references: "/path/to/reference/databases"
+
+# Trimming configuration
+trimming:
+  tool: "cutadapt"
+  min_length: 20
+  max_error_rate: 0.1
+  cores: 12
+  discard_untrimmed: true
+
+# DADA2 configuration
+dada2:
+  filter:
+    max_ee: 2.0
+    trunc_q: 11
+    max_n: 0
+  merge:
+    min_overlap: 20
+    max_mismatch: 0
+  chimera:
+    method: "consensus"
+
+# Taxonomic assignment
+taxonomy:
+  method: "blast"  # Options: blast, dada2, decipher, ecotag
+
+  databases:
+    blast:
+      fasta: "/path/to/blast/database.fasta"
+      threshold_species: 98.0
+      threshold_genus: 96.0
+      threshold_family: 86.5
+
+# Export configuration
+export:
+  formats: ["csv"]
+  gbif:
+    enabled: true
+    add_rank: true
+    add_taxon: true
+
+# Resources
+resources:
+  max_cores: 12
+  memory_limit: "32G"
+
+# Pipeline steps
+pipeline:
+  steps: ["trim", "dada2", "taxonomy", "export"]
+  skip: []
+```
+
+### Configuration Sections
+
+| Section | Description |
+|---------|-------------|
+| `version` | Configuration format version |
+| `marker` | Primer sequences and marker metadata |
+| `paths` | Input/output directory paths |
+| `demultiplex` | Demultiplexing settings (if needed) |
+| `trimming` | Cutadapt primer trimming parameters |
+| `dada2` | DADA2 filtering, merging, chimera settings |
+| `taxonomy` | Taxonomic assignment method and databases |
+| `export` | Output formats and GBIF settings |
+| `metrics` | Quality control metrics configuration |
+| `logging` | Logging level and format |
+| `resources` | CPU cores, memory limits |
+| `pipeline` | Steps to execute and skip |
+
+See [config/markers/teleo.yaml](config/markers/teleo.yaml) for a complete annotated example.
+
+---
+
+## Pipeline Steps
+
+### 1. Trimming (cutadapt)
+
+**Input:** Raw FASTQ files (paired-end)
+**Output:** Trimmed FASTQ files
+
+**Process:**
+- Remove forward and reverse primers
+- Discard reads where primers not found (optional)
+- Quality filtering by minimum length
+- Generate trimming statistics
+
+**Configuration:**
+```yaml
+trimming:
+  min_length: 20          # Minimum read length after trimming
+  max_error_rate: 0.1     # Maximum error rate in primer matching
+  cores: 12               # CPU cores for parallel processing
+  discard_untrimmed: true # Discard reads without primers
+  overlap: 3              # Minimum overlap for primer detection
+```
+
+### 2. DADA2 Processing
+
+**Input:** Trimmed FASTQ files
+**Output:** ASV table, ASV sequences, quality plots
+
+**Process:**
+1. **Quality Filtering:**
+   - Filter by expected errors (maxEE)
+   - Truncate by quality score (truncQ)
+   - Remove reads with N bases
+   - Remove PhiX contamination
+
+2. **Denoising:**
+   - Learn error rates from data
+   - Denoise reads to infer ASVs
+   - Pool samples or process independently
+
+3. **Merging:**
+   - Merge paired-end reads
+   - Require minimum overlap
+   - Allow maximum mismatches
+
+4. **Chimera Removal:**
+   - Detect chimeric sequences
+   - Methods: consensus, pooled, or none
+
+**Configuration:**
+```yaml
+dada2:
+  filter:
+    max_ee: 2.0        # Maximum expected errors
+    trunc_q: 11        # Truncate reads at first base with Q <= truncQ
+    max_n: 0           # Maximum N bases allowed
+    rm_phix: true      # Remove PhiX contamination
+  merge:
+    min_overlap: 20    # Minimum overlap for merging
+    max_mismatch: 0    # Maximum mismatches in overlap
+  chimera:
+    method: "consensus" # Chimera detection method
+  pool: false          # Pool samples for error learning
+  multithread: true    # Use multiple threads
+```
+
+### 3. Taxonomic Assignment
+
+Choose from four methods:
+
+#### A. BLAST + LCA (Recommended)
+
+**Process:**
+1. Create BLAST database from reference FASTA
+2. Run blastn search for each ASV
+3. Extract phylogeny from database headers
+4. Filter hits by percent identity thresholds
+5. Resolve ambiguous assignments using Lowest Common Ancestor (LCA)
+
+**Configuration:**
+```yaml
+taxonomy:
+  method: "blast"
+  databases:
+    blast:
+      fasta: "/path/to/refdb.fasta"
+      perc_identity: 80.0       # Minimum percent identity
+      qcov_hsp_perc: 80.0       # Minimum query coverage
+      evalue: 1.0e-25           # Maximum e-value
+      max_target_seqs: 5        # Maximum hits to return
+      threshold_species: 98.0   # %ID threshold for species assignment
+      threshold_genus: 96.0     # %ID threshold for genus assignment
+      threshold_family: 86.5    # %ID threshold for family assignment
+```
+
+**Features:**
+- Configurable percent identity thresholds by rank
+- LCA resolution for ambiguous hits
+- Phylogeny extraction from FASTA headers
+- Handles multiple database formats
+
+#### B. DADA2 RDP Classifier
+
+**Process:**
+1. Assign taxonomy using naive Bayesian classifier
+2. Requires reference FASTA with taxonomy in headers
+
+**Configuration:**
+```yaml
+taxonomy:
+  method: "dada2"
+  databases:
+    dada2:
+      all: "/path/to/dada2_all.fasta"
+      species: "/path/to/dada2_species.fasta"
+```
+
+#### C. DECIPHER
+
+**Process:**
+1. Use trained DECIPHER model for assignment
+2. Confidence-based taxonomic assignment
+
+**Configuration:**
+```yaml
+taxonomy:
+  method: "decipher"
+  databases:
+    decipher:
+      trained: "/path/to/trained_model.rds"
+      threshold: 60           # Confidence threshold
+      processors: 8           # CPU cores
+```
+
+#### D. Ecotag (OBITools)
+
+**Process:**
+1. Use OBITools ecotag for assignment
+2. Requires NCBI taxonomy tree
+
+**Configuration:**
+```yaml
+taxonomy:
+  method: "ecotag"
+  databases:
+    ecotag:
+      tree: "/path/to/taxonomy/tree/"
+      fasta: "/path/to/reference.fasta"
+```
+
+**Note:** Ecotag requires a separate conda environment (`obitools`) due to Python version conflicts with cutadapt.
+
+### 4. Export (GBIF Formatting)
+
+**Input:** Taxonomic assignment CSV
+**Output:** GBIF-compatible CSV
+
+**Process:**
+1. Transform from wide format (samples as columns) to long format (samples as rows)
+2. Determine taxonomic rank (species/genus/family/higher)
+3. Extract lowest available taxon
+4. Filter zero-count observations
+5. Export to GBIF format
+
+**Configuration:**
+```yaml
+export:
+  formats: ["csv"]
+  gbif:
+    enabled: true
+    add_rank: true   # Add 'rank' column
+    add_taxon: true  # Add 'taxon' column
+```
+
+**Output Columns:**
+- `kingdom`, `phylum`, `class`, `order`, `family`, `genus`, `species`
+- `taxon`: Lowest available taxonomic assignment
+- `rank`: Taxonomic rank of assignment (species/genus/family/higher)
+- `sequence`: ASV sequence
+- `nb_reads`: Read count
+- `eventID`: Sample identifier
+
+---
+
+## Taxonomic Assignment Methods
+
+### Method Comparison
+
+| Method | Speed | Accuracy | Database | Best For |
+|--------|-------|----------|----------|----------|
+| **BLAST + LCA** | Moderate | High | Custom FASTA | Flexible, multiple hits |
+| **DADA2 RDP** | Fast | Good | DADA2 format | Quick assignments |
+| **DECIPHER** | Fast | Good | Trained model | Pre-trained databases |
+| **Ecotag** | Slow | High | OBITools format | Legacy workflows |
+
+### Choosing a Method
+
+**Use BLAST + LCA when:**
+- You need configurable percent identity thresholds
+- You want LCA resolution for ambiguous hits
+- You have a custom reference database
+- You need detailed control over assignment logic
+
+**Use DADA2 when:**
+- You want fast, straightforward assignments
+- Your database is in DADA2 format
+- You're already using DADA2 for ASV detection
+
+**Use DECIPHER when:**
+- You have a pre-trained DECIPHER model
+- You want confidence scores
+- Speed is important
+
+**Use ecotag when:**
+- You're migrating from OBITools workflows
+- You have existing ecotag databases
+
+---
+
+## Architecture
+
+### Project Structure
+
+```
+seednap/
+├── src/seednap/
+│   ├── cli.py                    # Command-line interface
+│   ├── config/                   # Configuration management
+│   │   ├── models.py            # Pydantic config models
+│   │   ├── loader.py            # YAML loading and validation
+│   │   └── __init__.py
+│   ├── pipeline/                 # Pipeline orchestration
+│   │   ├── state.py             # State tracking and persistence
+│   │   ├── orchestrator.py      # Pipeline execution
+│   │   └── __init__.py
+│   ├── steps/                    # Pipeline step implementations
+│   │   ├── trimming/            # Cutadapt integration
+│   │   ├── dada2/               # DADA2 processing
+│   │   ├── taxonomic_assignment/ # BLAST, DECIPHER, ecotag
+│   │   └── formatting/          # GBIF formatting
+│   └── utils/                    # Shared utilities
+│       ├── logging.py           # Rich console logging
+│       └── sequences.py         # Sequence manipulation
+├── tests/                        # Test suite
+├── config/                       # Example configurations
+│   └── markers/
+│       └── teleo.yaml           # Teleo marker example
+├── docs/                         # Documentation (coming soon)
+├── environment.yml               # Conda environment
+├── pyproject.toml               # Python package metadata
+└── README.md                     # This file
+```
+
+### State Management
+
+The pipeline tracks state in JSON format:
+
+```json
+{
+  "marker": "teleo",
+  "started_at": "2025-01-15T10:30:00",
+  "current_step": "taxonomy",
+  "steps": {
+    "trim": {
+      "status": "completed",
+      "started_at": "2025-01-15T10:30:00",
+      "completed_at": "2025-01-15T10:45:00",
+      "duration_seconds": 900,
+      "outputs": {
+        "trimmed_dir": "/path/to/trimmed"
+      }
+    },
+    "dada2": {
+      "status": "completed",
+      ...
+    },
+    "taxonomy": {
+      "status": "running",
+      ...
+    }
+  }
+}
+```
+
+This allows:
+- Resume from any failed step
+- Track step timing and duration
+- Pass outputs between steps
+- Debug pipeline issues
+
+---
+
+## Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+### Development Setup
 
 ```bash
-bash main.sh path/to/config.sh
+# Install in development mode with dev dependencies
+pip install -e ".[dev]"
+
+# Install pre-commit hooks
+pre-commit install
+
+# Run tests
+pytest
+
+# Run linters
+ruff check .
+black --check .
+mypy src/
 ```
 
-The content of the config file is as follows: it contains infos on paths and marker name
+---
 
-``` sh
-# Config parameters
-marker="teleo" # No uppercase here
-raw_path="/home/shared/edna/raw/ma_ga_akand_2024/"
-primer_F="ACACCGCCCGTCACTCT"
-primer_R="CTTCCGGTACACTTACCATG"
-method_demultiplex="" # among: primer_trim / ligation_trim - not ready yet
-convert_for_GBIF="TRUE" # values= TRUE or FALSE
+## Acknowledgments
 
-# Assignment parameters
-method_assignment="dada2" # among: "dada2 / decipher / ecotag / blast" # Note: blast is in development
-
-# For blast below
-path_blast_fasta="/home/shared/edna/reference_database/2024/teleo/blast_db/refdb_all_fish_teleo.fasta" # If not already created, it will create the accompanying files in the same folder (ndb;nhr;nin etc)
-
-# For ecotag below
-path_ecotag_tree="/home/shared/edna/reference_database/2023_06/teleo_custom_embl/customtaxonomy/" # Directory not file # Caution: here it needs to be the path to the tree (NCBI tree ; -t ecotag option not -d)
-path_ecotag_fasta="/home/shared/edna/reference_database/2023_06/teleo_custom_embl/db_teleo_custom_and_embl.fasta"
-
-# For dada2 below
-path_dada_all="utils/teleo_crabs_dada2_all.fasta"
-path_dada_species="utils/teleo_crabs_dada2_species.fasta"
-
-# For decipher below
-path_decipher_trained="utils/teleo_trained.rds"
-
-# General
-CORES=12
-```
-
-**marker** is the marker name (lowercase)
-
-**raw_path** is the location of the raw data  
-
-**convert_for_GBIF** TRUE/FALSE: create an alternative output file. This would be the correct input format for creating the GBIF processed file. 
-
-**CORES** indicates the number of cores to be used for a single cutadapt command
-
-Some parameters are still in development. 
-Note that to use the `ecotag` assignment option, you need to have a conda image containing the obitools named `obitools` or handle this part manually.  
-This is because the obitools are not compatible with cutadapt within the same conda due to python version conflicts. 
-
-## Content 
-
-The script first cuts the primers from the sequences. It always cuts on the 5' end, and will primers on the 3' if they are present (but will not discard reads if there are no primers present in the 3' end).
-
-Reads will be discarded is **no** ends are trimmed. If only trimmed on the 5', only trimmed on the 3' end, or trimmed on both, the reads will be kept. 
- 
-See the cutadapt documentation for more details: https://cutadapt.readthedocs.io/en/stable/guide.html
-
-No direction precaution is taken as the samples are not prepared via a ligation protocol (checks were done and not reads were in the opposite direction)
-Samples are already demultiplexed so we directly cut the primers (not anchorage since parts of the tags remain)
-
-Next part of the script is launching dada2 in R. For now it processes all together, later dev will handle it on a library basis. 
-
-Taxonomic assignment is done either with dada2, decipher, ecotag or blast (in dev). 
-
-## Ligation-based compatibility
-
-If necessary, the script demultiplex_ligation.sh can now be used to demultiplex and re-order reads from a pooled library created using the ligation method ("SPYGEN" type). Final output is saved in the original raw path, by creating a sub-directory `raw_for_dada2` in fastq format (not zipped). 
-
-This script can be executed like this: 
-
-```
-bash scripts/demultiplex_ligation.sh [path_to_folder_with_libraries] [path_to_lab_file] [path_to_config.sh]
-```
-
-For for example: 
-
-```
-bash scripts/demultiplex_ligation.sh /home/shared/edna/raw/MA_Calanques_2023/ /home/shared/edna/raw/MA_Calanques_2023/metadata/metadata_lab_ma_fr_calanq_2023.csv config_teleo.sh
-```
-
-Config is the same as for the normal pipeline execution, and the metadata lab file is the one from our internal standards. Expected structure is: 
-
-
-```
-| `eventID`   | `tag_demultiplex` | `library`             | `pcr_primer_name_forward` | `pcr_primer_name_reverse` | `pcr_primer_forward`   | `pcr_primer_reverse`    |
-|-------------|------------------|------------------------|----------------------------|----------------------------|------------------------|--------------------------|
-| CNEG03_01   | aattgccg         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
-| CNEG03_10   | ttaggcac         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
-| CNEG03_11   | gtgttgga         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
-| CNEG03_12   | aacgcgat         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
-| CNEG03_02   | atgcttgg         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
-| CNEG03_03   | atggaggt         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
-| CNEG03_04   | tgaggaca         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
-| CNEG03_05   | acaagacc         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
-| CNEG03_06   | agttccac         | VL331___MB0523B1__     | teleoF                     | teleoR                     | ACACCGCCCGTCACTCT      | CTTCCGGTACACTTACCATG     |
-```
-
-## Issues with pattern recognition 
-
-We have now implemented that the match of the sample name is strict, meaning that the script will only work if your input files are named [sample_name]_R1.fastq (or R2). Characters between sample name and R1/2 are no longer allowed, as this was too flexible and causing issues with diluted samples (with a pattern of sample_named). If you wish to use the older more flexible pattern, this is the code to replace in the main script
-
-```
-  r1_in=$(ls "${raw_path}" | grep "^${s}.*_R1\.fastq\.gz$")
-  r2_in=$(ls "${raw_path}" | grep "^${s}.*_R2\.fastq\.gz$")
-```
-
+- DADA2 pipeline and algorithm: Callahan et al. (2016)
+- cutadapt: Martin (2011)
+- BLAST: Altschul et al. (1990)
+- DECIPHER: Wright (2016)
+- OBITools: Boyer et al. (2016)
