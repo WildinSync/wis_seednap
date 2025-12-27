@@ -1,9 +1,13 @@
 """Configuration data models using Pydantic for type-safe configuration."""
 
+import logging
 from pathlib import Path
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
+import yaml
 from pydantic import BaseModel, Field, field_validator
+
+logger = logging.getLogger(__name__)
 
 
 class PrimerConfig(BaseModel):
@@ -186,6 +190,10 @@ class DecipherDatabaseConfig(BaseModel):
     """DECIPHER database configuration."""
 
     trained: Path = Field(..., description="Path to trained DECIPHER RDS file")
+    threshold: int = Field(
+        default=60, ge=0, le=100, description="Confidence threshold for assignment"
+    )
+    processors: int = Field(default=8, ge=1, description="Number of CPU cores to use")
 
     @field_validator("trained")
     @classmethod

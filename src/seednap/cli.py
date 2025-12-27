@@ -897,6 +897,128 @@ def assign_taxonomy(
 
 
 @main.command()
+@click.argument("config", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--resume",
+    is_flag=True,
+    help="Resume pipeline from previous run",
+)
+@click.option(
+    "--state-file",
+    type=click.Path(path_type=Path),
+    help="Path to state file (default: auto-generated in output dir)",
+)
+@click.option(
+    "--stop-on-error/--continue-on-error",
+    default=True,
+    help="Whether to stop on first error or continue (default: stop)",
+)
+def run_pipeline(
+    config: Path,
+    resume: bool,
+    state_file: Optional[Path],
+    stop_on_error: bool,
+) -> None:
+    """
+    Run complete seednap eDNA metabarcoding pipeline.
+
+    This command orchestrates the full pipeline from raw reads to taxonomic assignments:
+    1. Demultiplexing (optional)
+    2. Primer trimming with cutadapt
+    3. DADA2 processing (filtering, denoising, merging, chimera removal)
+    4. Taxonomic assignment (DADA2/BLAST/ecotag/DECIPHER)
+    5. Export to GBIF format
+
+    CONFIG: Path to pipeline configuration YAML file
+
+    Examples:
+
+        # Run complete pipeline
+        seednap run-pipeline config/markers/teleo.yaml
+
+        # Resume from previous run
+        seednap run-pipeline config/markers/teleo.yaml --resume
+
+        # Continue on errors
+        seednap run-pipeline config/markers/teleo.yaml --continue-on-error
+
+        # Use custom state file
+        seednap run-pipeline config/markers/teleo.yaml --state-file my_state.json
+    """
+    from seednap.pipeline.orchestrator import PipelineOrchestrator
+
+    try:
+        console.print("\n[bold cyan]═══════════════════════════════════════════════════════[/bold cyan]")
+        console.print("[bold cyan]     seednap eDNA Metabarcoding Pipeline[/bold cyan]")
+        console.print("[bold cyan]═══════════════════════════════════════════════════════[/bold cyan]\n")
+
+        # Load config to show marker info
+        from seednap.config.loader import load_config
+
+        config_obj = load_config(config)
+        console.print(f"[bold]Marker:[/bold] {config_obj.marker.name}")
+        console.print(f"[bold]Description:[/bold] {config_obj.marker.description}")
+        console.print(f"[bold]Taxonomy method:[/bold] {config_obj.taxonomy.method}")
+
+        if resume:
+            console.print(f"\n[yellow]Resuming from previous run[/yellow]")
+
+        console.print()
+
+        # Create and run orchestrator
+        orchestrator = PipelineOrchestrator(
+            config=config, state_file=state_file, resume=resume
+        )
+
+        final_state = orchestrator.run(stop_on_error=stop_on_error)
+
+        # Print summary
+        summary = final_state.get_summary()
+
+        console.print("\n[bold green]✓ Pipeline Completed Successfully![/bold green]\n")
+        console.print("[bold]Summary:[/bold]")
+        console.print(f"  Total duration: {summary['total_duration_seconds']:.1f}s")
+        console.print(f"  Completed steps: {summary['completed']}/{summary['total_steps']}")
+        console.print(f"  Failed steps: {summary['failed']}")
+        console.print(f"  Skipped steps: {summary['skipped']}")
+
+        if summary["completed"] > 0:
+            console.print(f"\n[bold]Completed steps:[/bold]")
+            for step_name, step_info in summary["steps"].items():
+                if step_info["status"] == "completed":
+                    duration = step_info["duration_seconds"]
+                    console.print(
+                        f"  [green]✓[/green] {step_name}: {duration:.1f}s"
+                        if duration
+                        else f"  [green]✓[/green] {step_name}"
+                    )
+
+        if summary["failed"] > 0:
+            console.print(f"\n[bold yellow]Failed steps:[/bold yellow]")
+            for step_name, step_info in summary["steps"].items():
+                if step_info["status"] == "failed":
+                    error = step_info.get("error", "Unknown error")
+                    console.print(f"  [red]✗[/red] {step_name}: {error}")
+
+        console.print(f"\n[bold]Output directory:[/bold] {config_obj.paths.output}")
+        console.print(f"[bold]Log directory:[/bold] {config_obj.paths.logs}")
+        console.print()
+
+    except ValueError as e:
+        print_error(str(e))
+        sys.exit(1)
+    except FileNotFoundError as e:
+        print_error(str(e))
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"Pipeline failed: {e}")
+        import traceback
+
+        console.print(traceback.format_exc())
+        sys.exit(1)
+
+
+@main.command()
 def version() -> None:
     """Show version information."""
     console.print(f"\n[bold]seednap[/bold] version [cyan]{__version__}[/cyan]\n")
