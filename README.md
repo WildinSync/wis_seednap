@@ -728,30 +728,6 @@ This allows:
 
 ---
 
-## Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### Development Setup
-
-```bash
-# Install in development mode with dev dependencies
-pip install -e ".[dev]"
-
-# Install pre-commit hooks
-pre-commit install
-
-# Run tests
-pytest
-
-# Run linters
-ruff check .
-black --check .
-mypy src/
-```
-
----
-
 ## Acknowledgments
 
 - DADA2 pipeline and algorithm: Callahan et al. (2016)
