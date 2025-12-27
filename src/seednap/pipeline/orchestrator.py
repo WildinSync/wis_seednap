@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 
 class PipelineOrchestrator:
     """
-    Orchestrate complete seednap eDNA metabarcoding pipeline.
+    Orchestrate complete SeeDNAP eDNA metabarcoding pipeline.
 
     This class coordinates all pipeline steps, handles state management,
     and enables resumability after failures.
@@ -267,7 +267,12 @@ class PipelineOrchestrator:
         try:
             logger.info("Running primer trimming")
 
-            trimmer = StandardTrimmer()
+            trimmer = StandardTrimmer(
+                cores=self.config.trimming.cores,
+                error_rate=self.config.trimming.max_error_rate,
+                min_length=self.config.trimming.min_length
+            )
+            
             output_dir = self.config.paths.output / "01_trim" / self.config.marker.name
 
             # Get list of samples from raw data directory
@@ -288,10 +293,7 @@ class PipelineOrchestrator:
                     sample_name=sample_name,
                     forward_primer=self.config.marker.primers.forward,
                     reverse_primer=self.config.marker.primers.reverse,
-                    min_length=self.config.trimming.min_length,
-                    max_error_rate=self.config.trimming.max_error_rate,
-                    cores=self.config.trimming.cores,
-                    discard_untrimmed=self.config.trimming.discard_untrimmed,
+                    keep_untrimmed=not self.config.trimming.discard_untrimmed
                 )
 
                 trimmed_outputs[sample_name] = outputs

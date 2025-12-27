@@ -920,7 +920,7 @@ def run_pipeline(
     stop_on_error: bool,
 ) -> None:
     """
-    Run complete seednap eDNA metabarcoding pipeline.
+    Run complete SeeDNAP eDNA metabarcoding pipeline.
 
     This command orchestrates the full pipeline from raw reads to taxonomic assignments:
     1. Demultiplexing (optional)
@@ -949,7 +949,7 @@ def run_pipeline(
 
     try:
         console.print("\n[bold cyan]═══════════════════════════════════════════════════════[/bold cyan]")
-        console.print("[bold cyan]     seednap eDNA Metabarcoding Pipeline[/bold cyan]")
+        console.print("[bold cyan]     SeeDNAP eDNA Metabarcoding Pipeline[/bold cyan]")
         console.print("[bold cyan]═══════════════════════════════════════════════════════[/bold cyan]\n")
 
         # Load config to show marker info
