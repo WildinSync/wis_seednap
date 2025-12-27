@@ -303,10 +303,9 @@ class TestMetricsCollector:
         # Create sequence table (transposed)
         seqtab = temp_dir / "seqtab_clean_t.csv"
         df = pd.DataFrame({
-            "sequence": ["ATCGATCG", "GCTAGCTA", "TTAATTAA"],
             "sample1": [100, 50, 25],
             "sample2": [200, 75, 30],
-        })
+        }, index=["ATCGATCG", "GCTAGCTA", "TTAATTAA"]) 
         df.to_csv(seqtab)
 
         # Create correspondence file
@@ -441,15 +440,13 @@ class TestDada2Processor:
 
         seqtab_clean_t = output_dir / "seqtab_clean_t.csv"
         pd.DataFrame({
-            "sequence": ["ATCG"],
             "sample1": [100],
-        }).to_csv(seqtab_clean_t)
+        }, index=["ATCG"]).to_csv(seqtab_clean_t)
 
         corresp_seq = output_dir / "corresp_seq.csv"
         pd.DataFrame({
             "ASV_n": ["ASV1"],
-            "sequence": ["ATCG"],
-        }).to_csv(corresp_seq, index=False)
+        }, index=["ATCG"]).to_csv(corresp_seq, index=False)
 
         # Mock DADA2 process return
         mock_run_dada2.return_value = {

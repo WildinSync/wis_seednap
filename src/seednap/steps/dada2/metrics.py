@@ -222,7 +222,7 @@ class MetricsCollector:
         # Calculate metrics
         self.asv_metrics.num_asvs = len(seqtab)
         self.asv_metrics.num_samples = len(seqtab.columns)
-        self.asv_metrics.total_abundance = seqtab.values.sum()
+        self.asv_metrics.total_abundance = int(seqtab.values.sum())
 
         # Sequence lengths (from index if available)
         if corresp_seq_path:
