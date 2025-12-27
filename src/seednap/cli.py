@@ -701,6 +701,202 @@ def dada2(
 
 
 @main.command()
+@click.argument("method", type=click.Choice(["blast", "dada2", "ecotag", "decipher"]))
+@click.argument("marker", type=str)
+@click.argument("query_fasta", type=click.Path(exists=True, path_type=Path))
+@click.argument("asv_count_csv", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=Path("outputs"),
+    help="Base output directory (default: outputs/)",
+)
+@click.option(
+    "--reference-fasta",
+    type=click.Path(exists=True, path_type=Path),
+    help="Reference database FASTA (for BLAST method)",
+)
+@click.option(
+    "--rdp-db",
+    type=click.Path(exists=True, path_type=Path),
+    help="RDP-formatted taxonomy database (for DADA2 method)",
+)
+@click.option(
+    "--species-db",
+    type=click.Path(exists=True, path_type=Path),
+    help="Species-level database (for DADA2 method)",
+)
+@click.option(
+    "--taxonomy-db",
+    type=click.Path(exists=True, path_type=Path),
+    help="NCBI taxonomy database (for ecotag method)",
+)
+@click.option(
+    "--reference-db",
+    type=click.Path(exists=True, path_type=Path),
+    help="Reference sequence database (for ecotag method)",
+)
+@click.option(
+    "--trained-classifier",
+    type=click.Path(exists=True, path_type=Path),
+    help="Trained DECIPHER classifier .rds file (for DECIPHER method)",
+)
+@click.option(
+    "--threshold-species",
+    type=float,
+    default=98.0,
+    help="Percent identity threshold for species (BLAST, default: 98.0)",
+)
+@click.option(
+    "--threshold-genus",
+    type=float,
+    default=96.0,
+    help="Percent identity threshold for genus (BLAST, default: 96.0)",
+)
+@click.option(
+    "--threshold-family",
+    type=float,
+    default=86.5,
+    help="Percent identity threshold for family (BLAST, default: 86.5)",
+)
+@click.option(
+    "--confidence-threshold",
+    type=int,
+    default=60,
+    help="Confidence threshold for DECIPHER (0-100, default: 60)",
+)
+@click.option(
+    "--processors",
+    "-c",
+    type=int,
+    default=8,
+    help="Number of CPU cores (default: 8)",
+)
+def assign_taxonomy(
+    method: str,
+    marker: str,
+    query_fasta: Path,
+    asv_count_csv: Path,
+    output_dir: Path,
+    reference_fasta: Optional[Path],
+    rdp_db: Optional[Path],
+    species_db: Optional[Path],
+    taxonomy_db: Optional[Path],
+    reference_db: Optional[Path],
+    trained_classifier: Optional[Path],
+    threshold_species: float,
+    threshold_genus: float,
+    threshold_family: float,
+    confidence_threshold: int,
+    processors: int,
+) -> None:
+    """
+    Assign taxonomy to ASVs using various methods.
+
+    METHOD: Taxonomic assignment method (blast, dada2, ecotag, decipher).
+    MARKER: Marker name (e.g., teleo, amph).
+    QUERY_FASTA: Query FASTA file with ASV sequences.
+    ASV_COUNT_CSV: ASV count table (seqtab_clean.csv or _t.csv).
+
+    Each method requires specific database files:
+
+    \b
+    BLAST: --reference-fasta
+    DADA2: --rdp-db and --species-db
+    ecotag: --taxonomy-db and --reference-db
+    DECIPHER: --trained-classifier
+    """
+    from seednap.steps.taxonomic_assignment import TaxonomicAssigner
+
+    console.print(f"\n[bold]Taxonomic Assignment:[/bold]")
+    console.print(f"Method: {method}")
+    console.print(f"Marker: {marker}")
+    console.print(f"Query: {query_fasta}")
+    console.print(f"ASV counts: {asv_count_csv}")
+    console.print(f"Output directory: {output_dir}\n")
+
+    try:
+        # Initialize assigner
+        assigner = TaxonomicAssigner(
+            method=method,
+            marker=marker,
+            output_dir=output_dir,
+        )
+
+        # Prepare method-specific arguments
+        kwargs = {}
+
+        if method == "blast":
+            if not reference_fasta:
+                print_error("--reference-fasta is required for BLAST method")
+                sys.exit(1)
+            kwargs.update({
+                "reference_fasta": reference_fasta,
+                "threshold_species": threshold_species,
+                "threshold_genus": threshold_genus,
+                "threshold_family": threshold_family,
+            })
+
+        elif method == "dada2":
+            if not rdp_db or not species_db:
+                print_error("--rdp-db and --species-db are required for DADA2 method")
+                sys.exit(1)
+            kwargs.update({
+                "rdp_db_path": rdp_db,
+                "species_db_path": species_db,
+            })
+
+        elif method == "ecotag":
+            if not taxonomy_db or not reference_db:
+                print_error("--taxonomy-db and --reference-db are required for ecotag method")
+                sys.exit(1)
+            kwargs.update({
+                "taxonomy_db": taxonomy_db,
+                "reference_db": reference_db,
+            })
+
+        elif method == "decipher":
+            if not trained_classifier:
+                print_error("--trained-classifier is required for DECIPHER method")
+                sys.exit(1)
+            kwargs.update({
+                "trained_classifier_path": trained_classifier,
+                "threshold": confidence_threshold,
+                "processors": processors,
+            })
+
+        # Run taxonomic assignment
+        console.print(f"[bold]Running {method.upper()} taxonomic assignment...[/bold]")
+        outputs = assigner.assign_taxonomy(
+            query_fasta=query_fasta,
+            asv_count_csv=asv_count_csv,
+            **kwargs,
+        )
+
+        print_success(f"\nTaxonomic assignment completed!")
+        console.print("\nOutput files:")
+        for key, path in outputs.items():
+            if path and Path(path).exists():
+                console.print(f"  {key}: {path}")
+
+        console.print()
+
+    except FileNotFoundError as e:
+        print_error(str(e))
+        sys.exit(1)
+    except ValueError as e:
+        print_error(str(e))
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"Taxonomic assignment failed: {e}")
+        import traceback
+
+        console.print(traceback.format_exc())
+        sys.exit(1)
+
+
+@main.command()
 def version() -> None:
     """Show version information."""
     console.print(f"\n[bold]seednap[/bold] version [cyan]{__version__}[/cyan]\n")
