@@ -390,8 +390,20 @@ class TestPipelineOrchestrator:
         config_file = tmp_path / "config.yaml"
         import yaml
 
+        # Convert Path objects to strings and tuples to lists for YAML serialization
+        def convert_paths(obj):
+            if isinstance(obj, Path):
+                return str(obj)
+            elif isinstance(obj, dict):
+                return {k: convert_paths(v) for k, v in obj.items()}
+            elif isinstance(obj, (list, tuple)):
+                return [convert_paths(item) for item in obj]
+            return obj
+
+        config_dict = convert_paths(minimal_config.model_dump(mode="python"))
+
         with open(config_file, "w") as f:
-            yaml.dump(minimal_config.model_dump(mode="python"), f)
+            yaml.dump(config_dict, f)
 
         with patch("seednap.pipeline.orchestrator.setup_logging"):
             with patch("seednap.config.loader.load_config", return_value=minimal_config):
