@@ -109,12 +109,6 @@ logging:
   file: true
   console: true
 
-# Computational resources
-resources:
-  max_cores: 12
-  memory_limit: "32G"
-  parallel_samples: 4
-
 # Pipeline execution steps
 pipeline:
   steps:
