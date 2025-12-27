@@ -1,4 +1,4 @@
-# seednap
+# SeeDNAP
 
 **Modern eDNA metabarcoding pipeline with DADA2**
 
