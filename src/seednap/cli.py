@@ -158,37 +158,6 @@ def init(output: Path, marker: str, force: bool) -> None:
 
 
 @main.command()
-@click.argument("config_file", type=click.Path(exists=True, path_type=Path))
-@click.option(
-    "--resume-from",
-    type=click.Choice(["trim", "dada2", "taxonomy", "export"]),
-    help="Resume pipeline from a specific step",
-)
-@click.option(
-    "--dry-run",
-    is_flag=True,
-    help="Show what would be run without executing",
-)
-@click.pass_context
-def run(ctx: click.Context, config_file: Path, resume_from: Optional[str], dry_run: bool) -> None:
-    """
-    Run the full seednap pipeline.
-
-    CONFIG_FILE: Path to the configuration YAML file.
-
-    This will execute all configured pipeline steps:
-    1. Primer trimming (cutadapt)
-    2. DADA2 denoising and merging
-    3. Taxonomic assignment
-    4. Export to various formats
-    """
-    print_warning("Pipeline execution not yet implemented (Phase 6)")
-    console.print("\nThis command will be available after Phase 6 implementation.")
-    console.print("For now, use the legacy main.sh script.")
-    sys.exit(1)
-
-
-@main.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
 @click.option(
     "--format",
@@ -215,7 +184,7 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
     Adds 'rank' and 'taxon' columns, filters zero counts, and renames columns
     to match GBIF standards (eventID instead of filter_code).
     """
-    from seednap.steps.format_gbif import format_dada2_to_gbif, format_ecotag_to_gbif
+    from seednap.steps.formatting.gbif_formatter import GBIFFormatter
 
     console.print(f"\n[bold]Converting to GBIF format:[/bold] {input_file}")
     console.print(f"Input format: {format_type}\n")
@@ -225,11 +194,13 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
         if output is None:
             output = input_file.parent / f"{input_file.stem}_gbif_input.csv"
 
+        formatter = GBIFFormatter()
+
         # Call appropriate formatter
         if format_type == "dada2":
-            df_out = format_dada2_to_gbif(input_file, output)
+            df_out = formatter.from_dada2_rdp(input_file, output)
         elif format_type == "ecotag":
-            df_out = format_ecotag_to_gbif(input_file, output)
+            df_out = formatter.from_ecotag(input_file, output)
         else:
             print_error(f"Unknown format type: {format_type}")
             sys.exit(1)

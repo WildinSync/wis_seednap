@@ -194,9 +194,9 @@ class DecipherRunner:
         logger.info(f"Running DECIPHER taxonomic assignment for {marker}")
 
         # Run R script
-        output = self._run_r_script(
+        self._run_r_script(
             script_path=script_path,
-            args=[marker, str(trained_classifier_path)],
+            args=[marker, str(trained_classifier_path), str(threshold), str(processors)],
             log_file=log_file,
         )
 

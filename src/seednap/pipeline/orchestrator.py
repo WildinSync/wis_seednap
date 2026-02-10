@@ -228,7 +228,7 @@ class PipelineOrchestrator:
             reverse_primer=self.config.marker.primers.reverse,
         )
 
-        return {"demux_dir": output_dir, **outputs}
+        return {"demux_dir": output_dir, "trimmed_dir": outputs}
 
     def _run_standard_demux(self) -> Dict[str, Path]:
         """Run standard demultiplexing."""
@@ -499,11 +499,21 @@ class PipelineOrchestrator:
                     add_rank=self.config.export.gbif.add_rank,
                     add_taxon=self.config.export.gbif.add_taxon,
                 )
+            elif self.config.taxonomy.method == "blast":
+                gbif_table = formatter.from_blast(
+                    taxonomy_csv,
+                    add_rank=self.config.export.gbif.add_rank,
+                    add_taxon=self.config.export.gbif.add_taxon,
+                )
+            elif self.config.taxonomy.method == "decipher":
+                gbif_table = formatter.from_decipher(
+                    taxonomy_csv,
+                    add_rank=self.config.export.gbif.add_rank,
+                    add_taxon=self.config.export.gbif.add_taxon,
+                )
             else:
-                # For BLAST and DECIPHER, use generic conversion
-                # (would need to implement specific formatters)
                 logger.warning(
-                    f"GBIF export not fully implemented for {self.config.taxonomy.method}"
+                    f"GBIF export not supported for {self.config.taxonomy.method}"
                 )
                 gbif_table = None
 

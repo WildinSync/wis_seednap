@@ -163,10 +163,17 @@ class Dada2Runner:
             # Default to the legacy R script
             script_path = Path("scripts/dada2_process.R")
 
-        # For now, use the existing R script with marker argument
-        # In the future, we'll create a parameterized version
-        output = self._run_r_script(
-            script_path=script_path, args=[marker], log_file=log_file
+        self._run_r_script(
+            script_path=script_path,
+            args=[
+                marker,
+                str(trimmed_reads_dir),
+                str(output_dir),
+                str(max_ee),
+                str(trunc_q),
+                str(min_overlap),
+            ],
+            log_file=log_file,
         )
 
         # Construct output paths

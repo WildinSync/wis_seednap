@@ -39,12 +39,14 @@ decipher_list_to_df <- function(file, confidence = FALSE){
 # Get the arguments
 args <- commandArgs(T)
 
-# Check file exist
-if (length(args)==0) {message("Please enter an valid file name.")} else
-{  
-  marker <- tolower(args[1]) #Must be character 
-  path_decipher_trained <- (args[2]) #Must be character 
+if (length(args) < 2) {
+  stop("Please provide marker and trained classifier path arguments.")
 }
+
+marker <- tolower(args[1]) # Must be character
+path_decipher_trained <- args[2] # Must be character
+threshold <- if (length(args) >= 3) as.integer(args[3]) else 60
+processors <- if (length(args) >= 4) as.integer(args[4]) else 8
 
 # Debug
 # marker <- "teleo"
@@ -55,8 +57,8 @@ seqtab <- readRDS(paste0("outputs/02_dada2/", marker, "/seqtab_clean.rds"))
 
 dna <- DNAStringSet(getSequences(as.matrix(seqtab))) # Create a DNAStringSet from the ASVs
 dna@ranges@NAMES <- colnames(seqtab)
-trainingset <- readRDS(paste0("utils/", marker, "_trained.rds")) 
-ids <- IdTaxa(dna, trainingset, strand="both", processors=8, verbose=TRUE, threshold = 60) # use all processors
+trainingset <- readRDS(path_decipher_trained)
+ids <- IdTaxa(dna, trainingset, strand="both", processors=processors, verbose=TRUE, threshold=threshold) # use configured processors/threshold
 ids_df <- decipher_list_to_df(ids, confidence = TRUE)
 colnames(ids_df)[1] <- "sequence"
  
