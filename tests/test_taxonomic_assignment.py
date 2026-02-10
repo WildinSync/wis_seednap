@@ -388,7 +388,7 @@ class TestTaxonomicAssigner:
                 # Missing reference_fasta!
             )
 
-    @patch("seednap.steps.dada2.dada2_runner.Dada2Runner")
+    @patch("seednap.steps.taxonomic_assignment.dada2_taxonomy_runner.Dada2TaxonomyRunner")
     def test_assign_dada2(self, mock_runner: MagicMock, temp_dir: Path) -> None:
         """Test DADA2 assignment through unified interface."""
         query_fasta = temp_dir / "query.fasta"

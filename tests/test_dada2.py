@@ -473,7 +473,7 @@ class TestDada2Processor:
         mock_check_packages.assert_called_once()
         mock_run_dada2.assert_called_once()
 
-    @patch("seednap.steps.dada2.dada2_runner.Dada2Runner.run_dada2_taxonomy")
+    @patch("seednap.steps.taxonomic_assignment.dada2_taxonomy_runner.Dada2TaxonomyRunner.run_dada2_taxonomy")
     @patch("subprocess.run")
     def test_assign_taxonomy(
         self, mock_subprocess: MagicMock, mock_run_taxonomy: MagicMock, temp_dir: Path

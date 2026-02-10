@@ -202,9 +202,9 @@ class TaxonomicAssigner:
         if rdp_db_path is None or species_db_path is None:
             raise ValueError("rdp_db_path and species_db_path are required for DADA2 method")
 
-        from seednap.steps.dada2.dada2_runner import Dada2Runner
+        from seednap.steps.taxonomic_assignment.dada2_taxonomy_runner import Dada2TaxonomyRunner
 
-        runner = Dada2Runner()
+        runner = Dada2TaxonomyRunner()
         outputs = runner.run_dada2_taxonomy(
             marker=self.marker,
             output_dir=self.output_dir,

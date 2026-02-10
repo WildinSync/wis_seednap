@@ -6,7 +6,7 @@ integrating R script execution with metrics collection and quality reporting.
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, Union
 
 from seednap.steps.dada2.dada2_runner import Dada2Runner
 from seednap.steps.dada2.metrics import MetricsCollector
@@ -164,8 +164,11 @@ class Dada2Processor:
                 "Run process() before assign_taxonomy()."
             )
 
+        from seednap.steps.taxonomic_assignment.dada2_taxonomy_runner import Dada2TaxonomyRunner
+
         log_file = self.output_dir / "dada2_taxonomy.log"
-        outputs = self.runner.run_dada2_taxonomy(
+        taxonomy_runner = Dada2TaxonomyRunner()
+        outputs = taxonomy_runner.run_dada2_taxonomy(
             marker=self.marker,
             output_dir=self.output_base_dir,
             rdp_db_path=rdp_db_path,

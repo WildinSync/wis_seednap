@@ -26,7 +26,6 @@ class Dada2Runner:
     - Error learning and sample inference
     - Chimera removal
     - ASV table generation
-    - Taxonomic assignment (DADA2 method)
     """
 
     def __init__(self, timeout: int = 14400):
@@ -182,63 +181,6 @@ class Dada2Runner:
             "query_fasta": marker_dir / "query.fasta",
             "corresp_seq": marker_dir / "corresp_seq.csv",
             "metrics_dir": marker_dir / "QC",  # Will rename to metrics
-        }
-
-    def run_dada2_taxonomy(
-        self,
-        marker: str,
-        output_dir: Union[str, Path],
-        rdp_db_path: Union[str, Path],
-        species_db_path: Union[str, Path],
-        script_path: Optional[Union[str, Path]] = None,
-        log_file: Optional[Union[str, Path]] = None,
-    ) -> Dict[str, Path]:
-        """
-        Run DADA2 taxonomic assignment.
-
-        Uses DADA2's naive Bayesian classifier with RDP training set.
-
-        Args:
-            marker: Marker name
-            output_dir: Base output directory
-            rdp_db_path: Path to RDP-formatted database (genus-level)
-            species_db_path: Path to species-level database
-            script_path: Path to R script (default: scripts/taxo_dada2_marker.R)
-            log_file: Path to log file
-
-        Returns:
-            Dictionary with paths to output files:
-            - taxonomy: Taxonomy table CSV
-            - complete: Complete table with taxonomy and abundances
-
-        Raises:
-            Dada2Error: If taxonomy assignment fails
-        """
-        if script_path is None:
-            script_path = Path("scripts/taxo_dada2_marker.R")
-
-        rdp_db_path = Path(rdp_db_path)
-        species_db_path = Path(species_db_path)
-
-        if not rdp_db_path.exists():
-            raise FileNotFoundError(f"RDP database not found: {rdp_db_path}")
-        if not species_db_path.exists():
-            raise FileNotFoundError(f"Species database not found: {species_db_path}")
-
-        # Run taxonomy assignment
-        output = self._run_r_script(
-            script_path=script_path,
-            args=[marker, str(rdp_db_path), str(species_db_path)],
-            log_file=log_file,
-        )
-
-        # Construct output paths
-        output_dir = Path(output_dir)
-        marker_dir = output_dir / "02_dada2" / marker
-
-        return {
-            "taxonomy": marker_dir / "taxonomy_dada2RDP.csv",
-            "complete": output_dir / f"{marker}_dada2RDP.csv",
         }
 
     def check_dada2_packages(self) -> Dict[str, str]:
