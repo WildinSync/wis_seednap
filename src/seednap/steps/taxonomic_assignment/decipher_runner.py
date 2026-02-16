@@ -11,6 +11,8 @@ from typing import Dict, Optional, Union
 
 import pandas as pd
 
+from seednap.utils.r_runner import RScriptRunner
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,13 +22,15 @@ class DecipherError(Exception):
     pass
 
 
-class DecipherRunner:
+class DecipherRunner(RScriptRunner):
     """
     Run DECIPHER taxonomic assignment via Rscript.
 
     DECIPHER uses a trained classifier (created with DECIPHER::LearnTaxa)
     to assign taxonomy to sequences with confidence scores.
     """
+
+    _error_class = DecipherError
 
     def __init__(self, timeout: int = 7200):
         """
@@ -35,28 +39,16 @@ class DecipherRunner:
         Args:
             timeout: Command timeout in seconds (default: 7200 = 2 hours)
         """
-        self.timeout = timeout
-        self._check_r_availability()
+        super().__init__(timeout=timeout)
+        self._check_decipher_package()
 
-    def _check_r_availability(self) -> None:
+    def _check_decipher_package(self) -> None:
         """
-        Check if R and DECIPHER package are available.
+        Check if DECIPHER R package is installed.
 
         Raises:
-            DecipherError: If R or DECIPHER is not found
+            DecipherError: If DECIPHER is not found
         """
-        try:
-            result = subprocess.run(
-                ["Rscript", "--version"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            logger.debug(f"Found Rscript: {result.stderr.strip()}")
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            raise DecipherError("Rscript not found. Is R installed?") from e
-
-        # Check for DECIPHER package
         r_code = """
         if (!requireNamespace("DECIPHER", quietly = TRUE)) {
             stop("DECIPHER package not installed")
@@ -79,64 +71,6 @@ class DecipherRunner:
                 "DECIPHER R package not installed. "
                 "Install with: install.packages('DECIPHER')"
             ) from e
-
-    def _run_r_script(
-        self,
-        script_path: Union[str, Path],
-        args: list,
-        log_file: Optional[Union[str, Path]] = None,
-    ) -> str:
-        """
-        Execute R script via Rscript.
-
-        Args:
-            script_path: Path to R script file
-            args: List of arguments to pass to script
-            log_file: Optional path to log file for stdout/stderr
-
-        Returns:
-            stdout from Rscript
-
-        Raises:
-            DecipherError: If Rscript command fails
-        """
-        script_path = Path(script_path)
-        if not script_path.exists():
-            raise FileNotFoundError(f"R script not found: {script_path}")
-
-        cmd = ["Rscript", str(script_path)] + [str(arg) for arg in args]
-        logger.info(f"Running R script: {script_path.name} {' '.join([str(a) for a in args])}")
-
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, check=True, timeout=self.timeout
-            )
-
-            # Write to log file if specified
-            if log_file:
-                log_path = Path(log_file)
-                log_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(log_path, "w") as f:
-                    f.write(f"Command: {' '.join(cmd)}\n")
-                    f.write(f"\n{'='*80}\n")
-                    f.write("STDOUT:\n")
-                    f.write(result.stdout)
-                    f.write(f"\n{'='*80}\n")
-                    f.write("STDERR:\n")
-                    f.write(result.stderr)
-
-            logger.debug(f"R script completed successfully: {script_path.name}")
-            return result.stdout
-
-        except subprocess.CalledProcessError as e:
-            error_msg = f"R script failed: {script_path.name}\n{e.stderr}"
-            logger.error(error_msg)
-            raise DecipherError(error_msg) from e
-
-        except subprocess.TimeoutExpired as e:
-            error_msg = f"R script timed out after {self.timeout} seconds: {script_path.name}"
-            logger.error(error_msg)
-            raise DecipherError(error_msg) from e
 
     def run_decipher_assignment(
         self,
@@ -166,7 +100,7 @@ class DecipherRunner:
         Returns:
             Dictionary with paths to output files:
             - taxonomy: Taxonomy table CSV (with confidence scores)
-            - complete: Complete table with taxonomy and abundances
+            - final_table: Complete table with taxonomy and abundances
 
         Raises:
             DecipherError: If DECIPHER assignment fails
@@ -196,7 +130,7 @@ class DecipherRunner:
         # Run R script
         self._run_r_script(
             script_path=script_path,
-            args=[marker, str(trained_classifier_path), str(threshold), str(processors)],
+            args=[marker, str(trained_classifier_path), str(threshold), str(processors), str(output_dir)],
             log_file=log_file,
         )
 
@@ -205,7 +139,7 @@ class DecipherRunner:
 
         return {
             "taxonomy": marker_dir / "taxo_assigned_decipher.csv",
-            "complete": output_dir / f"{marker}_decipher.csv",
+            "final_table": output_dir / f"{marker}_decipher.csv",
         }
 
     def link_with_abundance_table(

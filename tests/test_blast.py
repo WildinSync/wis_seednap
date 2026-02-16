@@ -6,13 +6,14 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from seednap.steps.taxonomic_assignment.blast import (
+from seednap.steps.taxonomic_assignment.blast_runner import (
+    BlastDatabaseError,
     BlastLCAResolver,
     BlastOutputFormatter,
     BlastPhyloFilter,
+    BlastRunner,
     BlastTaxonomicAssigner,
 )
-from seednap.steps.taxonomic_assignment.blast_runner import BlastDatabaseError, BlastRunner
 
 
 class TestBlastOutputFormatter:

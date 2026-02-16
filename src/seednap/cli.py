@@ -656,7 +656,7 @@ def dada2(
             )
 
             print_success("\nTaxonomic assignment completed!")
-            console.print(f"  Taxonomy table: {taxo_outputs['complete']}")
+            console.print(f"  Taxonomy table: {taxo_outputs['final_table']}")
 
         console.print()
 

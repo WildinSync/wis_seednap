@@ -47,13 +47,14 @@ marker <- tolower(args[1]) # Must be character
 path_decipher_trained <- args[2] # Must be character
 threshold <- if (length(args) >= 3) as.integer(args[3]) else 60
 processors <- if (length(args) >= 4) as.integer(args[4]) else 8
+output_dir <- if (length(args) >= 5) args[5] else "outputs"
 
 # Debug
 # marker <- "teleo"
 # path_decipher_trained <- "utils/teleo_trained.rds"
 
 # Open seqtab - abundance table output of dada2
-seqtab <- readRDS(paste0("outputs/02_dada2/", marker, "/seqtab_clean.rds"))
+seqtab <- readRDS(file.path(output_dir, "02_dada2", marker, "seqtab_clean.rds"))
 
 dna <- DNAStringSet(getSequences(as.matrix(seqtab))) # Create a DNAStringSet from the ASVs
 dna@ranges@NAMES <- colnames(seqtab)
@@ -62,15 +63,15 @@ ids <- IdTaxa(dna, trainingset, strand="both", processors=processors, verbose=TR
 ids_df <- decipher_list_to_df(ids, confidence = TRUE)
 colnames(ids_df)[1] <- "sequence"
  
-write.csv(ids_df, paste0("outputs/02_dada2/", marker, "/taxo_assigned_decipher.csv"), row.names= FALSE)
+write.csv(ids_df, file.path(output_dir, "02_dada2", marker, "taxo_assigned_decipher.csv"), row.names= FALSE)
 
 # Now link it to abundance table
 # Open data 
-samples <- read.csv(paste0("outputs/02_dada2/", marker, "/seqtab_clean_t.csv"))
+samples <- read.csv(file.path(output_dir, "02_dada2", marker, "seqtab_clean_t.csv"))
 colnames(samples)[1] <- "sequence"
 
 # Now link 
 decipher_taxo_complete <- dplyr::left_join(ids_df, samples) 
 
 # Now write the output
-write.csv(decipher_taxo_complete, paste0("outputs/", marker, "_decipher.csv"), row.names=TRUE)
+write.csv(decipher_taxo_complete, file.path(output_dir, paste0(marker, "_decipher.csv")), row.names=TRUE)

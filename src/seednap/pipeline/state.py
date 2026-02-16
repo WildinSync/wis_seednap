@@ -67,7 +67,10 @@ class StepState(BaseModel):
             ).total_seconds()
 
         if outputs:
-            self.outputs = outputs
+            # Normalize Path values to strings for consistent serialization
+            self.outputs = {
+                k: str(v) if isinstance(v, Path) else v for k, v in outputs.items()
+            }
 
         logger.info(
             f"Step '{self.name}' completed in {self.duration_seconds:.1f}s"

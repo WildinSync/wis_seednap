@@ -84,7 +84,7 @@ invisible(mclapply(valid_indices, function(i) {
   } else {
     message("Skipping ", name_sample, " due to an issue with plotQualityProfile.")
   }
-}, mc.cores = detectCores() - 30))
+}, mc.cores = max(1, detectCores() - 2)))
 
 # Filter
 filterAndTrim(fwd=file.path(pathFR, fastqFs), filt=file.path(filtpathFR, fastqFs),
@@ -98,7 +98,7 @@ invisible(mclapply(seq_along(paste0(filtpathFR, "/", fastqFs)), function(i) {
   
   # Try-catch to avoid errors stopping the loop
   p_f <- try(plotQualityProfile(paste0(filtpathFR, "/", fastqFs)[i]), silent = TRUE)
-  p_r <- try(plotQualityProfile(paste0(filtpathFR, "/", fastqFs)[i]), silent = TRUE)
+  p_r <- try(plotQualityProfile(paste0(filtpathFR, "/", fastqRs)[i]), silent = TRUE)
   
   # Check if plots were generated successfully
   if (!inherits(p_f, "try-error") & !inherits(p_r, "try-error")) {
@@ -109,7 +109,7 @@ invisible(mclapply(seq_along(paste0(filtpathFR, "/", fastqFs)), function(i) {
   } else {
     message("Skipping ", name_sample, " due to an issue with plotQualityProfile.")
   }
-}, mc.cores = detectCores() - 30))
+}, mc.cores = max(1, detectCores() - 2)))
 
 # FIltered reads
 filtFs <- list.files(filtpathFR, pattern="R1.fastq", full.names = TRUE)

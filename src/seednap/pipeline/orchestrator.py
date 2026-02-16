@@ -100,9 +100,13 @@ class PipelineOrchestrator:
         # Determine log file path
         log_file = None
         if log_config.file:
+            if hasattr(self, "state") and self.state.started_at:
+                timestamp = self.state.started_at.strftime("%Y%m%d_%H%M%S")
+            else:
+                timestamp = "run"
             log_file = (
                 self.config.paths.logs
-                / f"{self.config.marker.name}_pipeline_{self.state.started_at if hasattr(self, 'state') else 'run'}.log"
+                / f"{self.config.marker.name}_pipeline_{timestamp}.log"
             )
 
         # Setup logging using utility function
@@ -334,7 +338,10 @@ class PipelineOrchestrator:
             # Determine trimmed reads directory
             if self.state.is_step_completed("trim"):
                 trim_step = self.state.get_step("trim")
-                trimmed_reads_dir = trim_step.outputs.get("trimmed_dir")
+                trimmed_reads_dir = trim_step.outputs.get("trimmed_dir") if trim_step else None
+                if trimmed_reads_dir is None:
+                    raise ValueError("Trim step completed but no trimmed_dir in outputs")
+                trimmed_reads_dir = Path(trimmed_reads_dir)
             else:
                 # Use raw data if trimming was skipped
                 trimmed_reads_dir = self.config.paths.raw_data
@@ -388,8 +395,15 @@ class PipelineOrchestrator:
                 raise ValueError("DADA2 step must be completed before taxonomy")
 
             dada2_step = self.state.get_step("dada2")
+            if dada2_step is None:
+                raise ValueError("DADA2 step not found in pipeline state")
             query_fasta = dada2_step.outputs.get("query_fasta")
             asv_count_csv = dada2_step.outputs.get("seqtab_clean_t")
+            if query_fasta is None or asv_count_csv is None:
+                raise ValueError(
+                    f"DADA2 outputs incomplete: query_fasta={query_fasta}, "
+                    f"seqtab_clean_t={asv_count_csv}"
+                )
 
             # Create taxonomic assigner
             assigner = TaxonomicAssigner(
@@ -472,9 +486,9 @@ class PipelineOrchestrator:
                 raise ValueError("Taxonomy step must be completed before export")
 
             taxo_step = self.state.get_step("taxonomy")
-            taxonomy_csv = taxo_step.outputs.get("final_table") or taxo_step.outputs.get(
-                "complete"
-            )
+            if taxo_step is None:
+                raise ValueError("Taxonomy step not found in pipeline state")
+            taxonomy_csv = taxo_step.outputs.get("final_table")
 
             if taxonomy_csv is None:
                 raise ValueError("No taxonomy output file found")

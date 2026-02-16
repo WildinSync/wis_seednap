@@ -1,6 +1,4 @@
 """Configuration loading and validation utilities."""
-
-import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -153,18 +151,6 @@ def validate_config_file(config_path: Path) -> tuple[bool, Optional[str]]:
         return False, f"Unexpected error: {e}"
 
 
-def print_config_error(error_message: str, exit_code: int = 1) -> None:
-    """
-    Print a formatted configuration error message and exit.
-
-    Args:
-        error_message: Error message to display
-        exit_code: Exit code (default: 1)
-    """
-    print(f"\n❌ Configuration Error:\n{error_message}\n", file=sys.stderr)
-    sys.exit(exit_code)
-
-
 def get_default_config_path() -> Optional[Path]:
     """
     Get the default configuration file path.
@@ -212,6 +198,7 @@ marker:
     reverse: "CTTCCGGTACACTTACCATG"
     name: "{marker.capitalize()}"
     target: "12S rRNA"
+    amplicon_length: [100, 200]
 
 paths:
   raw_data: "data/raw"
@@ -229,6 +216,7 @@ trimming:
   max_error_rate: 0.1
   cores: 4
   discard_untrimmed: true
+  overlap: 3
 
 dada2:
   filter:
@@ -241,6 +229,8 @@ dada2:
     max_mismatch: 0
   chimera:
     method: "consensus"
+  pool: false
+  multithread: true
 
 taxonomy:
   method: "dada2"

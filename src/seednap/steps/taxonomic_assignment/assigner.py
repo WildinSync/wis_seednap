@@ -9,8 +9,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-from seednap.steps.taxonomic_assignment.blast import BlastTaxonomicAssigner
-from seednap.steps.taxonomic_assignment.blast_runner import BlastRunner
+from seednap.steps.taxonomic_assignment.blast_runner import BlastRunner, BlastTaxonomicAssigner
 from seednap.steps.taxonomic_assignment.decipher_runner import DecipherRunner
 from seednap.steps.taxonomic_assignment.ecotag_runner import EcotagRunner
 
@@ -107,6 +106,8 @@ class TaxonomicAssigner:
             return self._assign_ecotag(query_fasta, asv_count_csv, **method_specific_kwargs)
         elif self.method == TaxonomyMethod.DECIPHER:
             return self._assign_decipher(query_fasta, asv_count_csv, **method_specific_kwargs)
+        else:
+            raise ValueError(f"Unsupported taxonomy method: {self.method}")
 
     def _assign_blast(
         self,
@@ -212,7 +213,7 @@ class TaxonomicAssigner:
             species_db_path=species_db_path,
         )
 
-        logger.info(f"DADA2 assignment completed: {outputs['complete']}")
+        logger.info(f"DADA2 assignment completed: {outputs['final_table']}")
 
         return outputs
 
@@ -261,7 +262,7 @@ class TaxonomicAssigner:
             output_csv=complete_output,
         )
 
-        outputs["complete"] = complete_output
+        outputs["final_table"] = complete_output
 
         logger.info(f"Ecotag assignment completed: {complete_output}")
 
@@ -305,7 +306,7 @@ class TaxonomicAssigner:
             processors=processors,
         )
 
-        logger.info(f"DECIPHER assignment completed: {outputs['complete']}")
+        logger.info(f"DECIPHER assignment completed: {outputs['final_table']}")
 
         return outputs
 

@@ -5,9 +5,10 @@ This module provides a Python wrapper around DADA2's naive Bayesian classifier
 """
 
 import logging
-import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, Optional, Union
+
+from seednap.utils.r_runner import RScriptRunner
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +19,15 @@ class Dada2TaxonomyError(Exception):
     pass
 
 
-class Dada2TaxonomyRunner:
+class Dada2TaxonomyRunner(RScriptRunner):
     """
     Run DADA2 taxonomic assignment via Rscript.
 
     DADA2 uses a naive Bayesian classifier with RDP training set
     for genus-level assignment and exact matching for species-level.
     """
+
+    _error_class = Dada2TaxonomyError
 
     def __init__(self, timeout: int = 7200):
         """
@@ -33,84 +36,7 @@ class Dada2TaxonomyRunner:
         Args:
             timeout: Command timeout in seconds (default: 7200 = 2 hours)
         """
-        self.timeout = timeout
-        self._check_r_availability()
-
-    def _check_r_availability(self) -> None:
-        """
-        Check if R and DADA2 package are available.
-
-        Raises:
-            Dada2TaxonomyError: If R or DADA2 is not found
-        """
-        try:
-            result = subprocess.run(
-                ["Rscript", "--version"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            logger.debug(f"Found Rscript: {result.stderr.strip()}")
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            raise Dada2TaxonomyError("Rscript not found. Is R installed?") from e
-
-    def _run_r_script(
-        self,
-        script_path: Union[str, Path],
-        args: List[str],
-        log_file: Optional[Union[str, Path]] = None,
-    ) -> str:
-        """
-        Execute R script via Rscript.
-
-        Args:
-            script_path: Path to R script file
-            args: List of arguments to pass to script
-            log_file: Optional path to log file for stdout/stderr
-
-        Returns:
-            stdout from Rscript
-
-        Raises:
-            Dada2TaxonomyError: If Rscript command fails
-        """
-        script_path = Path(script_path)
-        if not script_path.exists():
-            raise FileNotFoundError(f"R script not found: {script_path}")
-
-        cmd = ["Rscript", str(script_path)] + [str(arg) for arg in args]
-        logger.info(f"Running R script: {script_path.name} {' '.join([str(a) for a in args])}")
-
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, check=True, timeout=self.timeout
-            )
-
-            # Write to log file if specified
-            if log_file:
-                log_path = Path(log_file)
-                log_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(log_path, "w") as f:
-                    f.write(f"Command: {' '.join(cmd)}\n")
-                    f.write(f"\n{'='*80}\n")
-                    f.write("STDOUT:\n")
-                    f.write(result.stdout)
-                    f.write(f"\n{'='*80}\n")
-                    f.write("STDERR:\n")
-                    f.write(result.stderr)
-
-            logger.debug(f"R script completed successfully: {script_path.name}")
-            return result.stdout
-
-        except subprocess.CalledProcessError as e:
-            error_msg = f"R script failed: {script_path.name}\n{e.stderr}"
-            logger.error(error_msg)
-            raise Dada2TaxonomyError(error_msg) from e
-
-        except subprocess.TimeoutExpired as e:
-            error_msg = f"R script timed out after {self.timeout} seconds: {script_path.name}"
-            logger.error(error_msg)
-            raise Dada2TaxonomyError(error_msg) from e
+        super().__init__(timeout=timeout)
 
     def run_dada2_taxonomy(
         self,
@@ -137,7 +63,7 @@ class Dada2TaxonomyRunner:
         Returns:
             Dictionary with paths to output files:
             - taxonomy: Taxonomy table CSV
-            - complete: Complete table with taxonomy and abundances
+            - final_table: Complete table with taxonomy and abundances
 
         Raises:
             Dada2TaxonomyError: If taxonomy assignment fails
@@ -167,7 +93,7 @@ class Dada2TaxonomyRunner:
         # Run taxonomy assignment
         self._run_r_script(
             script_path=script_path,
-            args=[marker, str(rdp_db_path), str(species_db_path)],
+            args=[marker, str(rdp_db_path), str(species_db_path), str(output_dir)],
             log_file=log_file,
         )
 
@@ -176,5 +102,5 @@ class Dada2TaxonomyRunner:
 
         return {
             "taxonomy": marker_dir / "taxonomy_dada2RDP.csv",
-            "complete": output_dir / f"{marker}_dada2RDP.csv",
+            "final_table": output_dir / f"{marker}_dada2RDP.csv",
         }

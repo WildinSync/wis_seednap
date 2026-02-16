@@ -177,7 +177,7 @@ class Dada2Processor:
         )
 
         logger.info(f"Taxonomic assignment completed successfully")
-        logger.info(f"Taxonomy table: {outputs['complete']}")
+        logger.info(f"Taxonomy table: {outputs['final_table']}")
 
         return outputs
 
