@@ -5,13 +5,11 @@ for taxonomic assignment of eDNA sequences.
 """
 
 import logging
-import subprocess
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-import pandas as pd
-
 from seednap.utils.r_runner import RScriptRunner
+from seednap.utils.subprocess import run_subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -56,21 +54,13 @@ class DecipherRunner(RScriptRunner):
         cat(as.character(packageVersion("DECIPHER")))
         """
 
-        try:
-            result = subprocess.run(
-                ["Rscript", "-e", r_code],
-                capture_output=True,
-                text=True,
-                check=True,
-                timeout=30,
-            )
-            version = result.stdout.strip()
-            logger.info(f"Found DECIPHER version: {version}")
-        except subprocess.CalledProcessError as e:
-            raise DecipherError(
-                "DECIPHER R package not installed. "
-                "Install with: install.packages('DECIPHER')"
-            ) from e
+        stdout = run_subprocess(
+            ["Rscript", "-e", r_code],
+            timeout=30,
+            error_class=DecipherError,
+        )
+        version = stdout.strip()
+        logger.info(f"Found DECIPHER version: {version}")
 
     def run_decipher_assignment(
         self,
@@ -161,28 +151,11 @@ class DecipherRunner(RScriptRunner):
         Returns:
             Path to output CSV file with merged taxonomy and abundances
         """
-        taxonomy_csv = Path(taxonomy_csv)
-        abundance_csv = Path(abundance_csv)
-        output_csv = Path(output_csv)
+        from seednap.utils.taxonomy import link_taxonomy_with_abundance
 
-        if not taxonomy_csv.exists():
-            raise FileNotFoundError(f"Taxonomy CSV not found: {taxonomy_csv}")
-        if not abundance_csv.exists():
-            raise FileNotFoundError(f"Abundance CSV not found: {abundance_csv}")
-
-        # Read taxonomy
-        taxo_df = pd.read_csv(taxonomy_csv)
-
-        # Read abundance table
-        abundance_df = pd.read_csv(abundance_csv, index_col=0)
-        abundance_df = abundance_df.reset_index().rename(columns={"index": sequence_col})
-
-        # Merge
-        result = pd.merge(taxo_df, abundance_df, on=sequence_col, how="left")
-
-        # Write output
-        output_csv.parent.mkdir(parents=True, exist_ok=True)
-        result.to_csv(output_csv, index=False)
-
-        logger.info(f"Linked DECIPHER taxonomy with abundances: {output_csv}")
-        return output_csv
+        return link_taxonomy_with_abundance(
+            taxonomy_path=taxonomy_csv,
+            abundance_path=abundance_csv,
+            output_path=output_csv,
+            sequence_col=sequence_col,
+        )

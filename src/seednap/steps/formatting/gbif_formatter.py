@@ -138,6 +138,44 @@ class GBIFFormatter:
 
         return df_long
 
+    def from_method(
+        self,
+        method: str,
+        input_path: Union[str, Path],
+        output_path: Optional[Union[str, Path]] = None,
+        add_rank: bool = True,
+        add_taxon: bool = True,
+    ) -> pd.DataFrame:
+        """
+        Dispatch to the correct formatter based on taxonomy method name.
+
+        Args:
+            method: Taxonomy method ('dada2', 'ecotag', 'blast', 'decipher').
+            input_path: Path to taxonomy CSV file.
+            output_path: Optional path to output GBIF CSV file.
+            add_rank: Whether to add 'rank' column (default: True).
+            add_taxon: Whether to add 'taxon' column (default: True).
+
+        Returns:
+            DataFrame in GBIF-compatible long format.
+
+        Raises:
+            ValueError: If method is not recognised.
+        """
+        dispatch = {
+            "dada2": self.from_dada2_rdp,
+            "ecotag": self.from_ecotag,
+            "blast": self.from_blast,
+            "decipher": self.from_decipher,
+        }
+        formatter_fn = dispatch.get(method)
+        if formatter_fn is None:
+            raise ValueError(
+                f"Unknown taxonomy method '{method}'. "
+                f"Supported: {', '.join(dispatch)}"
+            )
+        return formatter_fn(input_path, output_path, add_rank, add_taxon)
+
     def from_dada2_rdp(
         self,
         input_path: Union[str, Path],

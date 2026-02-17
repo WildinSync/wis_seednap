@@ -195,19 +195,7 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
             output = input_file.parent / f"{input_file.stem}_gbif_input.csv"
 
         formatter = GBIFFormatter()
-
-        # Call appropriate formatter
-        if format_type == "dada2":
-            df_out = formatter.from_dada2_rdp(input_file, output)
-        elif format_type == "ecotag":
-            df_out = formatter.from_ecotag(input_file, output)
-        elif format_type == "blast":
-            df_out = formatter.from_blast(input_file, output)
-        elif format_type == "decipher":
-            df_out = formatter.from_decipher(input_file, output)
-        else:
-            print_error(f"Unknown format type: {format_type}")
-            sys.exit(1)
+        df_out = formatter.from_method(format_type, input_file, output)
 
         # Print success message with stats
         print_success(f"Converted to GBIF format!")
@@ -741,10 +729,16 @@ def dada2(
                 print_error("--rdp-db and --species-db are required for taxonomy assignment")
                 sys.exit(1)
 
+            from seednap.steps.taxonomic_assignment.dada2_taxonomy_runner import Dada2TaxonomyRunner
+
             console.print("\n[bold]Running taxonomic assignment...[/bold]")
-            taxo_outputs = processor.assign_taxonomy(
+            taxonomy_runner = Dada2TaxonomyRunner()
+            taxo_outputs = taxonomy_runner.run_dada2_taxonomy(
+                marker=marker,
+                output_dir=output_dir,
                 rdp_db_path=rdp_db,
                 species_db_path=species_db,
+                log_file=output_dir / "02_dada2" / marker / "dada2_taxonomy.log",
             )
 
             print_success("\nTaxonomic assignment completed!")

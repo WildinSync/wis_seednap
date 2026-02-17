@@ -6,9 +6,10 @@ and DECIPHER runners.
 """
 
 import logging
-import subprocess
 from pathlib import Path
 from typing import List, Optional, Union
+
+from seednap.utils.subprocess import run_subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -46,16 +47,11 @@ class RScriptRunner:
         Raises:
             RScriptError (or subclass): If Rscript is not found
         """
-        try:
-            result = subprocess.run(
-                ["Rscript", "--version"],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            logger.debug(f"Found Rscript: {result.stderr.strip()}")
-        except (subprocess.CalledProcessError, FileNotFoundError) as e:
-            raise self._error_class("Rscript not found. Is R installed?") from e
+        run_subprocess(
+            ["Rscript", "--version"],
+            timeout=10,
+            error_class=self._error_class,
+        )
 
     def _run_r_script(
         self,
@@ -82,35 +78,11 @@ class RScriptRunner:
             raise FileNotFoundError(f"R script not found: {script_path}")
 
         cmd = ["Rscript", str(script_path)] + [str(arg) for arg in args]
-        logger.info(f"Running R script: {script_path.name} {' '.join([str(a) for a in args])}")
 
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, check=True, timeout=self.timeout
-            )
-
-            # Write to log file if specified
-            if log_file:
-                log_path = Path(log_file)
-                log_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(log_path, "w") as f:
-                    f.write(f"Command: {' '.join(cmd)}\n")
-                    f.write(f"\n{'='*80}\n")
-                    f.write("STDOUT:\n")
-                    f.write(result.stdout)
-                    f.write(f"\n{'='*80}\n")
-                    f.write("STDERR:\n")
-                    f.write(result.stderr)
-
-            logger.debug(f"R script completed successfully: {script_path.name}")
-            return result.stdout
-
-        except subprocess.CalledProcessError as e:
-            error_msg = f"R script failed: {script_path.name}\n{e.stderr}"
-            logger.error(error_msg)
-            raise self._error_class(error_msg) from e
-
-        except subprocess.TimeoutExpired as e:
-            error_msg = f"R script timed out after {self.timeout} seconds: {script_path.name}"
-            logger.error(error_msg)
-            raise self._error_class(error_msg) from e
+        return run_subprocess(
+            cmd,
+            timeout=self.timeout,
+            log_file=log_file,
+            log_append=False,
+            error_class=self._error_class,
+        )

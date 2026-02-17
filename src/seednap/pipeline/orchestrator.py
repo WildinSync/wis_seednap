@@ -503,42 +503,15 @@ class PipelineOrchestrator:
                 / f"{self.config.marker.name}_{self.config.taxonomy.method}_gbif.csv"
             )
 
-            # Convert based on method
-            if self.config.taxonomy.method == "dada2":
-                gbif_table = formatter.from_dada2_rdp(
-                    taxonomy_csv,
-                    add_rank=self.config.export.gbif.add_rank,
-                    add_taxon=self.config.export.gbif.add_taxon,
-                )
-            elif self.config.taxonomy.method == "ecotag":
-                gbif_table = formatter.from_ecotag(
-                    taxonomy_csv,
-                    add_rank=self.config.export.gbif.add_rank,
-                    add_taxon=self.config.export.gbif.add_taxon,
-                )
-            elif self.config.taxonomy.method == "blast":
-                gbif_table = formatter.from_blast(
-                    taxonomy_csv,
-                    add_rank=self.config.export.gbif.add_rank,
-                    add_taxon=self.config.export.gbif.add_taxon,
-                )
-            elif self.config.taxonomy.method == "decipher":
-                gbif_table = formatter.from_decipher(
-                    taxonomy_csv,
-                    add_rank=self.config.export.gbif.add_rank,
-                    add_taxon=self.config.export.gbif.add_taxon,
-                )
-            else:
-                logger.warning(
-                    f"GBIF export not supported for {self.config.taxonomy.method}"
-                )
-                gbif_table = None
+            gbif_table = formatter.from_method(
+                method=self.config.taxonomy.method,
+                input_path=taxonomy_csv,
+                add_rank=self.config.export.gbif.add_rank,
+                add_taxon=self.config.export.gbif.add_taxon,
+            )
 
-            if gbif_table is not None:
-                gbif_table.to_csv(output_path, index=False)
-                outputs = {"gbif_csv": output_path}
-            else:
-                outputs = {}
+            gbif_table.to_csv(output_path, index=False)
+            outputs = {"gbif_csv": output_path}
 
             self.state.complete_step(step_name, outputs)
             self._save_state()

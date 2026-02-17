@@ -11,13 +11,13 @@ Author: Théophile Sanchez (original), refactored for seednap v0.1.0
 """
 
 import logging
-import subprocess
 from pathlib import Path
 from typing import Dict, Union
 
 import pandas as pd
 
 from seednap.utils.sequences import fasta_to_df
+from seednap.utils.subprocess import run_subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -97,29 +97,8 @@ class BlastRunner:
         logger.info(f"Creating BLAST database for {fasta_path}")
 
         cmd = ["makeblastdb", "-dbtype", "nucl", "-in", str(fasta_path)]
-
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, check=True, timeout=600  # 10 minute timeout
-            )
-
-            logger.debug(f"makeblastdb stdout: {result.stdout}")
-            logger.info("BLAST database created successfully")
-
-        except subprocess.CalledProcessError as e:
-            error_msg = f"makeblastdb failed: {e.stderr}"
-            logger.error(error_msg)
-            raise BlastError(error_msg) from e
-
-        except subprocess.TimeoutExpired as e:
-            error_msg = "makeblastdb timed out after 10 minutes"
-            logger.error(error_msg)
-            raise BlastError(error_msg) from e
-
-        except FileNotFoundError as e:
-            error_msg = "makeblastdb command not found. Is BLAST installed?"
-            logger.error(error_msg)
-            raise BlastError(error_msg) from e
+        run_subprocess(cmd, timeout=600, error_class=BlastError)
+        logger.info("BLAST database created successfully")
 
     def run_blastn(
         self, query_fasta: Union[str, Path], db_fasta: Union[str, Path], output_tsv: Union[str, Path]
@@ -182,28 +161,8 @@ class BlastRunner:
             str(self.max_target_seqs),
         ]
 
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, check=True, timeout=3600  # 1 hour timeout
-            )
-
-            logger.debug(f"blastn stdout: {result.stdout}")
-            logger.info(f"BLAST search completed, output saved to {output_tsv}")
-
-        except subprocess.CalledProcessError as e:
-            error_msg = f"blastn failed: {e.stderr}"
-            logger.error(error_msg)
-            raise BlastError(error_msg) from e
-
-        except subprocess.TimeoutExpired as e:
-            error_msg = "blastn timed out after 1 hour"
-            logger.error(error_msg)
-            raise BlastError(error_msg) from e
-
-        except FileNotFoundError as e:
-            error_msg = "blastn command not found. Is BLAST installed?"
-            logger.error(error_msg)
-            raise BlastError(error_msg) from e
+        run_subprocess(cmd, timeout=3600, error_class=BlastError)
+        logger.info(f"BLAST search completed, output saved to {output_tsv}")
 
     def run_blast_pipeline(
         self,

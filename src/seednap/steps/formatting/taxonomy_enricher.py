@@ -13,9 +13,6 @@ from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-# Load .env from the project root (or wherever the user placed it).
-load_dotenv()
-
 # Rate-limit: NCBI allows 10 req/s with API key, 3 req/s without.
 _NCBI_DELAY_WITH_KEY = 0.1  # seconds between requests
 _NCBI_DELAY_NO_KEY = 0.34
@@ -30,6 +27,7 @@ class TaxonomyEnricher:
     """
 
     def __init__(self, email: str = "seednap@ethz.ch") -> None:
+        load_dotenv()
         self._cache: Dict[str, Tuple[Optional[str], Optional[str], Optional[str]]] = {}
         self._api_key: Optional[str] = os.environ.get("NCBI_API_KEY")
         self._email = email

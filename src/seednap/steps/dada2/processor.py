@@ -133,54 +133,6 @@ class Dada2Processor:
 
         return outputs
 
-    def assign_taxonomy(
-        self,
-        rdp_db_path: Union[str, Path],
-        species_db_path: Union[str, Path],
-    ) -> Dict[str, Path]:
-        """
-        Perform taxonomic assignment using DADA2's naive Bayesian classifier.
-
-        This should be run after process() completes successfully.
-
-        Args:
-            rdp_db_path: Path to RDP-formatted taxonomy database (genus-level)
-            species_db_path: Path to species-level database
-
-        Returns:
-            Dictionary with paths to taxonomy output files
-
-        Raises:
-            FileNotFoundError: If database files or required inputs are missing
-            Dada2Error: If taxonomy assignment fails
-        """
-        logger.info(f"Starting DADA2 taxonomic assignment for {self.marker}")
-
-        # Check that sequence table exists
-        seqtab_rds = self.output_dir / "seqtab_clean.rds"
-        if not seqtab_rds.exists():
-            raise FileNotFoundError(
-                f"Sequence table not found: {seqtab_rds}. "
-                "Run process() before assign_taxonomy()."
-            )
-
-        from seednap.steps.taxonomic_assignment.dada2_taxonomy_runner import Dada2TaxonomyRunner
-
-        log_file = self.output_dir / "dada2_taxonomy.log"
-        taxonomy_runner = Dada2TaxonomyRunner()
-        outputs = taxonomy_runner.run_dada2_taxonomy(
-            marker=self.marker,
-            output_dir=self.output_base_dir,
-            rdp_db_path=rdp_db_path,
-            species_db_path=species_db_path,
-            log_file=log_file,
-        )
-
-        logger.info(f"Taxonomic assignment completed successfully")
-        logger.info(f"Taxonomy table: {outputs['final_table']}")
-
-        return outputs
-
     def _collect_metrics(self, outputs: Dict[str, Path]) -> None:
         """
         Collect metrics from DADA2 outputs.

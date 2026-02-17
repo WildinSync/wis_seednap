@@ -5,11 +5,10 @@ for taxonomic assignment of eDNA sequences.
 """
 
 import logging
-import subprocess
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-import pandas as pd
+from seednap.utils.subprocess import run_subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -48,18 +47,9 @@ class EcotagRunner:
             EcotagError: If OBITools is not found
         """
         for cmd in ["ecotag", "obiannotate", "obitab"]:
-            try:
-                subprocess.run(
-                    [cmd, "--version"],
-                    capture_output=True,
-                    check=True,
-                    timeout=10,
-                )
-                logger.debug(f"Found OBITools command: {cmd}")
-            except (subprocess.CalledProcessError, FileNotFoundError) as e:
-                raise EcotagError(
-                    f"OBITools command '{cmd}' not found. Is OBITools installed?"
-                ) from e
+            run_subprocess(
+                [cmd, "--version"], timeout=10, error_class=EcotagError
+            )
 
     def _run_command(
         self,
@@ -79,39 +69,12 @@ class EcotagRunner:
         Raises:
             EcotagError: If command fails
         """
-        logger.info(f"Running: {' '.join(cmd)}")
-
-        try:
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, check=True, timeout=self.timeout
-            )
-
-            # Write to log file if specified
-            if log_file:
-                log_path = Path(log_file)
-                log_path.parent.mkdir(parents=True, exist_ok=True)
-                with open(log_path, "a") as f:
-                    f.write(f"Command: {' '.join(cmd)}\n")
-                    f.write(f"\n{'='*80}\n")
-                    f.write("STDOUT:\n")
-                    f.write(result.stdout)
-                    f.write(f"\n{'='*80}\n")
-                    f.write("STDERR:\n")
-                    f.write(result.stderr)
-                    f.write(f"\n{'='*80}\n\n")
-
-            logger.debug(f"Command completed successfully")
-            return result.stdout
-
-        except subprocess.CalledProcessError as e:
-            error_msg = f"Command failed: {' '.join(cmd)}\n{e.stderr}"
-            logger.error(error_msg)
-            raise EcotagError(error_msg) from e
-
-        except subprocess.TimeoutExpired as e:
-            error_msg = f"Command timed out after {self.timeout} seconds"
-            logger.error(error_msg)
-            raise EcotagError(error_msg) from e
+        return run_subprocess(
+            cmd,
+            timeout=self.timeout,
+            log_file=log_file,
+            error_class=EcotagError,
+        )
 
     def run_ecotag(
         self,
@@ -378,28 +341,12 @@ class EcotagRunner:
         Returns:
             Path to output CSV file with merged taxonomy and abundances
         """
-        taxonomy_tsv = Path(taxonomy_tsv)
-        abundance_csv = Path(abundance_csv)
-        output_csv = Path(output_csv)
+        from seednap.utils.taxonomy import link_taxonomy_with_abundance
 
-        if not taxonomy_tsv.exists():
-            raise FileNotFoundError(f"Taxonomy TSV not found: {taxonomy_tsv}")
-        if not abundance_csv.exists():
-            raise FileNotFoundError(f"Abundance CSV not found: {abundance_csv}")
-
-        # Read taxonomy
-        taxo_df = pd.read_csv(taxonomy_tsv, sep="\t")
-
-        # Read abundance table
-        abundance_df = pd.read_csv(abundance_csv, index_col=0)
-        abundance_df = abundance_df.reset_index().rename(columns={"index": sequence_col})
-
-        # Merge
-        result = pd.merge(taxo_df, abundance_df, on=sequence_col, how="left")
-
-        # Write output
-        output_csv.parent.mkdir(parents=True, exist_ok=True)
-        result.to_csv(output_csv, index=False)
-
-        logger.info(f"Linked taxonomy with abundances: {output_csv}")
-        return output_csv
+        return link_taxonomy_with_abundance(
+            taxonomy_path=taxonomy_tsv,
+            abundance_path=abundance_csv,
+            output_path=output_csv,
+            sequence_col=sequence_col,
+            taxonomy_sep="\t",
+        )
