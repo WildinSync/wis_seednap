@@ -19,6 +19,17 @@ from pydantic import BaseModel, Field
 logger = logging.getLogger(__name__)
 
 
+def _serialize_outputs(obj: Any) -> Any:
+    """Recursively convert Path objects to strings for JSON serialization."""
+    if isinstance(obj, Path):
+        return str(obj)
+    elif isinstance(obj, dict):
+        return {k: _serialize_outputs(v) for k, v in obj.items()}
+    elif isinstance(obj, (list, tuple)):
+        return [_serialize_outputs(v) for v in obj]
+    return obj
+
+
 class StepStatus(str, Enum):
     """Status of a pipeline step."""
 
@@ -68,9 +79,7 @@ class StepState(BaseModel):
 
         if outputs:
             # Normalize Path values to strings for consistent serialization
-            self.outputs = {
-                k: str(v) if isinstance(v, Path) else v for k, v in outputs.items()
-            }
+            self.outputs = _serialize_outputs(outputs)
 
         logger.info(
             f"Step '{self.name}' completed in {self.duration_seconds:.1f}s"

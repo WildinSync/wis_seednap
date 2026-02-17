@@ -198,7 +198,7 @@ class TaxonomicAssigner:
             species_db_path: Path to species database (required)
 
         Returns:
-            Dictionary with 'taxonomy' and 'complete' keys
+            Dictionary with 'taxonomy' and 'final_table' keys
         """
         if rdp_db_path is None or species_db_path is None:
             raise ValueError("rdp_db_path and species_db_path are required for DADA2 method")
@@ -235,7 +235,7 @@ class TaxonomicAssigner:
             reference_db: Path to reference sequence database (required)
 
         Returns:
-            Dictionary with 'taxonomy_tsv' and 'complete' keys
+            Dictionary with 'taxonomy_tsv' and 'final_table' keys
         """
         if taxonomy_db is None or reference_db is None:
             raise ValueError("taxonomy_db and reference_db are required for ecotag method")
@@ -288,7 +288,7 @@ class TaxonomicAssigner:
             processors: Number of CPU cores (default: 8)
 
         Returns:
-            Dictionary with 'taxonomy' and 'complete' keys
+            Dictionary with 'taxonomy' and 'final_table' keys
         """
         if trained_classifier_path is None:
             raise ValueError("trained_classifier_path is required for DECIPHER method")

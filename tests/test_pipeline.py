@@ -534,13 +534,13 @@ class TestPipelineOrchestrator:
             mock_assigner = MagicMock()
             mock_assigner.assign_taxonomy.return_value = {
                 "taxonomy": tmp_path / "taxonomy.csv",
-                "complete": tmp_path / "complete.csv",
+                "final_table": tmp_path / "complete.csv",
             }
             mock_assigner_class.return_value = mock_assigner
 
             outputs = orchestrator.run_taxonomy()
 
-            assert "taxonomy" in outputs or "complete" in outputs
+            assert "final_table" in outputs
             assert orchestrator.state.is_step_completed("taxonomy")
             mock_assigner.assign_taxonomy.assert_called_once()
 
@@ -566,7 +566,7 @@ class TestPipelineOrchestrator:
             taxonomy_csv.write_text("sequence,kingdom\nATCG,Animalia\n")
 
             orchestrator.state.start_step("taxonomy")
-            orchestrator.state.complete_step("taxonomy", {"complete": taxonomy_csv})
+            orchestrator.state.complete_step("taxonomy", {"final_table": taxonomy_csv})
 
             # Mock formatter
             mock_formatter = MagicMock()

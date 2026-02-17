@@ -163,7 +163,7 @@ def init(output: Path, marker: str, force: bool) -> None:
     "--format",
     "-f",
     "format_type",
-    type=click.Choice(["dada2", "ecotag"]),
+    type=click.Choice(["dada2", "ecotag", "blast", "decipher"]),
     required=True,
     help="Input format type",
 )
@@ -201,6 +201,10 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
             df_out = formatter.from_dada2_rdp(input_file, output)
         elif format_type == "ecotag":
             df_out = formatter.from_ecotag(input_file, output)
+        elif format_type == "blast":
+            df_out = formatter.from_blast(input_file, output)
+        elif format_type == "decipher":
+            df_out = formatter.from_decipher(input_file, output)
         else:
             print_error(f"Unknown format type: {format_type}")
             sys.exit(1)

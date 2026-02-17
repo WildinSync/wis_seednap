@@ -404,6 +404,8 @@ class PipelineOrchestrator:
                     f"DADA2 outputs incomplete: query_fasta={query_fasta}, "
                     f"seqtab_clean_t={asv_count_csv}"
                 )
+            query_fasta = Path(query_fasta)
+            asv_count_csv = Path(asv_count_csv)
 
             # Create taxonomic assigner
             assigner = TaxonomicAssigner(
@@ -492,6 +494,7 @@ class PipelineOrchestrator:
 
             if taxonomy_csv is None:
                 raise ValueError("No taxonomy output file found")
+            taxonomy_csv = Path(taxonomy_csv)
 
             # Format for GBIF
             formatter = GBIFFormatter()

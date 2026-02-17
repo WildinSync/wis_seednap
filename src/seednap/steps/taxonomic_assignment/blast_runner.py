@@ -13,7 +13,7 @@ Author: Théophile Sanchez (original), refactored for seednap v0.1.0
 import logging
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, Union
 
 import pandas as pd
 

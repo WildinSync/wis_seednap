@@ -7,7 +7,7 @@ handling primer trimming, demultiplexing, and adapter removal for eDNA metabarco
 import logging
 import subprocess
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import List, Optional, Union
 
 logger = logging.getLogger(__name__)
 

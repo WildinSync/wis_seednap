@@ -498,7 +498,7 @@ class TestDada2Processor:
         # Mock taxonomy return
         mock_run_taxonomy.return_value = {
             "taxonomy": output_dir / "taxonomy_dada2RDP.csv",
-            "complete": temp_dir / "test_dada2RDP.csv",
+            "final_table": temp_dir / "test_dada2RDP.csv",
         }
 
         # Create DB files
@@ -518,7 +518,7 @@ class TestDada2Processor:
 
         # Verify
         assert "taxonomy" in outputs
-        assert "complete" in outputs
+        assert "final_table" in outputs
         mock_run_taxonomy.assert_called_once()
 
     def test_assign_taxonomy_missing_seqtab(self, temp_dir: Path) -> None:

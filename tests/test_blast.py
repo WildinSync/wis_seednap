@@ -7,7 +7,6 @@ import pandas as pd
 import pytest
 
 from seednap.steps.taxonomic_assignment.blast_runner import (
-    BlastDatabaseError,
     BlastLCAResolver,
     BlastOutputFormatter,
     BlastPhyloFilter,

@@ -291,7 +291,7 @@ class TestDecipherRunner:
         )
 
         assert "taxonomy" in outputs
-        assert "complete" in outputs
+        assert "final_table" in outputs
 
 
 class TestTaxonomicAssigner:
@@ -407,7 +407,7 @@ class TestTaxonomicAssigner:
         mock_runner_instance = MagicMock()
         mock_runner_instance.run_dada2_taxonomy.return_value = {
             "taxonomy": temp_dir / "taxonomy.csv",
-            "complete": temp_dir / "complete.csv",
+            "final_table": temp_dir / "complete.csv",
         }
         mock_runner.return_value = mock_runner_instance
 
@@ -420,7 +420,7 @@ class TestTaxonomicAssigner:
         )
 
         assert "taxonomy" in outputs
-        assert "complete" in outputs
+        assert "final_table" in outputs
         mock_runner_instance.run_dada2_taxonomy.assert_called_once()
 
     @patch("seednap.steps.taxonomic_assignment.assigner.EcotagRunner")
@@ -456,7 +456,7 @@ class TestTaxonomicAssigner:
             reference_db=reference_db,
         )
 
-        assert "complete" in outputs
+        assert "final_table" in outputs
         mock_runner_instance.run_complete_workflow.assert_called_once()
         mock_runner_instance.link_with_abundance_table.assert_called_once()
 
@@ -476,7 +476,7 @@ class TestTaxonomicAssigner:
         mock_runner_instance = MagicMock()
         mock_runner_instance.run_decipher_assignment.return_value = {
             "taxonomy": temp_dir / "taxonomy.csv",
-            "complete": temp_dir / "complete.csv",
+            "final_table": temp_dir / "complete.csv",
         }
         mock_runner.return_value = mock_runner_instance
 
@@ -488,7 +488,7 @@ class TestTaxonomicAssigner:
         )
 
         assert "taxonomy" in outputs
-        assert "complete" in outputs
+        assert "final_table" in outputs
         mock_runner_instance.run_decipher_assignment.assert_called_once()
 
 
