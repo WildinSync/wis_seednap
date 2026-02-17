@@ -780,7 +780,10 @@ seednap/
 │   │   └── formatting/          # GBIF formatting & DarwinCore builder
 │   └── utils/                    # Shared utilities
 │       ├── logging.py           # Rich console logging
-│       └── sequences.py         # Sequence manipulation
+│       ├── r_runner.py          # Base class for R script execution
+│       ├── sequences.py         # Sequence manipulation
+│       ├── subprocess.py        # Shared subprocess runner
+│       └── taxonomy.py          # Taxonomy-abundance linking
 ├── tests/                        # Test suite
 ├── config/                       # Example configurations
 │   └── markers/
