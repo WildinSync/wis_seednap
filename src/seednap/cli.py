@@ -237,6 +237,94 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
         sys.exit(1)
 
 
+@main.command("create-gbif")
+@click.argument("taxonomy_results", type=click.Path(exists=True, path_type=Path))
+@click.argument("sample_metadata", type=click.Path(exists=True, path_type=Path))
+@click.argument("project_metadata", type=click.Path(exists=True, path_type=Path))
+@click.argument("output", type=click.Path(path_type=Path))
+@click.option(
+    "--summarise-pcr/--no-summarise-pcr",
+    default=False,
+    help="Summarise PCR replicates by sample before building",
+)
+@click.option(
+    "--skip-enrichment",
+    is_flag=True,
+    default=False,
+    help="Skip NCBI/WORMS taxonomy enrichment (kingdom/phylum lookup)",
+)
+@click.pass_context
+def create_gbif(
+    ctx: click.Context,
+    taxonomy_results: Path,
+    sample_metadata: Path,
+    project_metadata: Path,
+    output: Path,
+    summarise_pcr: bool,
+    skip_enrichment: bool,
+) -> None:
+    """
+    Build a DarwinCore-compliant GBIF occurrence CSV.
+
+    Takes three input files and produces a single DarwinCore CSV with all
+    required columns populated.
+
+    \b
+    TAXONOMY_RESULTS: Taxonomy CSV from format-gbif step (long format with
+                      class, order, family, genus, species, taxon, rank,
+                      sequence, nb_reads, eventID columns).
+    SAMPLE_METADATA:  Per-sample metadata CSV (eventID, lat/lon, eventDate,
+                      env_medium, samp_size, depth, size_frac).
+    PROJECT_METADATA: Per-project metadata CSV (marker, recordedby, seqmet,
+                      identificationRemarks, identificationReferences,
+                      otu_seq_comp_appr, otu_db, chimera_check).
+    OUTPUT:           Path for the output DarwinCore CSV file.
+
+    \b
+    Set the NCBI_API_KEY environment variable (or in a .env file) to enable
+    automatic kingdom/phylum enrichment via NCBI Entrez and WORMS.
+    """
+    from seednap.steps.formatting.darwincore_builder import DarwinCoreBuilder
+
+    console.print("\n[bold]Building DarwinCore GBIF CSV[/bold]")
+    console.print(f"  Taxonomy results:  {taxonomy_results}")
+    console.print(f"  Sample metadata:   {sample_metadata}")
+    console.print(f"  Project metadata:  {project_metadata}")
+    console.print(f"  Output:            {output}")
+    if summarise_pcr:
+        console.print("  PCR replicates:    will be summarised")
+    if skip_enrichment:
+        console.print("  Enrichment:        skipped")
+    console.print()
+
+    try:
+        builder = DarwinCoreBuilder(
+            taxonomy_results_path=taxonomy_results,
+            sample_metadata_path=sample_metadata,
+            project_metadata_path=project_metadata,
+            output_path=output,
+            summarise_pcr_replicates=summarise_pcr,
+            skip_enrichment=skip_enrichment,
+        )
+        result_path = builder.build()
+
+        print_success(f"DarwinCore CSV written to {result_path}")
+
+    except FileNotFoundError as e:
+        print_error(str(e))
+        sys.exit(1)
+    except ValueError as e:
+        print_error(f"Validation error: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"Failed to build DarwinCore CSV: {e}")
+        if ctx.obj.get("verbose"):
+            import traceback
+
+            console.print(traceback.format_exc())
+        sys.exit(1)
+
+
 @main.command()
 @click.argument("query_fasta", type=click.Path(exists=True, path_type=Path))
 @click.argument("ref_fasta", type=click.Path(exists=True, path_type=Path))

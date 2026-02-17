@@ -34,6 +34,7 @@ dependencies = [
     "biopython>=1.80",
     "rich>=13.0",
     "jinja2>=3.0",
+    "python-dotenv>=1.0",
 ]
 
 [project.optional-dependencies]
@@ -66,7 +67,7 @@ Issues = "https://github.com/eth-edna/seednap/issues"
 where = ["src"]
 
 [tool.setuptools.package-data]
-seednap = ["py.typed"]
+seednap = ["py.typed", "data/templates/*.csv"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -176,5 +177,6 @@ strict_concatenate = true
 module = [
     "Bio.*",
     "pandas.*",
+    "dotenv.*",
 ]
 ignore_missing_imports = true

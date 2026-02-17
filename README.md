@@ -36,6 +36,7 @@ A production-ready Python pipeline for processing environmental DNA (eDNA) metab
 2. **DADA2**: Quality filtering, denoising, ASV detection, chimera removal
 3. **Taxonomic Assignment**: BLAST, DADA2, DECIPHER, or ecotag
 4. **Export**: GBIF-compatible format with rank determination
+5. **DarwinCore Publishing** (`create-gbif`): Merge metadata, enrich taxonomy, produce full DarwinCore-compliant GBIF occurrence CSV
 
 ---
 
@@ -214,6 +215,21 @@ Options:
 - `--add-rank/--no-add-rank`: Add rank column
 - `--add-taxon/--no-add-taxon`: Add taxon column
 
+#### 5. DarwinCore Publishing
+
+Build a full DarwinCore-compliant GBIF occurrence CSV from the formatted taxonomy results and sample/project metadata:
+
+```bash
+seednap create-gbif taxonomy_gbif.csv sample_metadata.csv project_metadata.csv output.csv
+```
+
+Options:
+
+- `--summarise-pcr/--no-summarise-pcr`: Summarise PCR replicates by sample (default: no)
+- `--skip-enrichment`: Skip NCBI/WORMS kingdom/phylum enrichment
+
+**Environment variable:** Set `NCBI_API_KEY` in your `.env` file or environment to enable automatic taxonomy enrichment. Get your key at <https://www.ncbi.nlm.nih.gov/account/settings/>
+
 ---
 
 ## CLI Reference
@@ -239,6 +255,7 @@ seednap -q [command]        # Quiet mode (errors only)
 | `blast` | Run BLAST taxonomic assignment with LCA resolution |
 | `assign-taxonomy` | Run taxonomic assignment (dada2/decipher/ecotag) |
 | `format-gbif` | Convert outputs to GBIF format |
+| `create-gbif` | Build full DarwinCore GBIF occurrence CSV |
 | `demultiplex` | Demultiplex pooled libraries |
 | `version` | Show detailed version information |
 
@@ -333,6 +350,24 @@ Options:
   --method TEXT               Source method (dada2/blast/ecotag/decipher)
   --add-rank/--no-add-rank   Add rank column (default: yes)
   --add-taxon/--no-add-taxon Add taxon column (default: yes)
+```
+
+#### `seednap create-gbif`
+
+Build a full DarwinCore-compliant GBIF occurrence CSV:
+
+```bash
+seednap create-gbif TAXONOMY_RESULTS SAMPLE_METADATA PROJECT_METADATA OUTPUT [OPTIONS]
+
+Arguments:
+  TAXONOMY_RESULTS   Taxonomy CSV from format-gbif step (long format)
+  SAMPLE_METADATA    Per-sample metadata CSV (eventID, coordinates, dates, ...)
+  PROJECT_METADATA   Per-project metadata CSV (marker, recordedby, seqmet, ...)
+  OUTPUT             Output DarwinCore CSV path
+
+Options:
+  --summarise-pcr/--no-summarise-pcr   Summarise PCR replicates (default: no)
+  --skip-enrichment                    Skip NCBI/WORMS taxonomy enrichment
 ```
 
 ---
@@ -611,12 +646,77 @@ export:
 ```
 
 **Output Columns:**
+
 - `kingdom`, `phylum`, `class`, `order`, `family`, `genus`, `species`
 - `taxon`: Lowest available taxonomic assignment
 - `rank`: Taxonomic rank of assignment (species/genus/family/higher)
 - `sequence`: ASV sequence
 - `nb_reads`: Read count
 - `eventID`: Sample identifier
+
+### 5. DarwinCore Publishing (create-gbif)
+
+**Input:** GBIF-formatted taxonomy CSV (from step 4) + sample metadata CSV + project metadata CSV
+**Output:** Full DarwinCore-compliant GBIF occurrence CSV
+
+This step merges your taxonomy results with sample and project metadata to produce a CSV ready for submission to GBIF. It is run as a standalone CLI command after the pipeline completes.
+
+**Process:**
+
+1. Load taxonomy results, sample metadata, and project metadata
+2. Remove control samples (blank, CNEG, CMET, CEXT)
+3. Optionally summarise PCR replicates (aggregate reads per sample)
+4. Validate date formats (yyyy, yyyy.mm, or yyyy.mm.dd)
+5. Filter non-target taxa based on marker type
+6. Look up primer/marker details from bundled primer list
+7. Compute total reads per sample and generate occurrence IDs
+8. Map environment medium to ENVO ontology terms
+9. Merge sample metadata (coordinates, dates, depth, etc.)
+10. Enrich missing kingdom/phylum via NCBI Entrez and WORMS APIs
+11. Populate all DarwinCore columns and export CSV
+
+**Usage:**
+
+```bash
+# Basic usage
+seednap create-gbif taxonomy_gbif.csv sample_metadata.csv project_metadata.csv output.csv
+
+# With PCR replicate summarisation
+seednap create-gbif taxonomy_gbif.csv sample_metadata.csv project_metadata.csv output.csv --summarise-pcr
+
+# Skip taxonomy enrichment (no API calls)
+seednap create-gbif taxonomy_gbif.csv sample_metadata.csv project_metadata.csv output.csv --skip-enrichment
+```
+
+**NCBI API Key:** Set `NCBI_API_KEY` in a `.env` file at the project root (see `.env.example`). Without it, taxonomy enrichment is skipped and kingdom/phylum columns remain empty.
+
+**Input file formats:**
+
+*Sample metadata CSV* — one row per sample:
+
+| Column | Description |
+|--------|-------------|
+| `eventID` | Sample identifier (must match taxonomy results) |
+| `decimalLatitude` | Sampling latitude |
+| `decimalLongitude` | Sampling longitude |
+| `eventDate` | Sampling date (yyyy.mm.dd) |
+| `env_medium` | Environment type (water, soil, river) |
+| `samp_size` | Sample volume/size |
+| `depth` | Sampling depth in meters |
+| `size_frac` | Filter size fraction |
+
+*Project metadata CSV* — one row per project:
+
+| Column | Description |
+|--------|-------------|
+| `marker` | Marker name (e.g. teleo, vert01) |
+| `recordedby` | Name of the person who recorded the data |
+| `seqmet` | Sequencing method (e.g. MiSeq) |
+| `identificationRemarks` | Identification method description |
+| `identificationReferences` | Reference DOIs |
+| `otu_seq_comp_appr` | Sequence comparison approach |
+| `otu_db` | Reference database used |
+| `chimera_check` | Chimera checking method |
 
 ---
 
@@ -671,11 +771,13 @@ seednap/
 │   │   ├── state.py             # State tracking and persistence
 │   │   ├── orchestrator.py      # Pipeline execution
 │   │   └── __init__.py
+│   ├── data/                      # Bundled data files
+│   │   └── templates/            # GBIF and primer templates
 │   ├── steps/                    # Pipeline step implementations
 │   │   ├── trimming/            # Cutadapt integration
 │   │   ├── dada2/               # DADA2 processing
 │   │   ├── taxonomic_assignment/ # BLAST, DECIPHER, ecotag
-│   │   └── formatting/          # GBIF formatting
+│   │   └── formatting/          # GBIF formatting & DarwinCore builder
 │   └── utils/                    # Shared utilities
 │       ├── logging.py           # Rich console logging
 │       └── sequences.py         # Sequence manipulation
