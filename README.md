@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="media/teaser.png" alt="SeeDNAP Logo" width="1024">
+  <img src="media/teaser.png" alt="SeeDNAP Logo">
 </p>
 
 **Modern eDNA metabarcoding pipeline with DADA2**
