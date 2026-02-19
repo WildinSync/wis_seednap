@@ -93,16 +93,32 @@ seednap run-pipeline my_analysis.yaml --continue-on-error
 **Python:** >= 3.9
 
 **System dependencies:**
-- `cutadapt` (>= 4.0)
-- `R` (>= 4.0)
+- `cutadapt` (>= 4.0) — primer trimming
+- `R` (>= 4.0) — required for DADA2 and DECIPHER
 - R packages: `tidyverse`, `dada2`, `Biostrings`
 
-**Optional (for specific methods):**
+**For SWARM clustering:**
+- `vsearch` (>= 2.0) — read merging, dereplication, chimera detection
+- `swarm` (>= 3.0) — OTU clustering
 
-- **SWARM clustering:** `swarm` (>= 3.0), `vsearch` (>= 2.0)
+**Optional (for specific taxonomy methods):**
 - **BLAST:** `ncbi-blast+` (makeblastdb, blastn)
 - **DECIPHER:** R package `DECIPHER`
 - **Ecotag:** `obitools` v1 (requires separate conda environment)
+
+**Installing external tools:**
+```bash
+# cutadapt (pip)
+pip install cutadapt
+
+# vsearch and swarm (conda/bioconda)
+conda install -c bioconda vsearch swarm
+
+# BLAST (conda/bioconda)
+conda install -c bioconda blast
+```
+
+All three are included in the `environment.yml` conda environment.
 
 ### Install from Source
 
