@@ -2,13 +2,13 @@
   <img src="media/teaser.png" alt="SeeDNAP Logo">
 </p>
 
-**Modern eDNA metabarcoding pipeline with DADA2**
+**Modern eDNA metabarcoding pipeline with DADA2 and SWARM**
 
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](tests/)
 
-A production-ready Python pipeline for processing environmental DNA (eDNA) metabarcoding data with support for multiple taxonomic assignment methods (DADA2, BLAST, DECIPHER, ecotag).
+A production-ready Python pipeline for processing environmental DNA (eDNA) metabarcoding data with support for DADA2 (ASV) and SWARM (OTU) clustering and multiple taxonomic assignment methods (BLAST, DADA2, DECIPHER, ecotag).
 
 **Version:** 0.1.0
 
@@ -35,7 +35,9 @@ A production-ready Python pipeline for processing environmental DNA (eDNA) metab
 
 ## Pipeline Steps
 1. **Trimming** (cutadapt): Remove primers and adapters
-2. **DADA2**: Quality filtering, denoising, ASV detection, chimera removal
+2. **Clustering** (choose one):
+   - **DADA2**: Quality filtering, denoising, ASV detection, chimera removal
+   - **SWARM**: Read merging (vsearch), dereplication, OTU clustering, chimera detection
 3. **Taxonomic Assignment**: BLAST, DADA2, DECIPHER, or ecotag
 4. **Export**: GBIF-compatible format with rank determination
 5. **DarwinCore Publishing** (`create-gbif`): Merge metadata, enrich taxonomy, produce full DarwinCore-compliant GBIF occurrence CSV
@@ -95,7 +97,9 @@ seednap run-pipeline my_analysis.yaml --continue-on-error
 - `R` (>= 4.0)
 - R packages: `tidyverse`, `dada2`, `Biostrings`
 
-**Optional (for specific taxonomic methods):**
+**Optional (for specific methods):**
+
+- **SWARM clustering:** `swarm` (>= 3.0), `vsearch` (>= 2.0)
 - **BLAST:** `ncbi-blast+` (makeblastdb, blastn)
 - **DECIPHER:** R package `DECIPHER`
 - **Ecotag:** `obitools` v1 (requires separate conda environment)
@@ -151,7 +155,7 @@ seednap run-pipeline config.yaml --continue-on-error
 
 **Output:**
 - Trimmed FASTQ files
-- DADA2 ASV table and sequences
+- DADA2 ASV table / SWARM OTU table and sequences
 - Taxonomic assignments
 - GBIF-formatted export
 - Quality plots and metrics
@@ -183,6 +187,28 @@ Performs:
 - Read merging
 - Chimera removal
 - ASV table generation
+
+#### 2b. SWARM OTU Clustering (Alternative to DADA2)
+
+```bash
+seednap swarm teleo /path/to/trimmed/reads --output-dir outputs
+```
+
+Performs:
+
+- Merge paired-end reads (vsearch)
+- Per-sample and global dereplication (vsearch)
+- SWARM OTU clustering (d=1, fastidious)
+- Sort representatives by abundance
+- De novo chimera detection (vsearch UCHIME)
+- OTU contingency table generation
+
+Options:
+
+- `-d, --distance`: Clustering distance threshold (default: 1)
+- `-t, --threads`: Number of threads (default: 4)
+- `--no-fastidious`: Disable fastidious singleton refinement
+- `--no-chimera-filter`: Skip chimera detection
 
 #### 3. Taxonomic Assignment
 
@@ -254,6 +280,7 @@ seednap -q [command]        # Quiet mode (errors only)
 | `run-pipeline` | Run complete pipeline (trim → dada2 → taxonomy → export) |
 | `trim` | Run primer trimming with cutadapt |
 | `dada2` | Run DADA2 quality filtering and ASV detection |
+| `swarm` | Run SWARM OTU clustering with vsearch merging/chimera detection |
 | `blast` | Run BLAST taxonomic assignment with LCA resolution |
 | `assign-taxonomy` | Run taxonomic assignment (dada2/decipher/ecotag) |
 | `format-gbif` | Convert outputs to GBIF format |
@@ -326,6 +353,21 @@ seednap dada2 CONFIG_FILE [OPTIONS]
 Options:
   --input-dir PATH      Input directory (default: from config)
   --output-dir PATH     Output directory (default: from config)
+```
+
+#### `seednap swarm`
+
+Run SWARM OTU clustering:
+
+```bash
+seednap swarm MARKER TRIMMED_READS_DIR [OPTIONS]
+
+Options:
+  -o, --output-dir PATH   Base output directory (default: outputs/)
+  -d, --distance INTEGER  SWARM distance threshold (default: 1)
+  -t, --threads INTEGER   Number of threads (default: 4)
+  --no-fastidious         Disable fastidious mode
+  --no-chimera-filter     Skip chimera detection
 ```
 
 #### `seednap blast`
@@ -422,6 +464,21 @@ dada2:
   chimera:
     method: "consensus"
 
+# SWARM configuration (alternative to DADA2)
+swarm:
+  merge:
+    fastq_maxdiffs: 10
+    fastq_minovlen: 10
+    allow_stagger: false
+  clustering:
+    d: 1
+    fastidious: true
+    boundary: 3
+    threads: 4
+  chimera:
+    method: "denovo"
+  min_sequence_length: 20
+
 # Taxonomic assignment
 taxonomy:
   method: "blast"  # Options: blast, dada2, decipher, ecotag
@@ -448,7 +505,7 @@ resources:
 
 # Pipeline steps
 pipeline:
-  steps: ["trim", "dada2", "taxonomy", "export"]
+  steps: ["trim", "dada2", "taxonomy", "export"]  # or ["trim", "swarm", "taxonomy", "export"]
   skip: []
 ```
 
@@ -462,6 +519,7 @@ pipeline:
 | `demultiplex` | Demultiplexing settings (if needed) |
 | `trimming` | Cutadapt primer trimming parameters |
 | `dada2` | DADA2 filtering, merging, chimera settings |
+| `swarm` | SWARM OTU clustering, vsearch merge/chimera settings |
 | `taxonomy` | Taxonomic assignment method and databases |
 | `export` | Output formats and GBIF settings |
 | `metrics` | Quality control metrics configuration |
@@ -537,6 +595,54 @@ dada2:
     method: "consensus" # Chimera detection method
   pool: false          # Pool samples for error learning
   multithread: true    # Use multiple threads
+```
+
+### 2b. SWARM OTU Clustering (Alternative to DADA2)
+
+**Input:** Trimmed FASTQ files (R1/R2 pairs)
+**Output:** OTU table, representative sequences, chimera report
+
+Use SWARM instead of DADA2 by setting `steps: ["trim", "swarm", "taxonomy", "export"]` in your config.
+
+**Process:**
+
+1. **Read Merging** (vsearch):
+   - Merge paired-end R1/R2 reads per sample
+   - Configurable overlap and mismatch tolerances
+
+2. **Dereplication** (vsearch):
+   - Per-sample: collapse identical sequences, count abundances
+   - Global: pool all samples, collapse again with summed abundances
+
+3. **SWARM Clustering:**
+   - Graph-based OTU clustering with distance threshold d (default: 1)
+   - Fastidious mode refines singletons into existing OTUs
+   - Produces cluster membership, statistics, and representative sequences
+
+4. **Chimera Detection** (vsearch UCHIME):
+   - De novo chimera detection on sorted representatives
+   - Chimeric OTUs flagged and filtered from final output
+
+5. **OTU Table Generation:**
+   - Maps cluster membership back to per-sample abundances
+   - Produces DADA2-compatible outputs (query.fasta + abundance CSV)
+
+**Configuration:**
+
+```yaml
+swarm:
+  merge:
+    fastq_maxdiffs: 10    # Max differences in overlap region
+    fastq_minovlen: 10    # Min overlap length
+    allow_stagger: false  # Allow staggered read merging
+  clustering:
+    d: 1                  # Distance threshold
+    fastidious: true      # Refine singletons
+    boundary: 3           # Min mass for large OTUs (fastidious)
+    threads: 4            # CPU threads
+  chimera:
+    method: "denovo"      # "denovo" or "none"
+  min_sequence_length: 20 # Min sequence length after merging
 ```
 
 ### 3. Taxonomic Assignment
@@ -777,7 +883,8 @@ seednap/
 │   │   └── templates/            # GBIF and primer templates
 │   ├── steps/                    # Pipeline step implementations
 │   │   ├── trimming/            # Cutadapt integration
-│   │   ├── dada2/               # DADA2 processing
+│   │   ├── dada2/               # DADA2 ASV processing
+│   │   ├── swarm/               # SWARM OTU clustering (vsearch + swarm)
 │   │   ├── taxonomic_assignment/ # BLAST, DECIPHER, ecotag
 │   │   └── formatting/          # GBIF formatting & DarwinCore builder
 │   └── utils/                    # Shared utilities

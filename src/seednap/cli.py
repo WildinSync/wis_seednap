@@ -758,6 +758,106 @@ def dada2(
 
 
 @main.command()
+@click.argument("marker", type=str)
+@click.argument("trimmed_reads_dir", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--output-dir",
+    "-o",
+    type=click.Path(path_type=Path),
+    default=Path("outputs"),
+    help="Base output directory (default: outputs/)",
+)
+@click.option(
+    "--distance",
+    "-d",
+    default=1,
+    type=int,
+    help="SWARM clustering distance threshold (default: 1)",
+)
+@click.option(
+    "--threads",
+    "-t",
+    default=4,
+    type=int,
+    help="Number of threads (default: 4)",
+)
+@click.option(
+    "--no-fastidious",
+    is_flag=True,
+    help="Disable fastidious mode (singleton refinement)",
+)
+@click.option(
+    "--no-chimera-filter",
+    is_flag=True,
+    help="Skip de novo chimera detection",
+)
+def swarm(
+    marker: str,
+    trimmed_reads_dir: Path,
+    output_dir: Path,
+    distance: int,
+    threads: int,
+    no_fastidious: bool,
+    no_chimera_filter: bool,
+) -> None:
+    """
+    Run SWARM OTU clustering on trimmed reads.
+
+    MARKER: Marker name (e.g., teleo, amph).
+    TRIMMED_READS_DIR: Directory containing primer-trimmed FASTQ files (R1/R2 pairs).
+
+    This command performs:
+    1. Merge paired-end reads (vsearch)
+    2. Per-sample dereplication (vsearch)
+    3. Global dereplication
+    4. SWARM OTU clustering
+    5. Sort representatives by abundance
+    6. De novo chimera detection (vsearch UCHIME)
+    7. OTU contingency table generation
+    """
+    from seednap.steps.swarm import SwarmProcessor
+
+    console.print(f"\n[bold]Running SWARM OTU clustering:[/bold]")
+    console.print(f"Marker: {marker}")
+    console.print(f"Trimmed reads: {trimmed_reads_dir}")
+    console.print(f"Output directory: {output_dir}")
+    console.print(f"Parameters: d={distance}, threads={threads}, "
+                  f"fastidious={not no_fastidious}, chimera={not no_chimera_filter}\n")
+
+    try:
+        processor = SwarmProcessor(
+            marker=marker,
+            trimmed_reads_dir=trimmed_reads_dir,
+            output_base_dir=output_dir,
+        )
+
+        outputs = processor.process(
+            d=distance,
+            fastidious=not no_fastidious,
+            threads=threads,
+            chimera_detection=not no_chimera_filter,
+        )
+
+        print_success("\nSWARM OTU clustering completed successfully!")
+        console.print(f"\nOutput files:")
+        console.print(f"  Query FASTA: {outputs['query_fasta']}")
+        console.print(f"  OTU table: {outputs['seqtab_clean_t']}")
+        console.print(f"  Full OTU table: {outputs['otu_table_full']}")
+        console.print(f"  Merged reads: {outputs['merged_dir']}")
+        console.print()
+
+    except FileNotFoundError as e:
+        print_error(str(e))
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"SWARM processing failed: {e}")
+        import traceback
+
+        console.print(traceback.format_exc())
+        sys.exit(1)
+
+
+@main.command()
 @click.argument("method", type=click.Choice(["blast", "dada2", "ecotag", "decipher"]))
 @click.argument("marker", type=str)
 @click.argument("query_fasta", type=click.Path(exists=True, path_type=Path))

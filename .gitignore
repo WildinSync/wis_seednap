@@ -24,3 +24,4 @@ seednap.egg-info/
 mkdocs.yml
 README.md.backup
 .env
+/swarm_gdc

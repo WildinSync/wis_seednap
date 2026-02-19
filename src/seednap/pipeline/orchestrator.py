@@ -3,7 +3,7 @@
 This module orchestrates the complete seednap pipeline:
 1. Demultiplexing (optional)
 2. Primer trimming (cutadapt)
-3. DADA2 processing
+3. Denoising/clustering (DADA2 or SWARM)
 4. Taxonomic assignment
 5. Export to GBIF format
 """
@@ -16,6 +16,7 @@ from seednap.config.models import PipelineConfig
 from seednap.pipeline.state import PipelineState
 from seednap.steps.dada2.processor import Dada2Processor
 from seednap.steps.formatting.gbif_formatter import GBIFFormatter
+from seednap.steps.swarm.processor import SwarmProcessor
 from seednap.steps.taxonomic_assignment.assigner import TaxonomicAssigner
 from seednap.steps.trimming.tag_generator import TagFileGenerator
 from seednap.steps.trimming.trimming_pipeline import LigationTrimmer, StandardTrimmer
@@ -128,6 +129,7 @@ class PipelineOrchestrator:
         # Create main output directories
         (base / "01_trim" / marker).mkdir(parents=True, exist_ok=True)
         (base / "02_dada2" / marker).mkdir(parents=True, exist_ok=True)
+        (base / "02_swarm" / marker).mkdir(parents=True, exist_ok=True)
         (base / "03_taxo" / marker).mkdir(parents=True, exist_ok=True)
 
         # Create logs directory
@@ -370,6 +372,65 @@ class PipelineOrchestrator:
             log_pipeline_step(step_name, "error", logger)
             raise
 
+    def run_swarm(self) -> Dict[str, Path]:
+        """
+        Run SWARM OTU clustering step.
+
+        Returns:
+            Dictionary with output paths
+        """
+        step_name = "swarm"
+
+        if not self._should_run_step(step_name):
+            step = self.state.get_step(step_name)
+            return step.outputs if step else {}
+
+        log_pipeline_step(step_name, "start", logger)
+        self.state.start_step(step_name)
+        self._save_state()
+
+        try:
+            logger.info("Running SWARM OTU clustering")
+
+            # Determine trimmed reads directory
+            if self.state.is_step_completed("trim"):
+                trim_step = self.state.get_step("trim")
+                trimmed_reads_dir = trim_step.outputs.get("trimmed_dir") if trim_step else None
+                if trimmed_reads_dir is None:
+                    raise ValueError("Trim step completed but no trimmed_dir in outputs")
+                trimmed_reads_dir = Path(trimmed_reads_dir)
+            else:
+                trimmed_reads_dir = self.config.paths.raw_data
+
+            processor = SwarmProcessor(
+                marker=self.config.marker.name,
+                trimmed_reads_dir=trimmed_reads_dir,
+                output_base_dir=self.config.paths.output,
+            )
+
+            outputs = processor.process(
+                d=self.config.swarm.clustering.d,
+                fastidious=self.config.swarm.clustering.fastidious,
+                boundary=self.config.swarm.clustering.boundary,
+                threads=self.config.swarm.clustering.threads,
+                fastq_maxdiffs=self.config.swarm.merge.fastq_maxdiffs,
+                fastq_minovlen=self.config.swarm.merge.fastq_minovlen,
+                allow_stagger=self.config.swarm.merge.allow_stagger,
+                min_sequence_length=self.config.swarm.min_sequence_length,
+                chimera_detection=self.config.swarm.chimera.method != "none",
+            )
+
+            self.state.complete_step(step_name, outputs)
+            self._save_state()
+            log_pipeline_step(step_name, "complete", logger)
+            return outputs
+
+        except Exception as e:
+            self.state.fail_step(step_name, e)
+            self._save_state()
+            log_pipeline_step(step_name, "error", logger)
+            raise
+
     def run_taxonomy(self) -> Dict[str, Path]:
         """
         Run taxonomic assignment step.
@@ -390,18 +451,21 @@ class PipelineOrchestrator:
         try:
             logger.info(f"Running taxonomic assignment: {self.config.taxonomy.method}")
 
-            # Get DADA2 outputs
-            if not self.state.is_step_completed("dada2"):
-                raise ValueError("DADA2 step must be completed before taxonomy")
+            # Get outputs from clustering step (DADA2 or SWARM)
+            clustering_step = None
+            for clustering_name in ("dada2", "swarm"):
+                if self.state.is_step_completed(clustering_name):
+                    clustering_step = self.state.get_step(clustering_name)
+                    break
 
-            dada2_step = self.state.get_step("dada2")
-            if dada2_step is None:
-                raise ValueError("DADA2 step not found in pipeline state")
-            query_fasta = dada2_step.outputs.get("query_fasta")
-            asv_count_csv = dada2_step.outputs.get("seqtab_clean_t")
+            if clustering_step is None:
+                raise ValueError("DADA2 or SWARM step must be completed before taxonomy")
+
+            query_fasta = clustering_step.outputs.get("query_fasta")
+            asv_count_csv = clustering_step.outputs.get("seqtab_clean_t")
             if query_fasta is None or asv_count_csv is None:
                 raise ValueError(
-                    f"DADA2 outputs incomplete: query_fasta={query_fasta}, "
+                    f"Clustering outputs incomplete: query_fasta={query_fasta}, "
                     f"seqtab_clean_t={asv_count_csv}"
                 )
             query_fasta = Path(query_fasta)
@@ -549,6 +613,7 @@ class PipelineOrchestrator:
             "demultiplex": self.run_demultiplex,
             "trim": self.run_trim,
             "dada2": self.run_dada2,
+            "swarm": self.run_swarm,
             "taxonomy": self.run_taxonomy,
             "export": self.run_export,
         }

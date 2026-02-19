@@ -135,6 +135,42 @@ class Dada2Config(BaseModel):
     multithread: bool = Field(default=True, description="Use multithreading")
 
 
+class SwarmMergeConfig(BaseModel):
+    """vsearch read merging parameters for SWARM pipeline."""
+
+    fastq_maxdiffs: int = Field(default=10, ge=0, description="Max differences in overlap region")
+    fastq_minovlen: int = Field(default=10, ge=1, description="Min overlap length for merging")
+    allow_stagger: bool = Field(default=False, description="Allow merging of staggered reads")
+
+
+class SwarmClusteringConfig(BaseModel):
+    """SWARM clustering algorithm parameters."""
+
+    d: int = Field(default=1, ge=1, description="Clustering distance threshold")
+    fastidious: bool = Field(default=True, description="Enable fastidious mode (refine singletons)")
+    boundary: int = Field(default=3, ge=1, description="Min mass for large OTUs in fastidious mode")
+    threads: int = Field(default=4, ge=1, description="Number of threads")
+
+
+class SwarmChimeraConfig(BaseModel):
+    """SWARM chimera detection parameters."""
+
+    method: Literal["denovo", "none"] = Field(
+        default="denovo", description="Chimera detection method"
+    )
+
+
+class SwarmConfig(BaseModel):
+    """SWARM OTU clustering pipeline configuration."""
+
+    merge: SwarmMergeConfig = Field(default_factory=SwarmMergeConfig)
+    clustering: SwarmClusteringConfig = Field(default_factory=SwarmClusteringConfig)
+    chimera: SwarmChimeraConfig = Field(default_factory=SwarmChimeraConfig)
+    min_sequence_length: int = Field(
+        default=20, ge=1, description="Min sequence length after merging"
+    )
+
+
 class Dada2DatabaseConfig(BaseModel):
     """DADA2 taxonomic database configuration."""
 
@@ -315,6 +351,7 @@ class PipelineConfig(BaseModel):
         default_factory=TrimmingConfig, description="Primer trimming configuration"
     )
     dada2: Dada2Config = Field(default_factory=Dada2Config, description="DADA2 configuration")
+    swarm: SwarmConfig = Field(default_factory=SwarmConfig, description="SWARM clustering configuration")
     taxonomy: TaxonomicAssignmentConfig = Field(
         ..., description="Taxonomic assignment configuration"
     )
