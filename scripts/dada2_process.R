@@ -25,6 +25,14 @@ output_dir <- if (length(args) >= 3) args[3] else "outputs"
 max_ee <- if (length(args) >= 4) as.numeric(args[4]) else 2
 trunc_q <- if (length(args) >= 5) as.integer(args[5]) else 11
 min_overlap <- if (length(args) >= 6) as.integer(args[6]) else 20
+max_n <- if (length(args) >= 7) as.integer(args[7]) else 0
+rm_phix <- if (length(args) >= 8) as.logical(args[8]) else TRUE
+multithread <- if (length(args) >= 9) as.logical(args[9]) else TRUE
+chimera_method <- if (length(args) >= 10) args[10] else "consensus"
+max_mismatch <- if (length(args) >= 11) as.integer(args[11]) else 0
+pool <- if (length(args) >= 12) as.logical(args[12]) else FALSE
+min_len <- if (length(args) >= 13) as.integer(args[13]) else 0
+max_len <- if (length(args) >= 14) as.integer(args[14]) else 0
 
 marker_dir <- file.path(output_dir, "02_dada2", marker)
 qc_dir <- file.path(marker_dir, "QC")
@@ -87,10 +95,16 @@ invisible(mclapply(valid_indices, function(i) {
 }, mc.cores = max(1, detectCores() - 2)))
 
 # Filter
-filterAndTrim(fwd=file.path(pathFR, fastqFs), filt=file.path(filtpathFR, fastqFs),
-              rev=file.path(pathFR, fastqRs), filt.rev=file.path(filtpathFR, fastqRs),
-              maxEE=max_ee, truncQ=trunc_q, maxN=0, rm.phix=TRUE,
-              compress=FALSE, verbose=TRUE, multithread=TRUE)
+# Build filterAndTrim arguments
+filter_args <- list(
+  fwd=file.path(pathFR, fastqFs), filt=file.path(filtpathFR, fastqFs),
+  rev=file.path(pathFR, fastqRs), filt.rev=file.path(filtpathFR, fastqRs),
+  maxEE=max_ee, truncQ=trunc_q, maxN=max_n, rm.phix=rm_phix,
+  compress=FALSE, verbose=TRUE, multithread=multithread
+)
+if (min_len > 0) filter_args$minLen <- min_len
+if (max_len > 0) filter_args$maxLen <- max_len
+do.call(filterAndTrim, filter_args)
 
 # Generate QC images - after filtering
 invisible(mclapply(seq_along(paste0(filtpathFR, "/", fastqFs)), function(i) {
@@ -122,22 +136,33 @@ names(filtRs) <- sample.names
 
 set.seed(100)
 # Learn forward error rates
-errF <- learnErrors(filtFs, nbases=1e8, multithread=TRUE)
+errF <- learnErrors(filtFs, nbases=1e8, multithread=multithread)
 # Learn reverse error rates
-errR <- learnErrors(filtRs, nbases=1e8, multithread=TRUE)
+errR <- learnErrors(filtRs, nbases=1e8, multithread=multithread)
 # Sample inference and merger of paired-end reads
-mergers <- vector("list", length(sample.names))
-names(mergers) <- sample.names
-for(sam in sample.names) {
-  cat("Processing:", sam, "\n")
-  derepF <- derepFastq(filtFs[[sam]])
-  ddF <- dada(derepF, err=errF, multithread=TRUE)
-  derepR <- derepFastq(filtRs[[sam]])
-  ddR <- dada(derepR, err=errR, multithread=TRUE)
-  merger <- mergePairs(ddF, derepF, ddR, derepR, minOverlap = min_overlap)
-  mergers[[sam]] <- merger
+if (pool) {
+  # Pooled mode: run dada on all samples together
+  cat("Running DADA2 in pooled mode\n")
+  dadaFs <- dada(filtFs, err=errF, multithread=multithread, pool=TRUE)
+  dadaRs <- dada(filtRs, err=errR, multithread=multithread, pool=TRUE)
+  mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs,
+                        minOverlap=min_overlap, maxMismatch=max_mismatch)
+} else {
+  # Per-sample mode (default)
+  mergers <- vector("list", length(sample.names))
+  names(mergers) <- sample.names
+  for(sam in sample.names) {
+    cat("Processing:", sam, "\n")
+    derepF <- derepFastq(filtFs[[sam]])
+    ddF <- dada(derepF, err=errF, multithread=multithread)
+    derepR <- derepFastq(filtRs[[sam]])
+    ddR <- dada(derepR, err=errR, multithread=multithread)
+    merger <- mergePairs(ddF, derepF, ddR, derepR,
+                         minOverlap=min_overlap, maxMismatch=max_mismatch)
+    mergers[[sam]] <- merger
+  }
+  rm(derepF); rm(derepR)
 }
-rm(derepF); rm(derepR)
 # Construct sequence table and remove chimeras
 seqtab <- makeSequenceTable(mergers)
 saveRDS(seqtab, file.path(marker_dir, "seqtab.rds"))
@@ -145,7 +170,11 @@ saveRDS(seqtab, file.path(marker_dir, "seqtab.rds"))
 # Merge multiple runs (if necessary)
 st1 <- readRDS(file.path(marker_dir, "seqtab.rds"))
 # Remove chimeras
-seqtab <- removeBimeraDenovo(st1, method="consensus", multithread=TRUE)
+if (chimera_method != "none") {
+  seqtab <- removeBimeraDenovo(st1, method=chimera_method, multithread=multithread)
+} else {
+  seqtab <- st1
+}
 write.csv(seqtab, file.path(marker_dir, "seqtab_clean.csv"), row.names = TRUE)
 saveRDS(seqtab, file.path(marker_dir, "seqtab_clean.rds")) 
 #saveRDS(t(seqtab), file.path(marker_dir, "seqtab_clean_t.rds"))

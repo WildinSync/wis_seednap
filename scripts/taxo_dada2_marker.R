@@ -19,6 +19,7 @@ marker <- tolower(args[1])
 path_dada_all <- args[2]
 path_dada_species <- args[3]
 output_dir <- if (length(args) >= 4) args[4] else "outputs"
+multithread <- if (length(args) >= 5) as.logical(args[5]) else TRUE
 
 # Debug
 # marker <- "teleo"
@@ -31,7 +32,7 @@ cat(paste0("marker is ", marker, " \n the path dada all is ", path_dada_all, " \
 seqtab <- readRDS(file.path(output_dir, "02_dada2", marker, "seqtab_clean.rds"))
 
 # Assign taxo dada2
-taxa <- assignTaxonomy(seqtab, path_dada_all, multithread = TRUE, tryRC = TRUE)
+taxa <- assignTaxonomy(seqtab, path_dada_all, multithread = multithread, tryRC = TRUE)
 # Sometimes issue that Species column exist at this stage - remove it
 if ("Species" %in% colnames(taxa)) {
   taxa <- taxa[, !(colnames(taxa) == "Species")]

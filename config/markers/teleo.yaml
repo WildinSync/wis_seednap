@@ -52,6 +52,23 @@ dada2:
   pool: false
   multithread: true
 
+# SWARM OTU clustering configuration (alternative to DADA2)
+# To use SWARM instead of DADA2, change pipeline.steps to:
+#   ["trim", "swarm", "taxonomy", "export"]
+swarm:
+  merge:
+    fastq_maxdiffs: 10
+    fastq_minovlen: 10
+    allow_stagger: false
+  clustering:
+    d: 1
+    fastidious: true
+    boundary: 3
+    threads: 4
+  chimera:
+    method: "denovo"  # Options: "denovo", "none"
+  min_sequence_length: 20
+
 # Taxonomic assignment configuration
 taxonomy:
   method: "dada2"  # Options: "dada2", "decipher", "ecotag", "blast"

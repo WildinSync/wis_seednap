@@ -6,7 +6,7 @@ integrating R script execution with metrics collection and quality reporting.
 
 import logging
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 from seednap.steps.dada2.dada2_runner import Dada2Runner
 from seednap.steps.dada2.metrics import MetricsCollector
@@ -58,30 +58,34 @@ class Dada2Processor:
 
     def process(
         self,
-        max_ee: int = 2,
+        max_ee: float = 2.0,
         trunc_q: int = 11,
         min_overlap: int = 20,
+        max_n: int = 0,
+        rm_phix: bool = True,
+        multithread: bool = True,
+        chimera_method: str = "consensus",
+        max_mismatch: int = 0,
+        pool: bool = False,
+        min_len: Optional[int] = None,
+        max_len: Optional[int] = None,
         collect_metrics: bool = True,
     ) -> Dict[str, Path]:
         """
         Run complete DADA2 processing workflow.
 
-        Workflow steps:
-        1. Quality control (pre-filtering plots)
-        2. Filter and trim
-        3. Quality control (post-filtering plots)
-        4. Learn error rates
-        5. Denoise (sample inference)
-        6. Merge paired-end reads
-        7. Make sequence table
-        8. Remove chimeras
-        9. Generate outputs (CSV, FASTA, RDS)
-        10. Collect metrics (optional)
-
         Args:
-            max_ee: Maximum expected errors for filtering (default: 2)
+            max_ee: Maximum expected errors for filtering (default: 2.0)
             trunc_q: Truncate reads at first base with quality < this (default: 11)
             min_overlap: Minimum overlap for merging paired reads (default: 20)
+            max_n: Maximum number of N bases allowed (default: 0)
+            rm_phix: Remove PhiX reads (default: True)
+            multithread: Use multithreading (default: True)
+            chimera_method: Chimera detection method (default: "consensus")
+            max_mismatch: Maximum mismatches in overlap region (default: 0)
+            pool: Pool samples for denoising (default: False)
+            min_len: Minimum read length (None = no filter)
+            max_len: Maximum read length (None = no filter)
             collect_metrics: Collect and export metrics (default: True)
 
         Returns:
@@ -92,7 +96,11 @@ class Dada2Processor:
             Dada2Error: If DADA2 processing fails
         """
         logger.info(f"Starting DADA2 processing for {self.marker}")
-        logger.info(f"Parameters: maxEE={max_ee}, truncQ={trunc_q}, minOverlap={min_overlap}")
+        logger.info(
+            f"Parameters: maxEE={max_ee}, truncQ={trunc_q}, minOverlap={min_overlap}, "
+            f"maxN={max_n}, rmPhix={rm_phix}, chimera={chimera_method}, "
+            f"maxMismatch={max_mismatch}, pool={pool}, multithread={multithread}"
+        )
 
         # Check for required R packages
         logger.info("Checking R package dependencies...")
@@ -108,6 +116,14 @@ class Dada2Processor:
             max_ee=max_ee,
             trunc_q=trunc_q,
             min_overlap=min_overlap,
+            max_n=max_n,
+            rm_phix=rm_phix,
+            multithread=multithread,
+            chimera_method=chimera_method,
+            max_mismatch=max_mismatch,
+            pool=pool,
+            min_len=min_len,
+            max_len=max_len,
             log_file=log_file,
         )
 

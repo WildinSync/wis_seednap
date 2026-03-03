@@ -28,7 +28,6 @@ from seednap.config.models import (
     PipelineConfig,
     PipelineStepsConfig,
     PrimerConfig,
-    ResourcesConfig,
     TaxonomicAssignmentConfig,
     TrimmingConfig,
 )
@@ -62,6 +61,5 @@ __all__ = [
     "GbifExportConfig",
     "MetricsConfig",
     "LoggingConfig",
-    "ResourcesConfig",
     "PipelineStepsConfig",
 ]

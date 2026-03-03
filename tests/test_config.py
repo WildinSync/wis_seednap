@@ -68,7 +68,6 @@ class TestPipelineConfig:
         assert config.marker.name == "teleo"
         assert config.trimming.cores == 4
         assert config.dada2.filter.max_ee == 2.0
-        assert config.resources.max_cores == 4
 
     def test_default_values_applied(self, minimal_config: Dict[str, Any]) -> None:
         """Test that default values are applied for optional fields."""
@@ -220,7 +219,7 @@ class TestConfigMerging:
         defaults_file = temp_dir / "defaults.yaml"
         defaults = {
             "logging": {"level": "DEBUG"},
-            "resources": {"max_cores": 8},
+            "trimming": {"cores": 8},
         }
         import yaml
 
@@ -237,4 +236,4 @@ class TestConfigMerging:
 
         # Defaults should be applied
         assert config.logging.level == "DEBUG"
-        assert config.resources.max_cores == 8
+        assert config.trimming.cores == 8

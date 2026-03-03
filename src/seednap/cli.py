@@ -95,7 +95,7 @@ def validate(ctx: click.Context, config_file: Path) -> None:
             table.add_row("Marker", config.marker.name)
             table.add_row("Taxonomic Method", config.taxonomy.method)
             table.add_row("Output Directory", str(config.paths.output))
-            table.add_row("CPU Cores", str(config.resources.max_cores))
+            table.add_row("Trimming Cores", str(config.trimming.cores))
 
             if config.demultiplex.enabled:
                 table.add_row("Demultiplexing", f"Enabled ({config.demultiplex.protocol})")
@@ -631,9 +631,9 @@ def demultiplex(
 )
 @click.option(
     "--max-ee",
-    default=2,
-    type=int,
-    help="Maximum expected errors for filtering (default: 2)",
+    default=2.0,
+    type=float,
+    help="Maximum expected errors for filtering (default: 2.0)",
 )
 @click.option(
     "--trunc-q",
@@ -666,7 +666,7 @@ def dada2(
     marker: str,
     trimmed_reads_dir: Path,
     output_dir: Path,
-    max_ee: int,
+    max_ee: float,
     trunc_q: int,
     min_overlap: int,
     assign_taxonomy: bool,

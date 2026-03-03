@@ -232,6 +232,21 @@ dada2:
   pool: false
   multithread: true
 
+# SWARM OTU clustering configuration (alternative to DADA2)
+swarm:
+  merge:
+    fastq_maxdiffs: 10
+    fastq_minovlen: 10
+    allow_stagger: false
+  clustering:
+    d: 1
+    fastidious: true
+    boundary: 3
+    threads: 4
+  chimera:
+    method: "denovo"  # Options: "denovo", "none"
+  min_sequence_length: 20
+
 taxonomy:
   method: "dada2"
   databases:
@@ -274,11 +289,6 @@ logging:
   format: "detailed"
   file: true
   console: true
-
-resources:
-  max_cores: 4
-  memory_limit: "16G"
-  parallel_samples: 2
 
 pipeline:
   steps:

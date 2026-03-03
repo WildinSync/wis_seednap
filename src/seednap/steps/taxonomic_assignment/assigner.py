@@ -183,6 +183,7 @@ class TaxonomicAssigner:
         asv_count_csv: Path,
         rdp_db_path: Optional[Union[str, Path]] = None,
         species_db_path: Optional[Union[str, Path]] = None,
+        multithread: bool = True,
         **kwargs,
     ) -> Dict[str, Path]:
         """
@@ -196,6 +197,7 @@ class TaxonomicAssigner:
             asv_count_csv: ASV count table
             rdp_db_path: Path to RDP-formatted database (required)
             species_db_path: Path to species database (required)
+            multithread: Use multithreading (default: True)
 
         Returns:
             Dictionary with 'taxonomy' and 'final_table' keys
@@ -211,6 +213,7 @@ class TaxonomicAssigner:
             output_dir=self.output_dir,
             rdp_db_path=rdp_db_path,
             species_db_path=species_db_path,
+            multithread=multithread,
         )
 
         logger.info(f"DADA2 assignment completed: {outputs['final_table']}")

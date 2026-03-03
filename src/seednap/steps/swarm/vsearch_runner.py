@@ -57,6 +57,7 @@ class VsearchRunner:
         fastq_minovlen: int = 10,
         allow_stagger: bool = False,
         fastq_minmergelen: int = 0,
+        fastq_maxns: Optional[int] = None,
         log_file: Optional[Union[str, Path]] = None,
     ) -> Path:
         """
@@ -70,6 +71,7 @@ class VsearchRunner:
             fastq_minovlen: Min overlap length for merging
             allow_stagger: Allow merging of staggered reads
             fastq_minmergelen: Min merged read length (0 = no filter)
+            fastq_maxns: Max number of N bases allowed (None = no filter)
             log_file: Optional log file path
 
         Returns:
@@ -96,6 +98,9 @@ class VsearchRunner:
         if fastq_minmergelen > 0:
             cmd.extend(["--fastq_minmergelen", str(fastq_minmergelen)])
 
+        if fastq_maxns is not None:
+            cmd.extend(["--fastq_maxns", str(fastq_maxns)])
+
         run_subprocess(cmd, timeout=self.timeout, log_file=log_file, error_class=VsearchError)
 
         logger.info(f"Merged pairs → {output}")
@@ -107,6 +112,8 @@ class VsearchRunner:
         output_fasta: Union[str, Path],
         *,
         min_unique_size: int = 1,
+        sizein: bool = False,
+        relabel_sha1: bool = False,
         log_file: Optional[Union[str, Path]] = None,
     ) -> Path:
         """
@@ -116,6 +123,8 @@ class VsearchRunner:
             input_fasta: Input FASTA/FASTQ file
             output_fasta: Output dereplicated FASTA with ;size=N; annotations
             min_unique_size: Minimum abundance to keep a sequence
+            sizein: Read ;size=N; annotations from input (for summing abundances)
+            relabel_sha1: Relabel sequences with SHA1 hash of sequence content
             log_file: Optional log file path
 
         Returns:
@@ -135,6 +144,12 @@ class VsearchRunner:
             "--fasta_width", "0",
             "--minuniquesize", str(min_unique_size),
         ]
+
+        if sizein:
+            cmd.append("--sizein")
+
+        if relabel_sha1:
+            cmd.append("--relabel_sha1")
 
         run_subprocess(cmd, timeout=self.timeout, log_file=log_file, error_class=VsearchError)
 

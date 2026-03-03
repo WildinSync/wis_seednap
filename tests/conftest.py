@@ -119,11 +119,6 @@ def full_config(minimal_config: Dict[str, Any], temp_dir: Path) -> Dict[str, Any
                 "file": True,
                 "console": True,
             },
-            "resources": {
-                "max_cores": 4,
-                "memory_limit": "16G",
-                "parallel_samples": 2,
-            },
             "pipeline": {
                 "steps": ["trim", "dada2", "taxonomy", "export"],
                 "skip": [],

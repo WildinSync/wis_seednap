@@ -122,10 +122,11 @@ class SwarmProcessor:
         log_dir.mkdir(parents=True, exist_ok=True)
 
         sample_fastas = []
+        skipped_samples = []
         for sample_name, r1_path, r2_path in sample_pairs:
             logger.info(f"Processing sample: {sample_name}")
 
-            # Merge
+            # Merge (filter N bases with --fastq_maxns 0)
             merged_path = merged_dir / f"{sample_name}.merged.fastq"
             self.vsearch.merge_pairs(
                 r1=r1_path,
@@ -135,21 +136,50 @@ class SwarmProcessor:
                 fastq_minovlen=fastq_minovlen,
                 allow_stagger=allow_stagger,
                 fastq_minmergelen=min_sequence_length,
+                fastq_maxns=0,
                 log_file=log_dir / f"{sample_name}_merge.log",
             )
 
-            # Dereplicate
+            # Skip empty merged files (blanks/negative controls)
+            if not merged_path.exists() or merged_path.stat().st_size == 0:
+                logger.warning(
+                    f"Sample {sample_name}: merged file is empty, skipping"
+                )
+                skipped_samples.append(sample_name)
+                continue
+
+            # Dereplicate with SHA1 relabeling so same sequence
+            # gets the same ID across all samples
             derep_path = derep_dir / f"{sample_name}.fasta"
             self.vsearch.dereplicate(
                 input_fasta=merged_path,
                 output_fasta=derep_path,
                 min_unique_size=1,
+                relabel_sha1=True,
                 log_file=log_dir / f"{sample_name}_derep.log",
             )
 
+            # Skip if dereplication produced empty output
+            if not derep_path.exists() or derep_path.stat().st_size == 0:
+                logger.warning(
+                    f"Sample {sample_name}: no sequences after dereplication, skipping"
+                )
+                skipped_samples.append(sample_name)
+                continue
+
             sample_fastas.append(derep_path)
 
-        # Step 4: Combine and globally dereplicate
+        if skipped_samples:
+            logger.info(
+                f"Skipped {len(skipped_samples)} empty samples: "
+                f"{', '.join(skipped_samples[:10])}"
+                f"{'...' if len(skipped_samples) > 10 else ''}"
+            )
+
+        if not sample_fastas:
+            raise ValueError("All samples produced empty output after merging")
+
+        # Step 4: Combine and globally dereplicate (with --sizein to sum abundances)
         combined_path = self.output_dir / "combined.fasta"
         self._combine_fastas(sample_fastas, combined_path)
 
@@ -158,6 +188,7 @@ class SwarmProcessor:
             input_fasta=combined_path,
             output_fasta=all_uniq_path,
             min_unique_size=1,
+            sizein=True,
             log_file=log_dir / "global_derep.log",
         )
 

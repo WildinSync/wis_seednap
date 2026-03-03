@@ -46,9 +46,17 @@ class Dada2Runner(RScriptRunner):
         marker: str,
         trimmed_reads_dir: Union[str, Path],
         output_dir: Union[str, Path],
-        max_ee: int = 2,
+        max_ee: float = 2.0,
         trunc_q: int = 11,
         min_overlap: int = 20,
+        max_n: int = 0,
+        rm_phix: bool = True,
+        multithread: bool = True,
+        chimera_method: str = "consensus",
+        max_mismatch: int = 0,
+        pool: bool = False,
+        min_len: Optional[int] = None,
+        max_len: Optional[int] = None,
         script_path: Optional[Union[str, Path]] = None,
         log_file: Optional[Union[str, Path]] = None,
     ) -> Dict[str, Path]:
@@ -69,9 +77,17 @@ class Dada2Runner(RScriptRunner):
             marker: Marker name (e.g., 'teleo', 'amph')
             trimmed_reads_dir: Directory with primer-trimmed FASTQ files
             output_dir: Base output directory
-            max_ee: Maximum expected errors after filtering (default: 2)
+            max_ee: Maximum expected errors after filtering (default: 2.0)
             trunc_q: Truncate reads at first quality score below this (default: 11)
             min_overlap: Minimum overlap for merging paired reads (default: 20)
+            max_n: Maximum number of N bases allowed (default: 0)
+            rm_phix: Remove PhiX reads (default: True)
+            multithread: Use multithreading (default: True)
+            chimera_method: Chimera detection method (default: "consensus")
+            max_mismatch: Maximum mismatches in overlap region (default: 0)
+            pool: Pool samples for denoising (default: False)
+            min_len: Minimum read length (None = no filter)
+            max_len: Maximum read length (None = no filter)
             script_path: Path to R script (default: scripts/dada2_process.R)
             log_file: Path to log file
 
@@ -99,6 +115,14 @@ class Dada2Runner(RScriptRunner):
                 str(max_ee),
                 str(trunc_q),
                 str(min_overlap),
+                str(max_n),
+                str(rm_phix).upper(),
+                str(multithread).upper(),
+                chimera_method,
+                str(max_mismatch),
+                str(pool).upper(),
+                str(min_len if min_len is not None else 0),
+                str(max_len if max_len is not None else 0),
             ],
             log_file=log_file,
         )

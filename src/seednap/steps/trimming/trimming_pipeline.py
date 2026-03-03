@@ -31,6 +31,7 @@ class StandardTrimmer:
         cores: int = 1,
         error_rate: float = 0.1,
         min_length: int = 20,
+        overlap: int = 3,
     ):
         """
         Initialize standard trimmer.
@@ -39,9 +40,11 @@ class StandardTrimmer:
             cores: Number of CPU cores for cutadapt
             error_rate: Maximum allowed error rate (default: 0.1)
             min_length: Minimum read length after trimming (default: 20)
+            overlap: Minimum overlap for primer detection (default: 3)
         """
         self.cutadapt = CutadaptRunner(
-            cores=cores, error_rate=error_rate, min_length=min_length
+            cores=cores, error_rate=error_rate, min_length=min_length,
+            min_overlap=overlap,
         )
 
     def trim_sample(

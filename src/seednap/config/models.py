@@ -318,16 +318,6 @@ class LoggingConfig(BaseModel):
     console: bool = Field(default=True, description="Write logs to console")
 
 
-class ResourcesConfig(BaseModel):
-    """Computational resources configuration."""
-
-    max_cores: int = Field(default=1, ge=1, description="Maximum number of CPU cores to use")
-    memory_limit: Optional[str] = Field(None, description="Memory limit (e.g., '32G', '16G')")
-    parallel_samples: int = Field(
-        default=1, ge=1, description="Number of samples to process in parallel"
-    )
-
-
 class PipelineStepsConfig(BaseModel):
     """Pipeline steps configuration."""
 
@@ -363,9 +353,6 @@ class PipelineConfig(BaseModel):
     )
     logging: LoggingConfig = Field(
         default_factory=LoggingConfig, description="Logging configuration"
-    )
-    resources: ResourcesConfig = Field(
-        default_factory=ResourcesConfig, description="Resources configuration"
     )
     pipeline: PipelineStepsConfig = Field(
         default_factory=PipelineStepsConfig, description="Pipeline steps configuration"

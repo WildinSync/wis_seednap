@@ -44,6 +44,7 @@ class Dada2TaxonomyRunner(RScriptRunner):
         output_dir: Union[str, Path],
         rdp_db_path: Union[str, Path],
         species_db_path: Union[str, Path],
+        multithread: bool = True,
         script_path: Optional[Union[str, Path]] = None,
         log_file: Optional[Union[str, Path]] = None,
     ) -> Dict[str, Path]:
@@ -57,6 +58,7 @@ class Dada2TaxonomyRunner(RScriptRunner):
             output_dir: Base output directory
             rdp_db_path: Path to RDP-formatted database (genus-level)
             species_db_path: Path to species-level database
+            multithread: Use multithreading (default: True)
             script_path: Path to R script (default: scripts/taxo_dada2_marker.R)
             log_file: Path to log file
 
@@ -93,7 +95,13 @@ class Dada2TaxonomyRunner(RScriptRunner):
         # Run taxonomy assignment
         self._run_r_script(
             script_path=script_path,
-            args=[marker, str(rdp_db_path), str(species_db_path), str(output_dir)],
+            args=[
+                marker,
+                str(rdp_db_path),
+                str(species_db_path),
+                str(output_dir),
+                str(multithread).upper(),
+            ],
             log_file=log_file,
         )
 

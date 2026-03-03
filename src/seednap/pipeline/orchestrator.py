@@ -219,7 +219,11 @@ class PipelineOrchestrator:
         if self.config.demultiplex.metadata is None:
             raise ValueError("Metadata file required for ligation demultiplexing")
 
-        trimmer = LigationTrimmer()
+        trimmer = LigationTrimmer(
+            cores=self.config.trimming.cores,
+            error_rate=self.config.trimming.max_error_rate,
+            min_length=self.config.trimming.min_length,
+        )
         output_dir = (
             self.config.paths.output / "01_trim" / self.config.marker.name / "demux"
         )
@@ -276,7 +280,8 @@ class PipelineOrchestrator:
             trimmer = StandardTrimmer(
                 cores=self.config.trimming.cores,
                 error_rate=self.config.trimming.max_error_rate,
-                min_length=self.config.trimming.min_length
+                min_length=self.config.trimming.min_length,
+                overlap=self.config.trimming.overlap,
             )
             
             output_dir = self.config.paths.output / "01_trim" / self.config.marker.name
@@ -358,6 +363,14 @@ class PipelineOrchestrator:
                 max_ee=self.config.dada2.filter.max_ee,
                 trunc_q=self.config.dada2.filter.trunc_q,
                 min_overlap=self.config.dada2.merge.min_overlap,
+                max_n=self.config.dada2.filter.max_n,
+                rm_phix=self.config.dada2.filter.rm_phix,
+                multithread=self.config.dada2.multithread,
+                chimera_method=self.config.dada2.chimera.method,
+                max_mismatch=self.config.dada2.merge.max_mismatch,
+                pool=self.config.dada2.pool,
+                min_len=self.config.dada2.filter.min_len,
+                max_len=self.config.dada2.filter.max_len,
                 collect_metrics=self.config.metrics.generate_plots,
             )
 
@@ -487,6 +500,7 @@ class PipelineOrchestrator:
                 kwargs = {
                     "rdp_db_path": db_config.all,
                     "species_db_path": db_config.species,
+                    "multithread": self.config.dada2.multithread,
                 }
             elif self.config.taxonomy.method == "blast":
                 kwargs = {
