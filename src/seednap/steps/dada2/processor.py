@@ -102,6 +102,17 @@ class Dada2Processor:
             f"maxMismatch={max_mismatch}, pool={pool}, multithread={multithread}"
         )
 
+        # Verify trimmed reads directory has FASTQ files
+        fastq_files = list(self.trimmed_reads_dir.glob("*R1*.fastq*"))
+        if not fastq_files:
+            fastq_files = list(self.trimmed_reads_dir.glob("*R1*.fq*"))
+        if not fastq_files:
+            raise FileNotFoundError(
+                f"No FASTQ files found in trimmed reads directory: {self.trimmed_reads_dir}. "
+                f"Check that the trim step produced output or that paths.raw_data is correct."
+            )
+        logger.info(f"Found {len(fastq_files)} R1 files in {self.trimmed_reads_dir}")
+
         # Check for required R packages
         logger.info("Checking R package dependencies...")
         packages = self.runner.check_dada2_packages()

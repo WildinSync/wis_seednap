@@ -684,16 +684,19 @@ class PipelineOrchestrator:
         if not raw_dir.exists():
             raise FileNotFoundError(f"Raw data directory not found: {raw_dir}")
 
-        # Find all R1 files
-        r1_files = list(raw_dir.glob("*_R1*.fastq.gz")) + list(
-            raw_dir.glob("*_R1*.fastq")
-        )
+        # Find all R1 files (support both _R1 and .R1 naming)
+        r1_patterns = [
+            "*_R1*.fastq.gz", "*_R1*.fastq",
+            "*.R1.fastq.gz", "*.R1.fastq",
+        ]
+        r1_files = []
+        for pattern in r1_patterns:
+            r1_files.extend(raw_dir.glob(pattern))
 
-        # Extract sample names (everything before _R1)
+        # Extract sample names (everything before _R1 or .R1)
         samples = []
-        for r1_file in r1_files:
-            # Extract sample name using regex
-            match = re.match(r"(.+?)_R[12]", r1_file.name)
+        for r1_file in sorted(r1_files):
+            match = re.match(r"(.+?)[._]R[12]", r1_file.name)
             if match:
                 sample_name = match.group(1)
                 if sample_name not in samples:
@@ -717,10 +720,12 @@ class PipelineOrchestrator:
         """
         raw_dir = self.config.paths.raw_data
 
-        # Try different file name patterns
+        # Try different file name patterns (support both _R1 and .R1 naming)
         patterns = [
             f"{sample_name}_{read}.fastq.gz",
             f"{sample_name}_{read}.fastq",
+            f"{sample_name}.{read}.fastq.gz",
+            f"{sample_name}.{read}.fastq",
             f"{sample_name}_{read}_001.fastq.gz",
             f"{sample_name}_{read}_001.fastq",
         ]

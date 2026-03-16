@@ -4,8 +4,10 @@ Provides Python methods around vsearch CLI commands used in the SWARM pipeline.
 """
 
 import logging
+import re
+import subprocess
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional, Tuple, Union
 
 from seednap.utils.subprocess import run_subprocess
 
@@ -37,15 +39,30 @@ class VsearchRunner:
             VsearchError: If vsearch is not installed
         """
         self.timeout = timeout
-        self._check_availability()
+        self.version = self._check_availability()
 
-    def _check_availability(self) -> None:
-        """Check that vsearch is installed."""
-        run_subprocess(
-            ["vsearch", "--version"],
-            timeout=10,
-            error_class=VsearchError,
-        )
+    @staticmethod
+    def _parse_version(text: str) -> Tuple[int, ...]:
+        """Extract (major, minor, patch) from vsearch --version output."""
+        m = re.search(r"vsearch\s+v?(\d+)\.(\d+)\.(\d+)", text)
+        if m:
+            return tuple(int(x) for x in m.groups())
+        return (0, 0, 0)
+
+    def _check_availability(self) -> Tuple[int, ...]:
+        """Check that vsearch is installed and return its version tuple."""
+        try:
+            result = subprocess.run(
+                ["vsearch", "--version"],
+                capture_output=True, text=True, timeout=10,
+            )
+            # vsearch prints version to stderr
+            version_text = result.stderr or result.stdout or ""
+            version = self._parse_version(version_text)
+            logger.info(f"Detected vsearch version: {'.'.join(str(v) for v in version)}")
+            return version
+        except FileNotFoundError:
+            raise VsearchError("vsearch is not installed or not on PATH")
 
     def merge_pairs(
         self,
@@ -136,10 +153,21 @@ class VsearchRunner:
         input_fasta, output_fasta = Path(input_fasta), Path(output_fasta)
         output_fasta.parent.mkdir(parents=True, exist_ok=True)
 
+        # vsearch >= 2.28 rejects FASTQ input with --derep_fulllength;
+        # use --fastx_uniques instead (available since vsearch 2.17).
+        # For older versions, --derep_fulllength accepts both FASTA and FASTQ.
+        input_str = str(input_fasta)
+        is_fastq = input_str.endswith((".fastq", ".fq", ".fastq.gz", ".fq.gz"))
+        use_fastx_uniques = is_fastq and self.version >= (2, 28, 0)
+
+        derep_cmd = "--fastx_uniques" if use_fastx_uniques else "--derep_fulllength"
+        # --fastx_uniques uses --fastaout/--fastqout; --derep_fulllength uses --output
+        output_flag = "--fastaout" if use_fastx_uniques else "--output"
+
         cmd = [
             "vsearch",
-            "--derep_fulllength", str(input_fasta),
-            "--output", str(output_fasta),
+            derep_cmd, input_str,
+            output_flag, str(output_fasta),
             "--sizeout",
             "--fasta_width", "0",
             "--minuniquesize", str(min_unique_size),

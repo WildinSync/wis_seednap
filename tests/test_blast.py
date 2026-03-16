@@ -332,11 +332,11 @@ class TestBlastTaxonomicAssigner:
         with open(blast_tsv, "w") as f:
             f.write("ASV_1\tseq1\t98.5\t12\t0\t0\t1\t12\t1\t12\t1e-20\t50\tATCG\tATCG\n")
 
-        # ASV count table
+        # ASV count table (sequences as rows, samples as columns)
         asv_count = temp_dir / "counts.csv"
         pd.DataFrame({
-            "ATCGATCGATCG": [100]  # Sequence as column
-        }, index=["sample1"]).to_csv(asv_count)
+            "sample1": [100]
+        }, index=["ATCGATCGATCG"]).to_csv(asv_count)
 
         # ASV FASTA
         asv_fasta = temp_dir / "asvs.fasta"

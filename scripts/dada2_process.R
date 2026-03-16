@@ -64,6 +64,8 @@ filtpathFR <- file.path(pathFR, "filtered") # Filtered forward files go into the
 dir.create(filtpathFR, recursive = TRUE, showWarnings = FALSE)
 fastqFs <- sort(list.files(pathFR, pattern="R1.fastq"))
 fastqRs <- sort(list.files(pathFR, pattern="R2.fastq"))
+if(length(fastqFs) == 0) stop(paste0("No R1 FASTQ files found in: ", pathFR))
+if(length(fastqRs) == 0) stop(paste0("No R2 FASTQ files found in: ", pathFR))
 if(length(fastqFs) != length(fastqRs)) stop("Forward and reverse files do not match.")
 
 # Explore quality 
