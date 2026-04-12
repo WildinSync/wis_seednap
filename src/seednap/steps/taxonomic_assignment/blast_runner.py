@@ -295,8 +295,19 @@ class BlastOutputFormatter:
 
             # Parse header: >seq_id<TAB>kingdom;phylum;class;order;family;genus;species
             header = self._phylo_dict[seq_id]
-            phylo_string = header.replace("\n", "").split("\t")[1]
+            header_parts = header.replace("\n", "").split("\t")
+            if len(header_parts) < 2:
+                raise ValueError(
+                    f"Malformed reference header for '{seq_id}': expected tab-separated "
+                    f"ID and taxonomy, got: {header[:80]}"
+                )
+            phylo_string = header_parts[1]
             phylo_values = phylo_string.split(";")
+            if len(phylo_values) < len(self.TAXONOMIC_RANKS):
+                raise ValueError(
+                    f"Incomplete taxonomy for '{seq_id}': expected {len(self.TAXONOMIC_RANKS)} "
+                    f"ranks (;-separated), got {len(phylo_values)}: {phylo_string[:80]}"
+                )
 
             # Assign to columns
             phylo = dict(zip(self.TAXONOMIC_RANKS, phylo_values))
@@ -533,10 +544,10 @@ class BlastTaxonomicAssigner:
         asv_sequences = fasta_to_df(asv_fasta)
         asv_sequences = asv_sequences.rename(columns={"id": "ASV_ID", "sequence": "Sequence"})
 
-        # Merge count table with sequences
+        # Merge count table with sequences to get ASV_IDs
         asv_count = pd.merge(
             asv_count, asv_sequences, how="inner", left_index=True, right_on="Sequence"
-        ).drop(columns="Sequence")
+        )
 
         # Merge taxonomy with counts
         final_table = pd.merge(result, asv_count, how="inner", on="ASV_ID")
@@ -544,9 +555,6 @@ class BlastTaxonomicAssigner:
         # Sort by ASV number
         final_table["asv_num"] = final_table["ASV_ID"].str.extract(r"(\d+)").astype(int)
         final_table = final_table.sort_values("asv_num").drop(columns="asv_num")
-
-        # Add sequence back
-        final_table = pd.merge(final_table, asv_sequences, how="inner", on="ASV_ID")
 
         # Save if output path provided
         if output_path:

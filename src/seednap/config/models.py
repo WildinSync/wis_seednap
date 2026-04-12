@@ -4,12 +4,18 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 logger = logging.getLogger(__name__)
 
 
-class PrimerConfig(BaseModel):
+class StrictModel(BaseModel):
+    """Base model that rejects unknown fields to catch config typos."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class PrimerConfig(StrictModel):
     """Primer pair configuration."""
 
     forward: str = Field(..., min_length=10, description="Forward primer sequence (5' to 3')")
@@ -41,7 +47,7 @@ class PrimerConfig(BaseModel):
         return reverse_complement(self.forward), reverse_complement(self.reverse)
 
 
-class MarkerConfig(BaseModel):
+class MarkerConfig(StrictModel):
     """Marker-specific configuration (e.g., teleo, 16S, COI)."""
 
     name: str = Field(..., description="Marker name (lowercase)")
@@ -49,7 +55,7 @@ class MarkerConfig(BaseModel):
     primers: PrimerConfig = Field(..., description="Primer pair configuration")
 
 
-class PathsConfig(BaseModel):
+class PathsConfig(StrictModel):
     """File paths configuration."""
 
     raw_data: Path = Field(default=Path("data/raw"), description="Raw FASTQ data directory")
@@ -64,7 +70,7 @@ class PathsConfig(BaseModel):
         return v.expanduser().resolve()
 
 
-class DemultiplexConfig(BaseModel):
+class DemultiplexConfig(StrictModel):
     """Demultiplexing configuration."""
 
     enabled: bool = Field(default=False, description="Whether demultiplexing is enabled")
@@ -84,7 +90,7 @@ class DemultiplexConfig(BaseModel):
         return v
 
 
-class TrimmingConfig(BaseModel):
+class TrimmingConfig(StrictModel):
     """Primer trimming configuration."""
 
     tool: Literal["cutadapt"] = Field(default="cutadapt", description="Trimming tool to use")
@@ -99,7 +105,7 @@ class TrimmingConfig(BaseModel):
     overlap: int = Field(default=3, ge=1, description="Minimum overlap for primer detection")
 
 
-class Dada2FilterConfig(BaseModel):
+class Dada2FilterConfig(StrictModel):
     """DADA2 filtering parameters."""
 
     max_ee: float = Field(default=2.0, ge=0, description="Maximum expected errors")
@@ -110,14 +116,14 @@ class Dada2FilterConfig(BaseModel):
     max_len: Optional[int] = Field(None, ge=1, description="Maximum read length (optional)")
 
 
-class Dada2MergeConfig(BaseModel):
+class Dada2MergeConfig(StrictModel):
     """DADA2 read merging parameters."""
 
     min_overlap: int = Field(default=20, ge=1, description="Minimum overlap for merging")
     max_mismatch: int = Field(default=0, ge=0, description="Maximum mismatches in overlap region")
 
 
-class Dada2ChimeraConfig(BaseModel):
+class Dada2ChimeraConfig(StrictModel):
     """DADA2 chimera removal parameters."""
 
     method: Literal["consensus", "pooled", "none"] = Field(
@@ -125,7 +131,7 @@ class Dada2ChimeraConfig(BaseModel):
     )
 
 
-class Dada2Config(BaseModel):
+class Dada2Config(StrictModel):
     """DADA2 processing configuration."""
 
     filter: Dada2FilterConfig = Field(default_factory=Dada2FilterConfig)
@@ -135,7 +141,7 @@ class Dada2Config(BaseModel):
     multithread: bool = Field(default=True, description="Use multithreading")
 
 
-class SwarmMergeConfig(BaseModel):
+class SwarmMergeConfig(StrictModel):
     """vsearch read merging parameters for SWARM pipeline."""
 
     fastq_maxdiffs: int = Field(default=10, ge=0, description="Max differences in overlap region")
@@ -143,7 +149,7 @@ class SwarmMergeConfig(BaseModel):
     allow_stagger: bool = Field(default=False, description="Allow merging of staggered reads")
 
 
-class SwarmClusteringConfig(BaseModel):
+class SwarmClusteringConfig(StrictModel):
     """SWARM clustering algorithm parameters."""
 
     d: int = Field(default=1, ge=1, description="Clustering distance threshold")
@@ -152,7 +158,7 @@ class SwarmClusteringConfig(BaseModel):
     threads: int = Field(default=4, ge=1, description="Number of threads")
 
 
-class SwarmChimeraConfig(BaseModel):
+class SwarmChimeraConfig(StrictModel):
     """SWARM chimera detection parameters."""
 
     method: Literal["denovo", "none"] = Field(
@@ -160,7 +166,7 @@ class SwarmChimeraConfig(BaseModel):
     )
 
 
-class SwarmConfig(BaseModel):
+class SwarmConfig(StrictModel):
     """SWARM OTU clustering pipeline configuration."""
 
     merge: SwarmMergeConfig = Field(default_factory=SwarmMergeConfig)
@@ -171,7 +177,7 @@ class SwarmConfig(BaseModel):
     )
 
 
-class Dada2DatabaseConfig(BaseModel):
+class Dada2DatabaseConfig(StrictModel):
     """DADA2 taxonomic database configuration."""
 
     all: Path = Field(..., description="Path to database with all taxonomic ranks")
@@ -186,7 +192,7 @@ class Dada2DatabaseConfig(BaseModel):
         return v
 
 
-class BlastDatabaseConfig(BaseModel):
+class BlastDatabaseConfig(StrictModel):
     """BLAST database configuration."""
 
     fasta: Path = Field(..., description="Path to reference FASTA database")
@@ -208,7 +214,7 @@ class BlastDatabaseConfig(BaseModel):
         return v.expanduser().resolve()
 
 
-class EcotagDatabaseConfig(BaseModel):
+class EcotagDatabaseConfig(StrictModel):
     """Ecotag database configuration."""
 
     tree: Path = Field(..., description="Path to NCBI taxonomy tree directory")
@@ -221,7 +227,7 @@ class EcotagDatabaseConfig(BaseModel):
         return v.expanduser().resolve()
 
 
-class DecipherDatabaseConfig(BaseModel):
+class DecipherDatabaseConfig(StrictModel):
     """DECIPHER database configuration."""
 
     trained: Path = Field(..., description="Path to trained DECIPHER RDS file")
@@ -237,7 +243,7 @@ class DecipherDatabaseConfig(BaseModel):
         return v.expanduser().resolve()
 
 
-class TaxonomicAssignmentConfig(BaseModel):
+class TaxonomicAssignmentConfig(StrictModel):
     """Taxonomic assignment configuration."""
 
     method: Literal["dada2", "blast", "ecotag", "decipher"] = Field(
@@ -275,7 +281,7 @@ class TaxonomicAssignmentConfig(BaseModel):
             return db_config
 
 
-class GbifExportConfig(BaseModel):
+class GbifExportConfig(StrictModel):
     """GBIF export configuration."""
 
     enabled: bool = Field(default=True, description="Whether to generate GBIF format output")
@@ -283,7 +289,7 @@ class GbifExportConfig(BaseModel):
     add_taxon: bool = Field(default=True, description="Add lowest available taxon column")
 
 
-class ExportConfig(BaseModel):
+class ExportConfig(StrictModel):
     """Output export configuration."""
 
     formats: List[str] = Field(default=["csv"], description="Output formats to generate")
@@ -292,7 +298,7 @@ class ExportConfig(BaseModel):
     )
 
 
-class MetricsConfig(BaseModel):
+class MetricsConfig(StrictModel):
     """Quality control metrics configuration."""
 
     generate_plots: bool = Field(default=True, description="Generate QC plots")
@@ -305,7 +311,7 @@ class MetricsConfig(BaseModel):
     )
 
 
-class LoggingConfig(BaseModel):
+class LoggingConfig(StrictModel):
     """Logging configuration."""
 
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
@@ -318,7 +324,7 @@ class LoggingConfig(BaseModel):
     console: bool = Field(default=True, description="Write logs to console")
 
 
-class PipelineStepsConfig(BaseModel):
+class PipelineStepsConfig(StrictModel):
     """Pipeline steps configuration."""
 
     steps: List[str] = Field(
@@ -328,7 +334,7 @@ class PipelineStepsConfig(BaseModel):
     skip: List[str] = Field(default_factory=list, description="Steps to skip")
 
 
-class PipelineConfig(BaseModel):
+class PipelineConfig(StrictModel):
     """Complete pipeline configuration."""
 
     version: str = Field(default="0.1.0", description="Config format version")

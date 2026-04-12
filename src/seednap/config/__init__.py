@@ -28,6 +28,10 @@ from seednap.config.models import (
     PipelineConfig,
     PipelineStepsConfig,
     PrimerConfig,
+    SwarmChimeraConfig,
+    SwarmClusteringConfig,
+    SwarmConfig,
+    SwarmMergeConfig,
     TaxonomicAssignmentConfig,
     TrimmingConfig,
 )
@@ -62,4 +66,8 @@ __all__ = [
     "MetricsConfig",
     "LoggingConfig",
     "PipelineStepsConfig",
+    "SwarmConfig",
+    "SwarmMergeConfig",
+    "SwarmClusteringConfig",
+    "SwarmChimeraConfig",
 ]

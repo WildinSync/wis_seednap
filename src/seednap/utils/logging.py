@@ -138,31 +138,6 @@ def setup_logging(
     )
 
 
-def log_command_execution(
-    command: str,
-    cwd: Optional[Path] = None,
-    env_vars: Optional[dict[str, str]] = None,
-    logger: Optional[logging.Logger] = None,
-) -> None:
-    """
-    Log execution of an external command.
-
-    Args:
-        command: Command being executed
-        cwd: Working directory for command
-        env_vars: Environment variables for command
-        logger: Logger instance (uses root if None)
-    """
-    if logger is None:
-        logger = logging.getLogger()
-
-    logger.debug(f"Executing command: {command}")
-    if cwd:
-        logger.debug(f"  Working directory: {cwd}")
-    if env_vars:
-        logger.debug(f"  Environment variables: {env_vars}")
-
-
 def log_pipeline_step(step_name: str, status: str = "start", logger: Optional[logging.Logger] = None) -> None:
     """
     Log a pipeline step.

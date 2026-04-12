@@ -1,27 +1,34 @@
-#**/raw/*
-raw/*/*
-.Rproj.user
-report/**
-#!outputs/
-outputs/*csv
-outputs/*/*
-outputs/*/*/*
+# Data
 raw/*/*
 raw/*/*gz
-logs/*
-.claude
-.vscode
-pycache/
+
+# Outputs
+outputs/
+outputs_test/
+logs/
+
+# R
+.Rproj.user
+report/**
+
+# Python
 __pycache__/
 *.pyc
-.ipynb_checkpoints
+*.egg-info/
+.coverage
+htmlcov/
+
+# IDE / OS
+.claude
+.vscode
 .DS_Store
+.ipynb_checkpoints
+
+# Misc
 *.log
 *.aux
-.coverage
-seednap.egg-info/
+.env
 /docs
 mkdocs.yml
 README.md.backup
-.env
 /swarm_gdc

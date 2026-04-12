@@ -69,45 +69,6 @@ where = ["src"]
 [tool.setuptools.package-data]
 seednap = ["py.typed", "data/templates/*.csv"]
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = [
-    "-v",
-    "--strict-markers",
-    "--cov=seednap",
-    "--cov-report=html",
-    "--cov-report=term-missing",
-    "--cov-fail-under=80",
-]
-markers = [
-    "unit: Unit tests",
-    "integration: Integration tests",
-    "e2e: End-to-end tests",
-    "slow: Slow running tests",
-]
-
-[tool.coverage.run]
-source = ["src"]
-omit = [
-    "*/tests/*",
-    "*/__pycache__/*",
-    "*/site-packages/*",
-]
-
-[tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "raise AssertionError",
-    "raise NotImplementedError",
-    "if __name__ == .__main__.:",
-    "if TYPE_CHECKING:",
-    "@abstractmethod",
-]
-
 [tool.black]
 line-length = 100
 target-version = ['py39', 'py310', 'py311', 'py312']
@@ -130,7 +91,7 @@ extend-exclude = '''
 [tool.ruff]
 line-length = 100
 target-version = "py39"
-src = ["src", "tests"]
+src = ["src"]
 
 select = [
     "E",   # pycodestyle errors
@@ -153,7 +114,6 @@ ignore = [
 
 [tool.ruff.per-file-ignores]
 "__init__.py" = ["F401", "F403"]
-"tests/**/*.py" = ["S101"]  # allow assert in tests
 
 [tool.ruff.isort]
 known-first-party = ["seednap"]

@@ -55,7 +55,10 @@ class OtuTableBuilder:
 
         rows = []
         for i, (seed, mass) in enumerate(sorted_seeds, start=1):
-            sequence = representatives.get(seed, "")
+            sequence = representatives.get(seed)
+            if not sequence:
+                logger.warning(f"Seed {seed} not found in representatives FASTA, skipping OTU {i}")
+                continue
             seed_abundance, cloud = seeds.get(seed, (0, 0))
             chimera_status = uchime.get(seed, "NA")
 

@@ -167,6 +167,16 @@ class PipelineOrchestrator:
 
         return True
 
+    def _get_trimmed_reads_dir(self) -> Path:
+        """Get trimmed reads directory from trim step output or fall back to raw data."""
+        if self.state.is_step_completed("trim"):
+            trim_step = self.state.get_step("trim")
+            trimmed_reads_dir = trim_step.outputs.get("trimmed_dir") if trim_step else None
+            if trimmed_reads_dir is None:
+                raise ValueError("Trim step completed but no trimmed_dir in outputs")
+            return Path(trimmed_reads_dir)
+        return self.config.paths.raw_data
+
     def run_demultiplex(self) -> Dict[str, Path]:
         """
         Run demultiplexing step.
@@ -342,16 +352,7 @@ class PipelineOrchestrator:
         try:
             logger.info("Running DADA2 processing")
 
-            # Determine trimmed reads directory
-            if self.state.is_step_completed("trim"):
-                trim_step = self.state.get_step("trim")
-                trimmed_reads_dir = trim_step.outputs.get("trimmed_dir") if trim_step else None
-                if trimmed_reads_dir is None:
-                    raise ValueError("Trim step completed but no trimmed_dir in outputs")
-                trimmed_reads_dir = Path(trimmed_reads_dir)
-            else:
-                # Use raw data if trimming was skipped
-                trimmed_reads_dir = self.config.paths.raw_data
+            trimmed_reads_dir = self._get_trimmed_reads_dir()
 
             processor = Dada2Processor(
                 marker=self.config.marker.name,
@@ -405,15 +406,7 @@ class PipelineOrchestrator:
         try:
             logger.info("Running SWARM OTU clustering")
 
-            # Determine trimmed reads directory
-            if self.state.is_step_completed("trim"):
-                trim_step = self.state.get_step("trim")
-                trimmed_reads_dir = trim_step.outputs.get("trimmed_dir") if trim_step else None
-                if trimmed_reads_dir is None:
-                    raise ValueError("Trim step completed but no trimmed_dir in outputs")
-                trimmed_reads_dir = Path(trimmed_reads_dir)
-            else:
-                trimmed_reads_dir = self.config.paths.raw_data
+            trimmed_reads_dir = self._get_trimmed_reads_dir()
 
             processor = SwarmProcessor(
                 marker=self.config.marker.name,

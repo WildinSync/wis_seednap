@@ -1,0 +1,97 @@
+version: "0.1.0"
+
+marker:
+  name: "mifish"
+  description: "Fish eDNA metabarcoding using MiFish-U 12S rRNA"
+  primers:
+    forward: "GTCGGTAAAACTCGTGCCAGC"
+    reverse: "CATAGTGGGGTATCTAATCCCAGTTTG"
+    name: "MiFish-U"
+    target: "12S rRNA"
+    amplicon_length: [140, 220]
+
+paths:
+  raw_data: "/home/shared/edna/raw/fw_ar_rewild_2025/mifish/"
+  output: "outputs_test/mifish"
+  logs: "logs"
+  references: "/home/shared/edna/reference_database/2025/mifish/"
+
+demultiplex:
+  enabled: false
+  protocol: "none"
+
+trimming:
+  tool: "cutadapt"
+  min_length: 20
+  max_error_rate: 0.1
+  cores: 12
+  discard_untrimmed: true
+  overlap: 3
+
+swarm:
+  merge:
+    fastq_maxdiffs: 10
+    fastq_minovlen: 10
+    allow_stagger: false
+  clustering:
+    d: 1
+    fastidious: true
+    boundary: 3
+    threads: 4
+  chimera:
+    method: "denovo"
+  min_sequence_length: 50
+
+dada2:
+  filter:
+    max_ee: 2.0
+    trunc_q: 11
+    max_n: 0
+    rm_phix: true
+  merge:
+    min_overlap: 20
+    max_mismatch: 0
+  chimera:
+    method: "consensus"
+  pool: false
+  multithread: true
+
+taxonomy:
+  method: "blast"
+  databases:
+    blast:
+      fasta: "/home/shared/edna/reference_database/2025/mifish/CRABS_MITOFISH_MIDORI2_GB265_mifish_blast.fasta"
+      perc_identity: 80.0
+      qcov_hsp_perc: 80.0
+      evalue: 1.0e-10
+      max_target_seqs: 10
+      threshold_species: 100.0
+      threshold_genus: 96.0
+      threshold_family: 86.5
+
+export:
+  formats:
+    - "csv"
+  gbif:
+    enabled: false
+    add_rank: true
+    add_taxon: true
+
+metrics:
+  generate_plots: false
+  plot_format: "png"
+  metrics:
+    - "read_counts"
+
+logging:
+  level: "INFO"
+  format: "detailed"
+  file: true
+  console: true
+
+pipeline:
+  steps:
+    - "trim"
+    - "swarm"
+    - "taxonomy"
+  skip: []
