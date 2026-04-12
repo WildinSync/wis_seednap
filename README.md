@@ -1,967 +1,136 @@
 <p align="center">
-  <img src="media/teaser.png" alt="SeeDNAP Logo">
+  <img src="media/teaser.png" alt="SeeDNAP">
 </p>
 
 **Modern eDNA metabarcoding pipeline with DADA2 and SWARM**
 
 [![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](tests/)
-
-A production-ready Python pipeline for processing environmental DNA (eDNA) metabarcoding data with support for DADA2 (ASV) and SWARM (OTU) clustering and multiple taxonomic assignment methods (BLAST, DADA2, DECIPHER, ecotag).
-
-**Version:** 0.1.0
 
 ---
 
-## Table of Contents
+## What is SeeDNAP?
 
-- [Features](#features)
-- [Quick Start](#quick-start)
-- [Installation](#installation)
-- [Usage](#usage)
-  - [Complete Pipeline](#complete-pipeline)
-  - [Individual Steps](#individual-steps)
-- [CLI Reference](#cli-reference)
-- [Configuration](#configuration)
-- [Pipeline Steps](#pipeline-steps)
-- [Taxonomic Assignment Methods](#taxonomic-assignment-methods)
-- [Testing](#testing)
-- [Architecture](#architecture)
-- [Contributing](#contributing)
-- [Citation](#citation)
+SeeDNAP is an end-to-end Python pipeline for processing environmental DNA (eDNA) metabarcoding data. It takes raw paired-end FASTQ files and produces taxonomically assigned OTU/ASV tables ready for biodiversity analysis or GBIF submission.
 
----
-
-## Pipeline Steps
-1. **Trimming** (cutadapt): Remove primers and adapters
-2. **Clustering** (choose one):
-   - **DADA2**: Quality filtering, denoising, ASV detection, chimera removal
-   - **SWARM**: Read merging (vsearch), dereplication, OTU clustering, chimera detection
-3. **Taxonomic Assignment**: BLAST, DADA2, DECIPHER, or ecotag
-4. **Export**: GBIF-compatible format with rank determination
-5. **DarwinCore Publishing** (`create-gbif`): Merge metadata, enrich taxonomy, produce full DarwinCore-compliant GBIF occurrence CSV
-
----
+<p align="center">
+  <img src="media/pipeline_flowchart.png" alt="SeeDNAP Pipeline Flowchart" width="800">
+</p>
 
 ## Quick Start
 
-### 1. Installation
-
 ```bash
-# Clone repository
-git clone https://gitlab.ethz.ch/ele-projects/edna/edna-app/seednap.git
-
-cd seednap
-
-# Install with pip
-pip install -e .
-
-# Verify installation
-seednap --version
-```
-
-### 2. Create Configuration
-
-```bash
-# Generate example config
-seednap init --marker teleo --output my_analysis.yaml
-
-# Validate configuration
-seednap validate my_analysis.yaml
-```
-
-### 3. Run Pipeline
-
-```bash
-# Run complete pipeline
-seednap run-pipeline my_analysis.yaml
-
-# Resume from failed step
-seednap run-pipeline my_analysis.yaml --resume
-
-# Stop on first error (default) or continue
-seednap run-pipeline my_analysis.yaml --continue-on-error
-```
-
----
-
-## Installation
-
-### Requirements
-
-**Python:** >= 3.9
-
-**System dependencies:**
-- `cutadapt` (>= 4.0) — primer trimming
-- `R` (>= 4.0) — required for DADA2 and DECIPHER
-- R packages: `tidyverse`, `dada2`, `Biostrings`
-
-**For SWARM clustering:**
-- `vsearch` (>= 2.0) — read merging, dereplication, chimera detection
-- `swarm` (>= 3.0) — OTU clustering
-
-**Optional (for specific taxonomy methods):**
-- **BLAST:** `ncbi-blast+` (makeblastdb, blastn)
-- **DECIPHER:** R package `DECIPHER`
-- **Ecotag:** `obitools` v1 (requires separate conda environment)
-
-**Installing external tools:**
-```bash
-# cutadapt (pip)
-pip install cutadapt
-
-# vsearch and swarm (conda/bioconda)
-conda install -c bioconda vsearch swarm
-
-# BLAST (conda/bioconda)
-conda install -c bioconda blast
-```
-
-All three are included in the `environment.yml` conda environment.
-
-### Install from Source
-
-```bash
-# Clone repository
+# Install
 git clone https://gitlab.ethz.ch/ele-projects/edna/edna-app/seednap.git
 cd seednap
-
-# Install in development mode
-pip install -e .
-
-# Install with development dependencies
-pip install -e ".[dev]"
-```
-
-### Conda Environment (Recommended)
-
-```bash
-# Create conda environment
 conda env create -f environment.yml
 conda activate seednap
-
-# Install seednap
 pip install -e .
+
+# Create and edit a config
+seednap init --marker teleo --output config/markers/my_marker.yaml
+
+# Run the pipeline
+seednap run-pipeline config/markers/my_marker.yaml
 ```
 
-**NOTE**: **For ETH eDNA server users:** Use the existing `metabarcoding` conda environment which contains all dependencies.
-
----
-
-## Usage
-
-### Complete Pipeline
-
-Run the entire pipeline end-to-end:
-
-```bash
-# Basic usage
-seednap run-pipeline config.yaml
-
-# Resume from previous run
-seednap run-pipeline config.yaml --resume
-
-# Specify custom state file
-seednap run-pipeline config.yaml --state-file pipeline_state.json
-
-# Continue on errors (don't stop pipeline if one step fails)
-seednap run-pipeline config.yaml --continue-on-error
-```
-
-**Output:**
-- Trimmed FASTQ files
-- DADA2 ASV table / SWARM OTU table and sequences
-- Taxonomic assignments
-- GBIF-formatted export
-- Quality plots and metrics
-- Pipeline state file for resumability
-
-### Individual Steps
-
-Run pipeline steps separately:
-
-#### 1. Primer Trimming
-
-```bash
-seednap trim config.yaml
-```
-
-Options:
-- `--cores`: Number of CPU cores (default: from config)
-- `--output-dir`: Output directory (default: from config)
-
-#### 2. DADA2 Processing
-
-```bash
-seednap dada2 config.yaml
-```
-
-Performs:
-- Quality filtering (maxEE, truncQ, maxN)
-- Denoising and error learning
-- Read merging
-- Chimera removal
-- ASV table generation
-
-#### 2b. SWARM OTU Clustering (Alternative to DADA2)
-
-```bash
-seednap swarm teleo /path/to/trimmed/reads --output-dir outputs
-```
-
-Performs:
-
-- Merge paired-end reads (vsearch)
-- Per-sample and global dereplication (vsearch)
-- SWARM OTU clustering (d=1, fastidious)
-- Sort representatives by abundance
-- De novo chimera detection (vsearch UCHIME)
-- OTU contingency table generation
-
-Options:
-
-- `-d, --distance`: Clustering distance threshold (default: 1)
-- `-t, --threads`: Number of threads (default: 4)
-- `--no-fastidious`: Disable fastidious singleton refinement
-- `--no-chimera-filter`: Skip chimera detection
-
-#### 3. Taxonomic Assignment
-
-**BLAST:**
-```bash
-seednap blast config.yaml
-```
-
-**DADA2 RDP Classifier:**
-```bash
-seednap assign-taxonomy config.yaml --method dada2
-```
-
-**DECIPHER:**
-```bash
-seednap assign-taxonomy config.yaml --method decipher
-```
-
-**Ecotag:**
-```bash
-seednap assign-taxonomy config.yaml --method ecotag
-```
-
-#### 4. GBIF Formatting
-
-```bash
-seednap format-gbif input.csv output.csv --method dada2
-```
-
-Options:
-- `--method`: Source method (dada2, blast, decipher, ecotag)
-- `--add-rank/--no-add-rank`: Add rank column
-- `--add-taxon/--no-add-taxon`: Add taxon column
-
-#### 5. DarwinCore Publishing
-
-Build a full DarwinCore-compliant GBIF occurrence CSV from the formatted taxonomy results and sample/project metadata:
-
-```bash
-seednap create-gbif taxonomy_gbif.csv sample_metadata.csv project_metadata.csv output.csv
-```
-
-Options:
-
-- `--summarise-pcr/--no-summarise-pcr`: Summarise PCR replicates by sample (default: no)
-- `--skip-enrichment`: Skip NCBI/WORMS kingdom/phylum enrichment
-
-**Environment variable:** Set `NCBI_API_KEY` in your `.env` file or environment to enable automatic taxonomy enrichment. Get your key at <https://www.ncbi.nlm.nih.gov/account/settings/>
-
----
-
-## CLI Reference
-
-### Global Options
-
-```bash
-seednap --help              # Show help
-seednap --version           # Show version
-seednap -v [command]        # Verbose output (DEBUG level)
-seednap -q [command]        # Quiet mode (errors only)
-```
-
-### Commands
-
-| Command | Description |
-|---------|-------------|
-| `init` | Create example configuration file |
-| `validate` | Validate configuration file |
-| `run-pipeline` | Run complete pipeline (trim → dada2 → taxonomy → export) |
-| `trim` | Run primer trimming with cutadapt |
-| `dada2` | Run DADA2 quality filtering and ASV detection |
-| `swarm` | Run SWARM OTU clustering with vsearch merging/chimera detection |
-| `blast` | Run BLAST taxonomic assignment with LCA resolution |
-| `assign-taxonomy` | Run taxonomic assignment (dada2/decipher/ecotag) |
-| `format-gbif` | Convert outputs to GBIF format |
-| `create-gbif` | Build full DarwinCore GBIF occurrence CSV |
-| `demultiplex` | Demultiplex pooled libraries |
-| `version` | Show detailed version information |
-
-### Command Details
-
-#### `seednap init`
-
-Create an example configuration file:
-
-```bash
-seednap init [OPTIONS]
-
-Options:
-  -m, --marker TEXT     Marker name (default: teleo)
-  -o, --output PATH     Output path (default: config/markers/example.yaml)
-  -f, --force           Overwrite existing file
-```
-
-#### `seednap validate`
-
-Validate a configuration file:
-
-```bash
-seednap validate CONFIG_FILE
-
-Checks:
-  - YAML syntax validity
-  - Required fields present
-  - Field types and values correct
-  - Referenced paths exist
-```
-
-#### `seednap run-pipeline`
-
-Run the complete pipeline:
-
-```bash
-seednap run-pipeline CONFIG_FILE [OPTIONS]
-
-Options:
-  --resume                    Resume from previous run
-  --state-file PATH           Custom state file path
-  --stop-on-error            Stop on first error (default)
-  --continue-on-error        Continue pipeline if step fails
-```
-
-#### `seednap trim`
-
-Run primer trimming:
-
-```bash
-seednap trim CONFIG_FILE [OPTIONS]
-
-Options:
-  --cores INTEGER       Number of CPU cores
-  --output-dir PATH     Output directory
-```
-
-#### `seednap dada2`
-
-Run DADA2 processing:
-
-```bash
-seednap dada2 CONFIG_FILE [OPTIONS]
-
-Options:
-  --input-dir PATH      Input directory (default: from config)
-  --output-dir PATH     Output directory (default: from config)
-```
-
-#### `seednap swarm`
-
-Run SWARM OTU clustering:
-
-```bash
-seednap swarm MARKER TRIMMED_READS_DIR [OPTIONS]
-
-Options:
-  -o, --output-dir PATH   Base output directory (default: outputs/)
-  -d, --distance INTEGER  SWARM distance threshold (default: 1)
-  -t, --threads INTEGER   Number of threads (default: 4)
-  --no-fastidious         Disable fastidious mode
-  --no-chimera-filter     Skip chimera detection
-```
-
-#### `seednap blast`
-
-Run BLAST taxonomic assignment:
-
-```bash
-seednap blast CONFIG_FILE [OPTIONS]
-
-Options:
-  --input PATH          ASV sequences file
-  --database PATH       BLAST database FASTA
-  --output PATH         Output CSV file
-```
-
-#### `seednap format-gbif`
-
-Convert to GBIF format:
-
-```bash
-seednap format-gbif INPUT OUTPUT [OPTIONS]
-
-Options:
-  --method TEXT               Source method (dada2/blast/ecotag/decipher)
-  --add-rank/--no-add-rank   Add rank column (default: yes)
-  --add-taxon/--no-add-taxon Add taxon column (default: yes)
-```
-
-#### `seednap create-gbif`
-
-Build a full DarwinCore-compliant GBIF occurrence CSV:
-
-```bash
-seednap create-gbif TAXONOMY_RESULTS SAMPLE_METADATA PROJECT_METADATA OUTPUT [OPTIONS]
-
-Arguments:
-  TAXONOMY_RESULTS   Taxonomy CSV from format-gbif step (long format)
-  SAMPLE_METADATA    Per-sample metadata CSV (eventID, coordinates, dates, ...)
-  PROJECT_METADATA   Per-project metadata CSV (marker, recordedby, seqmet, ...)
-  OUTPUT             Output DarwinCore CSV path
-
-Options:
-  --summarise-pcr/--no-summarise-pcr   Summarise PCR replicates (default: no)
-  --skip-enrichment                    Skip NCBI/WORMS taxonomy enrichment
-```
-
----
-
-## Configuration
-
-Configuration files use YAML format with the following structure:
-
-### Example Configuration
-
-```yaml
-# Pipeline version
-version: "0.1.0"
-
-# Marker information
-marker:
-  name: "teleo"
-  description: "Teleost fish eDNA metabarcoding using 12S rRNA"
-  primers:
-    forward: "ACACCGCCCGTCACTCT"
-    reverse: "CTTCCGGTACACTTACCATG"
-    name: "Teleo"
-    target: "12S rRNA"
-    amplicon_length: [100, 200]
-
-# File paths
-paths:
-  raw_data: "/path/to/raw/fastq/files"
-  output: "outputs"
-  logs: "logs"
-  references: "/path/to/reference/databases"
-
-# Trimming configuration
-trimming:
-  tool: "cutadapt"
-  min_length: 20
-  max_error_rate: 0.1
-  cores: 12
-  discard_untrimmed: true
-
-# DADA2 configuration
-dada2:
-  filter:
-    max_ee: 2.0
-    trunc_q: 11
-    max_n: 0
-  merge:
-    min_overlap: 20
-    max_mismatch: 0
-  chimera:
-    method: "consensus"
-
-# SWARM configuration (alternative to DADA2)
-swarm:
-  merge:
-    fastq_maxdiffs: 10
-    fastq_minovlen: 10
-    allow_stagger: false
-  clustering:
-    d: 1
-    fastidious: true
-    boundary: 3
-    threads: 4
-  chimera:
-    method: "denovo"
-  min_sequence_length: 20
-
-# Taxonomic assignment
-taxonomy:
-  method: "blast"  # Options: blast, dada2, decipher, ecotag
-
-  databases:
-    blast:
-      fasta: "/path/to/blast/database.fasta"
-      threshold_species: 98.0
-      threshold_genus: 96.0
-      threshold_family: 86.5
-
-# Export configuration
-export:
-  formats: ["csv"]
-  gbif:
-    enabled: true
-    add_rank: true
-    add_taxon: true
-
-# Resources
-resources:
-  max_cores: 12
-  memory_limit: "32G"
-
-# Pipeline steps
-pipeline:
-  steps: ["trim", "dada2", "taxonomy", "export"]  # or ["trim", "swarm", "taxonomy", "export"]
-  skip: []
-```
-
-### Configuration Sections
-
-| Section | Description |
-|---------|-------------|
-| `version` | Configuration format version |
-| `marker` | Primer sequences and marker metadata |
-| `paths` | Input/output directory paths |
-| `demultiplex` | Demultiplexing settings (if needed) |
-| `trimming` | Cutadapt primer trimming parameters |
-| `dada2` | DADA2 filtering, merging, chimera settings |
-| `swarm` | SWARM OTU clustering, vsearch merge/chimera settings |
-| `taxonomy` | Taxonomic assignment method and databases |
-| `export` | Output formats and GBIF settings |
-| `metrics` | Quality control metrics configuration |
-| `logging` | Logging level and format |
-| `resources` | CPU cores, memory limits |
-| `pipeline` | Steps to execute and skip |
-
-See [config/markers/teleo.yaml](config/markers/teleo.yaml) for a complete annotated example.
-
----
+That's it. See [docs/](docs/) for configuration details, step-by-step guides, and CLI reference.
+
+## Requirements
+
+| Tool | Version | Purpose |
+|---|---|---|
+| Python | >= 3.9 | Pipeline runtime |
+| Cutadapt | >= 4.0 | Primer trimming |
+| VSEARCH | >= 2.0 | Read merging, dereplication, chimera detection |
+| SWARM | >= 3.0 | OTU clustering |
+| BLAST+ | >= 2.12 | Taxonomic assignment |
+| R | >= 4.0 | DADA2 / DECIPHER (optional) |
+
+All tools are included in `environment.yml`.
 
 ## Pipeline Steps
 
-### 1. Trimming (cutadapt)
+| Step | Tool | Description |
+|---|---|---|
+| **Trim** | Cutadapt | Two-pass primer removal (5' then 3') |
+| **Cluster** | SWARM or DADA2 | OTU clustering or ASV denoising |
+| **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Taxonomic assignment with LCA resolution |
+| **Export** | Built-in | GBIF-compatible and DarwinCore output |
 
-**Input:** Raw FASTQ files (paired-end)
-**Output:** Trimmed FASTQ files
+## CLI Commands
 
-**Process:**
-- Remove forward and reverse primers
-- Discard reads where primers not found (optional)
-- Quality filtering by minimum length
-- Generate trimming statistics
+| Command | Description |
+|---|---|
+| `run-pipeline CONFIG` | Run the full pipeline from a YAML config |
+| `init` | Generate an example config file |
+| `validate CONFIG` | Validate a config file |
+| `trim INPUT_DIR` | Primer trimming with Cutadapt |
+| `swarm MARKER READS_DIR` | SWARM OTU clustering |
+| `dada2 MARKER READS_DIR` | DADA2 ASV processing |
+| `blast QUERY REF COUNTS` | BLAST taxonomic assignment with LCA |
+| `assign-taxonomy METHOD MARKER QUERY COUNTS` | Generic taxonomy (blast/dada2/decipher/ecotag) |
+| `format-gbif INPUT` | Convert results to GBIF long format |
+| `create-gbif TAXO SAMPLE_META PROJECT_META OUTPUT` | Build DarwinCore GBIF occurrence CSV |
+| `demultiplex READS LIB META` | Demultiplex ligation-based libraries |
 
-**Configuration:**
-```yaml
-trimming:
-  min_length: 20          # Minimum read length after trimming
-  max_error_rate: 0.1     # Maximum error rate in primer matching
-  cores: 12               # CPU cores for parallel processing
-  discard_untrimmed: true # Discard reads without primers
-  overlap: 3              # Minimum overlap for primer detection
-```
+Run `seednap --help` or `seednap <command> --help` for full options.
 
-### 2. DADA2 Processing
+## Configuration
 
-**Input:** Trimmed FASTQ files
-**Output:** ASV table, ASV sequences, quality plots
-
-**Process:**
-1. **Quality Filtering:**
-   - Filter by expected errors (maxEE)
-   - Truncate by quality score (truncQ)
-   - Remove reads with N bases
-   - Remove PhiX contamination
-
-2. **Denoising:**
-   - Learn error rates from data
-   - Denoise reads to infer ASVs
-   - Pool samples or process independently
-
-3. **Merging:**
-   - Merge paired-end reads
-   - Require minimum overlap
-   - Allow maximum mismatches
-
-4. **Chimera Removal:**
-   - Detect chimeric sequences
-   - Methods: consensus, pooled, or none
-
-**Configuration:**
-```yaml
-dada2:
-  filter:
-    max_ee: 2.0        # Maximum expected errors
-    trunc_q: 11        # Truncate reads at first base with Q <= truncQ
-    max_n: 0           # Maximum N bases allowed
-    rm_phix: true      # Remove PhiX contamination
-  merge:
-    min_overlap: 20    # Minimum overlap for merging
-    max_mismatch: 0    # Maximum mismatches in overlap
-  chimera:
-    method: "consensus" # Chimera detection method
-  pool: false          # Pool samples for error learning
-  multithread: true    # Use multiple threads
-```
-
-### 2b. SWARM OTU Clustering (Alternative to DADA2)
-
-**Input:** Trimmed FASTQ files (R1/R2 pairs)
-**Output:** OTU table, representative sequences, chimera report
-
-Use SWARM instead of DADA2 by setting `steps: ["trim", "swarm", "taxonomy", "export"]` in your config.
-
-**Process:**
-
-1. **Read Merging** (vsearch):
-   - Merge paired-end R1/R2 reads per sample
-   - Configurable overlap and mismatch tolerances
-
-2. **Dereplication** (vsearch):
-   - Per-sample: collapse identical sequences, count abundances
-   - Global: pool all samples, collapse again with summed abundances
-
-3. **SWARM Clustering:**
-   - Graph-based OTU clustering with distance threshold d (default: 1)
-   - Fastidious mode refines singletons into existing OTUs
-   - Produces cluster membership, statistics, and representative sequences
-
-4. **Chimera Detection** (vsearch UCHIME):
-   - De novo chimera detection on sorted representatives
-   - Chimeric OTUs flagged and filtered from final output
-
-5. **OTU Table Generation:**
-   - Maps cluster membership back to per-sample abundances
-   - Produces DADA2-compatible outputs (query.fasta + abundance CSV)
-
-**Configuration:**
+Everything is controlled by a single YAML file per marker. Example configs are in [config/markers/](config/markers/). Key sections:
 
 ```yaml
-swarm:
-  merge:
-    fastq_maxdiffs: 10    # Max differences in overlap region
-    fastq_minovlen: 10    # Min overlap length
-    allow_stagger: false  # Allow staggered read merging
-  clustering:
-    d: 1                  # Distance threshold
-    fastidious: true      # Refine singletons
-    boundary: 3           # Min mass for large OTUs (fastidious)
-    threads: 4            # CPU threads
-  chimera:
-    method: "denovo"      # "denovo" or "none"
-  min_sequence_length: 20 # Min sequence length after merging
+marker:
+  name: "teleo"
+  primers:
+    forward: "ACACCGCCCGTCACTCT"
+    reverse: "CTTCCGGTACACTTACCATG"
+
+paths:
+  raw_data: "/path/to/fastq/files"
+  output: "outputs"
+
+pipeline:
+  steps: ["trim", "swarm", "taxonomy"]
 ```
 
-### 3. Taxonomic Assignment
+Full configuration reference: [docs/configuration.md](docs/configuration.md)
 
-Choose from four methods:
+## Documentation
 
-#### A. BLAST + LCA (Recommended)
+| Document | Description |
+|---|---|
+| [docs/installation.md](docs/installation.md) | Installation and environment setup |
+| [docs/configuration.md](docs/configuration.md) | Complete YAML configuration reference |
+| [docs/pipeline-steps.md](docs/pipeline-steps.md) | Detailed description of each pipeline step |
+| [docs/cli-reference.md](docs/cli-reference.md) | Full CLI command reference |
+| [docs/taxonomy-methods.md](docs/taxonomy-methods.md) | Taxonomy assignment methods comparison |
+| [docs/gbif-export.md](docs/gbif-export.md) | GBIF and DarwinCore export guide |
 
-**Process:**
-1. Create BLAST database from reference FASTA
-2. Run blastn search for each ASV
-3. Extract phylogeny from database headers
-4. Filter hits by percent identity thresholds
-5. Resolve ambiguous assignments using Lowest Common Ancestor (LCA)
-
-**Configuration:**
-```yaml
-taxonomy:
-  method: "blast"
-  databases:
-    blast:
-      fasta: "/path/to/refdb.fasta"
-      perc_identity: 80.0       # Minimum percent identity
-      qcov_hsp_perc: 80.0       # Minimum query coverage
-      evalue: 1.0e-25           # Maximum e-value
-      max_target_seqs: 5        # Maximum hits to return
-      threshold_species: 98.0   # %ID threshold for species assignment
-      threshold_genus: 96.0     # %ID threshold for genus assignment
-      threshold_family: 86.5    # %ID threshold for family assignment
-```
-
-**Features:**
-- Configurable percent identity thresholds by rank
-- LCA resolution for ambiguous hits
-- Phylogeny extraction from FASTA headers
-- Handles multiple database formats
-
-#### B. DADA2 RDP Classifier
-
-**Process:**
-1. Assign taxonomy using naive Bayesian classifier
-2. Requires reference FASTA with taxonomy in headers
-
-**Configuration:**
-```yaml
-taxonomy:
-  method: "dada2"
-  databases:
-    dada2:
-      all: "/path/to/dada2_all.fasta"
-      species: "/path/to/dada2_species.fasta"
-```
-
-#### C. DECIPHER
-
-**Process:**
-1. Use trained DECIPHER model for assignment
-2. Confidence-based taxonomic assignment
-
-**Configuration:**
-```yaml
-taxonomy:
-  method: "decipher"
-  databases:
-    decipher:
-      trained: "/path/to/trained_model.rds"
-      threshold: 60           # Confidence threshold
-      processors: 8           # CPU cores
-```
-
-#### D. Ecotag (OBITools)
-
-**Process:**
-1. Use OBITools ecotag for assignment
-2. Requires NCBI taxonomy tree
-
-**Configuration:**
-```yaml
-taxonomy:
-  method: "ecotag"
-  databases:
-    ecotag:
-      tree: "/path/to/taxonomy/tree/"
-      fasta: "/path/to/reference.fasta"
-```
-
-**Note:** Ecotag requires a separate conda environment (`obitools`) due to Python version conflicts with cutadapt.
-
-### 4. Export (GBIF Formatting)
-
-**Input:** Taxonomic assignment CSV
-**Output:** GBIF-compatible CSV
-
-**Process:**
-1. Transform from wide format (samples as columns) to long format (samples as rows)
-2. Determine taxonomic rank (species/genus/family/higher)
-3. Extract lowest available taxon
-4. Filter zero-count observations
-5. Export to GBIF format
-
-**Configuration:**
-```yaml
-export:
-  formats: ["csv"]
-  gbif:
-    enabled: true
-    add_rank: true   # Add 'rank' column
-    add_taxon: true  # Add 'taxon' column
-```
-
-**Output Columns:**
-
-- `kingdom`, `phylum`, `class`, `order`, `family`, `genus`, `species`
-- `taxon`: Lowest available taxonomic assignment
-- `rank`: Taxonomic rank of assignment (species/genus/family/higher)
-- `sequence`: ASV sequence
-- `nb_reads`: Read count
-- `eventID`: Sample identifier
-
-### 5. DarwinCore Publishing (create-gbif)
-
-**Input:** GBIF-formatted taxonomy CSV (from step 4) + sample metadata CSV + project metadata CSV
-**Output:** Full DarwinCore-compliant GBIF occurrence CSV
-
-This step merges your taxonomy results with sample and project metadata to produce a CSV ready for submission to GBIF. It is run as a standalone CLI command after the pipeline completes.
-
-**Process:**
-
-1. Load taxonomy results, sample metadata, and project metadata
-2. Remove control samples (blank, CNEG, CMET, CEXT)
-3. Optionally summarise PCR replicates (aggregate reads per sample)
-4. Validate date formats (yyyy, yyyy.mm, or yyyy.mm.dd)
-5. Filter non-target taxa based on marker type
-6. Look up primer/marker details from bundled primer list
-7. Compute total reads per sample and generate occurrence IDs
-8. Map environment medium to ENVO ontology terms
-9. Merge sample metadata (coordinates, dates, depth, etc.)
-10. Enrich missing kingdom/phylum via NCBI Entrez and WORMS APIs
-11. Populate all DarwinCore columns and export CSV
-
-**Usage:**
-
-```bash
-# Basic usage
-seednap create-gbif taxonomy_gbif.csv sample_metadata.csv project_metadata.csv output.csv
-
-# With PCR replicate summarisation
-seednap create-gbif taxonomy_gbif.csv sample_metadata.csv project_metadata.csv output.csv --summarise-pcr
-
-# Skip taxonomy enrichment (no API calls)
-seednap create-gbif taxonomy_gbif.csv sample_metadata.csv project_metadata.csv output.csv --skip-enrichment
-```
-
-**NCBI API Key:** Set `NCBI_API_KEY` in a `.env` file at the project root (see `.env.example`). Without it, taxonomy enrichment is skipped and kingdom/phylum columns remain empty.
-
-**Input file formats:**
-
-*Sample metadata CSV* — one row per sample:
-
-| Column | Description |
-|--------|-------------|
-| `eventID` | Sample identifier (must match taxonomy results) |
-| `decimalLatitude` | Sampling latitude |
-| `decimalLongitude` | Sampling longitude |
-| `eventDate` | Sampling date (yyyy.mm.dd) |
-| `env_medium` | Environment type (water, soil, river) |
-| `samp_size` | Sample volume/size |
-| `depth` | Sampling depth in meters |
-| `size_frac` | Filter size fraction |
-
-*Project metadata CSV* — one row per project:
-
-| Column | Description |
-|--------|-------------|
-| `marker` | Marker name (e.g. teleo, vert01) |
-| `recordedby` | Name of the person who recorded the data |
-| `seqmet` | Sequencing method (e.g. MiSeq) |
-| `identificationRemarks` | Identification method description |
-| `identificationReferences` | Reference DOIs |
-| `otu_seq_comp_appr` | Sequence comparison approach |
-| `otu_db` | Reference database used |
-| `chimera_check` | Chimera checking method |
-
----
-
-## Taxonomic Assignment Methods
-
-### Method Comparison
-
-| Method | Speed | Accuracy | Database | Best For |
-|--------|-------|----------|----------|----------|
-| **BLAST + LCA** | Moderate | High | Custom FASTA | Flexible, multiple hits |
-| **DADA2 RDP** | Fast | Good | DADA2 format | Quick assignments |
-| **DECIPHER** | Fast | Good | Trained model | Pre-trained databases |
-| **Ecotag** | Slow | High | OBITools format | Legacy workflows |
-
-### Choosing a Method
-
-**Use BLAST + LCA when:**
-- You need configurable percent identity thresholds
-- You want LCA resolution for ambiguous hits
-- You have a custom reference database
-- You need detailed control over assignment logic
-
-**Use DADA2 when:**
-- You want fast, straightforward assignments
-- Your database is in DADA2 format
-- You're already using DADA2 for ASV detection
-
-**Use DECIPHER when:**
-- You have a pre-trained DECIPHER model
-- You want confidence scores
-- Speed is important
-
-**Use ecotag when:**
-- You're migrating from OBITools workflows
-- You have existing ecotag databases
-
----
-
-## Architecture
-
-### Project Structure
+## Project Structure
 
 ```
 seednap/
-├── src/seednap/
-│   ├── cli.py                    # Command-line interface
-│   ├── config/                   # Configuration management
-│   │   ├── models.py            # Pydantic config models
-│   │   ├── loader.py            # YAML loading and validation
-│   │   └── __init__.py
-│   ├── pipeline/                 # Pipeline orchestration
-│   │   ├── state.py             # State tracking and persistence
-│   │   ├── orchestrator.py      # Pipeline execution
-│   │   └── __init__.py
-│   ├── data/                      # Bundled data files
-│   │   └── templates/            # GBIF and primer templates
-│   ├── steps/                    # Pipeline step implementations
-│   │   ├── trimming/            # Cutadapt integration
-│   │   ├── dada2/               # DADA2 ASV processing
-│   │   ├── swarm/               # SWARM OTU clustering (vsearch + swarm)
-│   │   ├── taxonomic_assignment/ # BLAST, DECIPHER, ecotag
-│   │   └── formatting/          # GBIF formatting & DarwinCore builder
-│   └── utils/                    # Shared utilities
-│       ├── logging.py           # Rich console logging
-│       ├── r_runner.py          # Base class for R script execution
-│       ├── sequences.py         # Sequence manipulation
-│       ├── subprocess.py        # Shared subprocess runner
-│       └── taxonomy.py          # Taxonomy-abundance linking
-├── tests/                        # Test suite
-├── config/                       # Example configurations
-│   └── markers/
-│       └── teleo.yaml           # Teleo marker example
-├── docs/                         # Documentation (coming soon)
-├── environment.yml               # Conda environment
-├── pyproject.toml               # Python package metadata
-└── README.md                     # This file
+  src/seednap/
+    cli.py                          # CLI entry point
+    config/                         # Pydantic config models + YAML loader
+    pipeline/                       # Orchestrator + state management
+    steps/
+      trimming/                     # Cutadapt integration
+      dada2/                        # DADA2 R wrapper
+      swarm/                        # VSEARCH + SWARM clustering
+      taxonomic_assignment/         # BLAST, DADA2, DECIPHER, ecotag
+      formatting/                   # GBIF + DarwinCore export
+    utils/                          # Subprocess, logging, sequence tools
+  config/markers/                   # Example YAML configs
+  scripts/                          # R scripts (DADA2, DECIPHER)
 ```
-
-### State Management
-
-The pipeline tracks state in JSON format:
-
-```json
-{
-  "marker": "teleo",
-  "started_at": "2025-01-15T10:30:00",
-  "current_step": "taxonomy",
-  "steps": {
-    "trim": {
-      "status": "completed",
-      "started_at": "2025-01-15T10:30:00",
-      "completed_at": "2025-01-15T10:45:00",
-      "duration_seconds": 900,
-      "outputs": {
-        "trimmed_dir": "/path/to/trimmed"
-      }
-    },
-    "dada2": {
-      "status": "completed",
-      ...
-    },
-    "taxonomy": {
-      "status": "running",
-      ...
-    }
-  }
-}
-```
-
-This allows:
-- Resume from any failed step
-- Track step timing and duration
-- Pass outputs between steps
-- Debug pipeline issues
-
----
 
 ## Acknowledgments
 
-- DADA2 pipeline and algorithm: Callahan et al. (2016)
-- cutadapt: Martin (2011)
-- BLAST: Altschul et al. (1990)
-- DECIPHER: Wright (2016)
-- OBITools: Boyer et al. (2016)
+SeeDNAP builds on: [Cutadapt](https://cutadapt.readthedocs.io/) (Martin, 2011), [VSEARCH](https://github.com/torognes/vsearch) (Rognes et al., 2016), [SWARM](https://github.com/torognes/swarm) (Mahe et al., 2015), [BLAST+](https://blast.ncbi.nlm.nih.gov/) (Camacho et al., 2009), [DADA2](https://benjjneb.github.io/dada2/) (Callahan et al., 2016).
+
+## License
+
+MIT. See [LICENSE](LICENSE).

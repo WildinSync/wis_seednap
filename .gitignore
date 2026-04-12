@@ -28,7 +28,6 @@ htmlcov/
 *.log
 *.aux
 .env
-/docs
 mkdocs.yml
 README.md.backup
 /swarm_gdc
