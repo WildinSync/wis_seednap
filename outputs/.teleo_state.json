@@ -1,0 +1,2572 @@
+{
+  "marker": "teleo",
+  "config_path": "config/markers/teleo.yaml",
+  "started_at": "2026-04-12 15:15:06.984134",
+  "completed_at": "2026-04-12 15:25:35.737086",
+  "steps": {
+    "trim": {
+      "name": "trim",
+      "status": "completed",
+      "started_at": "2026-04-12 15:15:06.992255",
+      "completed_at": "2026-04-12 15:22:45.385582",
+      "duration_seconds": 458.393327,
+      "error_message": null,
+      "outputs": {
+        "trimmed_dir": "/home/rzendehdel/seednap/outputs/01_trim/teleo",
+        "samples": {
+          "CNEG01_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_01.R2.fastq"
+          ],
+          "CNEG01_01_MB0922I_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_01_MB0922I_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_01_MB0922I_S1_L001.R2.fastq"
+          ],
+          "CNEG01_01_VL406___MB0124C16__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_01_VL406___MB0124C16__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_01_VL406___MB0124C16__.R2.fastq"
+          ],
+          "CNEG01_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_02.R2.fastq"
+          ],
+          "CNEG01_02_MB0922I_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_02_MB0922I_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_02_MB0922I_S1_L001.R2.fastq"
+          ],
+          "CNEG01_02_VL406___MB0124C16__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_02_VL406___MB0124C16__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_02_VL406___MB0124C16__.R2.fastq"
+          ],
+          "CNEG01_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_03.R2.fastq"
+          ],
+          "CNEG01_03_MB0922I_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_03_MB0922I_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_03_MB0922I_S1_L001.R2.fastq"
+          ],
+          "CNEG01_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_04.R2.fastq"
+          ],
+          "CNEG01_04_MB0922I_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_04_MB0922I_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_04_MB0922I_S1_L001.R2.fastq"
+          ],
+          "CNEG01_04_VL406___MB0124C16__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_04_VL406___MB0124C16__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_04_VL406___MB0124C16__.R2.fastq"
+          ],
+          "CNEG01_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_05.R2.fastq"
+          ],
+          "CNEG01_05_MB0922I_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_05_MB0922I_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_05_MB0922I_S1_L001.R2.fastq"
+          ],
+          "CNEG01_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_06.R2.fastq"
+          ],
+          "CNEG01_06_MB0922I_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_06_MB0922I_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_06_MB0922I_S1_L001.R2.fastq"
+          ],
+          "CNEG01_06_VL406___MB0124C16__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_06_VL406___MB0124C16__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_06_VL406___MB0124C16__.R2.fastq"
+          ],
+          "CNEG01_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_07.R2.fastq"
+          ],
+          "CNEG01_07_MB0922I_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_07_MB0922I_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_07_MB0922I_S1_L001.R2.fastq"
+          ],
+          "CNEG01_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_08.R2.fastq"
+          ],
+          "CNEG01_08_MB0922I_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_08_MB0922I_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_08_MB0922I_S1_L001.R2.fastq"
+          ],
+          "CNEG01_08_VL406___MB0124C16__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_08_VL406___MB0124C16__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_08_VL406___MB0124C16__.R2.fastq"
+          ],
+          "CNEG01_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_09.R2.fastq"
+          ],
+          "CNEG01_09_MB0922I_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_09_MB0922I_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_09_MB0922I_S1_L001.R2.fastq"
+          ],
+          "CNEG01_09_VL406___MB0124C16__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_09_VL406___MB0124C16__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_09_VL406___MB0124C16__.R2.fastq"
+          ],
+          "CNEG01_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_10.R2.fastq"
+          ],
+          "CNEG01_10_MB0922I_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_10_MB0922I_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_10_MB0922I_S1_L001.R2.fastq"
+          ],
+          "CNEG01_10_VL406___MB0124C16__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_10_VL406___MB0124C16__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_10_VL406___MB0124C16__.R2.fastq"
+          ],
+          "CNEG01_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_11.R2.fastq"
+          ],
+          "CNEG01_11_MB0922I_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_11_MB0922I_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_11_MB0922I_S1_L001.R2.fastq"
+          ],
+          "CNEG01_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_12.R2.fastq"
+          ],
+          "CNEG01_12_MB0922I_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_12_MB0922I_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG01_12_MB0922I_S1_L001.R2.fastq"
+          ],
+          "CNEG02_01_MB0922M2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_01_MB0922M2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_01_MB0922M2_S2_L001.R2.fastq"
+          ],
+          "CNEG02_01_VL406___MB0124C17__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_01_VL406___MB0124C17__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_01_VL406___MB0124C17__.R2.fastq"
+          ],
+          "CNEG02_02_MB0922M2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_02_MB0922M2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_02_MB0922M2_S2_L001.R2.fastq"
+          ],
+          "CNEG02_02_VL406___MB0124C17__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_02_VL406___MB0124C17__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_02_VL406___MB0124C17__.R2.fastq"
+          ],
+          "CNEG02_03_MB0922M2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_03_MB0922M2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_03_MB0922M2_S2_L001.R2.fastq"
+          ],
+          "CNEG02_03_VL406___MB0124C17__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_03_VL406___MB0124C17__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_03_VL406___MB0124C17__.R2.fastq"
+          ],
+          "CNEG02_04_MB0922M2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_04_MB0922M2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_04_MB0922M2_S2_L001.R2.fastq"
+          ],
+          "CNEG02_04_VL406___MB0124C17__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_04_VL406___MB0124C17__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_04_VL406___MB0124C17__.R2.fastq"
+          ],
+          "CNEG02_05_MB0922M2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_05_MB0922M2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_05_MB0922M2_S2_L001.R2.fastq"
+          ],
+          "CNEG02_05_VL406___MB0124C17__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_05_VL406___MB0124C17__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_05_VL406___MB0124C17__.R2.fastq"
+          ],
+          "CNEG02_06_MB0922M2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_06_MB0922M2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_06_MB0922M2_S2_L001.R2.fastq"
+          ],
+          "CNEG02_06_VL406___MB0124C17__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_06_VL406___MB0124C17__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_06_VL406___MB0124C17__.R2.fastq"
+          ],
+          "CNEG02_07_MB0922M2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_07_MB0922M2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_07_MB0922M2_S2_L001.R2.fastq"
+          ],
+          "CNEG02_07_VL406___MB0124C17__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_07_VL406___MB0124C17__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_07_VL406___MB0124C17__.R2.fastq"
+          ],
+          "CNEG02_08_MB0922M2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_08_MB0922M2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_08_MB0922M2_S2_L001.R2.fastq"
+          ],
+          "CNEG02_08_VL406___MB0124C17__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_08_VL406___MB0124C17__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_08_VL406___MB0124C17__.R2.fastq"
+          ],
+          "CNEG02_09_MB0922M2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_09_MB0922M2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_09_MB0922M2_S2_L001.R2.fastq"
+          ],
+          "CNEG02_09_VL406___MB0124C17__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_09_VL406___MB0124C17__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_09_VL406___MB0124C17__.R2.fastq"
+          ],
+          "CNEG02_10_MB0922M2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_10_MB0922M2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_10_MB0922M2_S2_L001.R2.fastq"
+          ],
+          "CNEG02_10_VL406___MB0124C17__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_10_VL406___MB0124C17__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_10_VL406___MB0124C17__.R2.fastq"
+          ],
+          "CNEG02_11_MB0922M2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_11_MB0922M2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_11_MB0922M2_S2_L001.R2.fastq"
+          ],
+          "CNEG02_11_VL406___MB0124C17__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_11_VL406___MB0124C17__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_11_VL406___MB0124C17__.R2.fastq"
+          ],
+          "CNEG02_12_MB0922M2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_12_MB0922M2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_12_MB0922M2_S2_L001.R2.fastq"
+          ],
+          "CNEG02_12_VL406___MB0124C17__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_12_VL406___MB0124C17__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG02_12_VL406___MB0124C17__.R2.fastq"
+          ],
+          "CNEG03_01_MB0922P2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_01_MB0922P2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_01_MB0922P2_S2_L001.R2.fastq"
+          ],
+          "CNEG03_01_VL406___MB0124C10__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_01_VL406___MB0124C10__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_01_VL406___MB0124C10__.R2.fastq"
+          ],
+          "CNEG03_02_MB0922P2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_02_MB0922P2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_02_MB0922P2_S2_L001.R2.fastq"
+          ],
+          "CNEG03_02_VL406___MB0124C10__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_02_VL406___MB0124C10__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_02_VL406___MB0124C10__.R2.fastq"
+          ],
+          "CNEG03_03_MB0922P2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_03_MB0922P2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_03_MB0922P2_S2_L001.R2.fastq"
+          ],
+          "CNEG03_04_MB0922P2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_04_MB0922P2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_04_MB0922P2_S2_L001.R2.fastq"
+          ],
+          "CNEG03_05_MB0922P2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_05_MB0922P2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_05_MB0922P2_S2_L001.R2.fastq"
+          ],
+          "CNEG03_06_MB0922P2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_06_MB0922P2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_06_MB0922P2_S2_L001.R2.fastq"
+          ],
+          "CNEG03_07_MB0922P2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_07_MB0922P2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_07_MB0922P2_S2_L001.R2.fastq"
+          ],
+          "CNEG03_07_VL406___MB0124C10__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_07_VL406___MB0124C10__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_07_VL406___MB0124C10__.R2.fastq"
+          ],
+          "CNEG03_08_MB0922P2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_08_MB0922P2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_08_MB0922P2_S2_L001.R2.fastq"
+          ],
+          "CNEG03_08_VL406___MB0124C10__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_08_VL406___MB0124C10__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_08_VL406___MB0124C10__.R2.fastq"
+          ],
+          "CNEG03_09_MB0922P2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_09_MB0922P2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_09_MB0922P2_S2_L001.R2.fastq"
+          ],
+          "CNEG03_09_VL406___MB0124C10__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_09_VL406___MB0124C10__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_09_VL406___MB0124C10__.R2.fastq"
+          ],
+          "CNEG03_10_MB0922P2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_10_MB0922P2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_10_MB0922P2_S2_L001.R2.fastq"
+          ],
+          "CNEG03_11_MB0922P2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_11_MB0922P2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_11_MB0922P2_S2_L001.R2.fastq"
+          ],
+          "CNEG03_12_MB0922P2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_12_MB0922P2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG03_12_MB0922P2_S2_L001.R2.fastq"
+          ],
+          "CNEG04_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_01.R2.fastq"
+          ],
+          "CNEG04_01_MB0922K_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_01_MB0922K_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_01_MB0922K_S1_L001.R2.fastq"
+          ],
+          "CNEG04_01_VL406___MB0124C21__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_01_VL406___MB0124C21__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_01_VL406___MB0124C21__.R2.fastq"
+          ],
+          "CNEG04_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_02.R2.fastq"
+          ],
+          "CNEG04_02_MB0922K_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_02_MB0922K_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_02_MB0922K_S1_L001.R2.fastq"
+          ],
+          "CNEG04_02_VL406___MB0124C21__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_02_VL406___MB0124C21__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_02_VL406___MB0124C21__.R2.fastq"
+          ],
+          "CNEG04_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_03.R2.fastq"
+          ],
+          "CNEG04_03_MB0922K_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_03_MB0922K_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_03_MB0922K_S1_L001.R2.fastq"
+          ],
+          "CNEG04_03_VL406___MB0124C21__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_03_VL406___MB0124C21__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_03_VL406___MB0124C21__.R2.fastq"
+          ],
+          "CNEG04_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_04.R2.fastq"
+          ],
+          "CNEG04_04_MB0922K_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_04_MB0922K_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_04_MB0922K_S1_L001.R2.fastq"
+          ],
+          "CNEG04_04_VL406___MB0124C21__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_04_VL406___MB0124C21__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_04_VL406___MB0124C21__.R2.fastq"
+          ],
+          "CNEG04_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_05.R2.fastq"
+          ],
+          "CNEG04_05_MB0922K_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_05_MB0922K_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_05_MB0922K_S1_L001.R2.fastq"
+          ],
+          "CNEG04_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_06.R2.fastq"
+          ],
+          "CNEG04_06_MB0922K_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_06_MB0922K_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_06_MB0922K_S1_L001.R2.fastq"
+          ],
+          "CNEG04_06_VL406___MB0124C21__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_06_VL406___MB0124C21__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_06_VL406___MB0124C21__.R2.fastq"
+          ],
+          "CNEG04_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_07.R2.fastq"
+          ],
+          "CNEG04_07_MB0922K_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_07_MB0922K_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_07_MB0922K_S1_L001.R2.fastq"
+          ],
+          "CNEG04_07_VL406___MB0124C21__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_07_VL406___MB0124C21__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_07_VL406___MB0124C21__.R2.fastq"
+          ],
+          "CNEG04_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_08.R2.fastq"
+          ],
+          "CNEG04_08_MB0922K_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_08_MB0922K_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_08_MB0922K_S1_L001.R2.fastq"
+          ],
+          "CNEG04_08_VL406___MB0124C21__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_08_VL406___MB0124C21__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_08_VL406___MB0124C21__.R2.fastq"
+          ],
+          "CNEG04_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_09.R2.fastq"
+          ],
+          "CNEG04_09_MB0922K_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_09_MB0922K_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_09_MB0922K_S1_L001.R2.fastq"
+          ],
+          "CNEG04_09_VL406___MB0124C21__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_09_VL406___MB0124C21__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_09_VL406___MB0124C21__.R2.fastq"
+          ],
+          "CNEG04_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_10.R2.fastq"
+          ],
+          "CNEG04_10_MB0922K_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_10_MB0922K_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_10_MB0922K_S1_L001.R2.fastq"
+          ],
+          "CNEG04_10_VL406___MB0124C21__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_10_VL406___MB0124C21__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_10_VL406___MB0124C21__.R2.fastq"
+          ],
+          "CNEG04_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_11.R2.fastq"
+          ],
+          "CNEG04_11_MB0922K_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_11_MB0922K_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_11_MB0922K_S1_L001.R2.fastq"
+          ],
+          "CNEG04_11_VL406___MB0124C21__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_11_VL406___MB0124C21__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_11_VL406___MB0124C21__.R2.fastq"
+          ],
+          "CNEG04_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_12.R2.fastq"
+          ],
+          "CNEG04_12_MB0922K_S1_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_12_MB0922K_S1_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_12_MB0922K_S1_L001.R2.fastq"
+          ],
+          "CNEG04_12_VL406___MB0124C21__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_12_VL406___MB0124C21__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG04_12_VL406___MB0124C21__.R2.fastq"
+          ],
+          "CNEG05_01_VL415___MB0224B1__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_01_VL415___MB0224B1__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_01_VL415___MB0224B1__.R2.fastq"
+          ],
+          "CNEG05_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_02.R2.fastq"
+          ],
+          "CNEG05_02_MB0922L2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_02_MB0922L2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_02_MB0922L2_S2_L001.R2.fastq"
+          ],
+          "CNEG05_02_VL415___MB0224B1__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_02_VL415___MB0224B1__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_02_VL415___MB0224B1__.R2.fastq"
+          ],
+          "CNEG05_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_03.R2.fastq"
+          ],
+          "CNEG05_03_MB0922L2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_03_MB0922L2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_03_MB0922L2_S2_L001.R2.fastq"
+          ],
+          "CNEG05_03_VL415___MB0224B1__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_03_VL415___MB0224B1__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_03_VL415___MB0224B1__.R2.fastq"
+          ],
+          "CNEG05_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_04.R2.fastq"
+          ],
+          "CNEG05_04_MB0922L2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_04_MB0922L2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_04_MB0922L2_S2_L001.R2.fastq"
+          ],
+          "CNEG05_04_VL415___MB0224B1__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_04_VL415___MB0224B1__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_04_VL415___MB0224B1__.R2.fastq"
+          ],
+          "CNEG05_05_VL415___MB0224B1__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_05_VL415___MB0224B1__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_05_VL415___MB0224B1__.R2.fastq"
+          ],
+          "CNEG05_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_06.R2.fastq"
+          ],
+          "CNEG05_06_MB0922L2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_06_MB0922L2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_06_MB0922L2_S2_L001.R2.fastq"
+          ],
+          "CNEG05_06_VL415___MB0224B1__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_06_VL415___MB0224B1__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_06_VL415___MB0224B1__.R2.fastq"
+          ],
+          "CNEG05_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_07.R2.fastq"
+          ],
+          "CNEG05_07_MB0922L2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_07_MB0922L2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_07_MB0922L2_S2_L001.R2.fastq"
+          ],
+          "CNEG05_07_VL415___MB0224B1__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_07_VL415___MB0224B1__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_07_VL415___MB0224B1__.R2.fastq"
+          ],
+          "CNEG05_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_08.R2.fastq"
+          ],
+          "CNEG05_08_MB0922L2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_08_MB0922L2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_08_MB0922L2_S2_L001.R2.fastq"
+          ],
+          "CNEG05_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_09.R2.fastq"
+          ],
+          "CNEG05_09_MB0922L2_S2_L001": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_09_MB0922L2_S2_L001.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_09_MB0922L2_S2_L001.R2.fastq"
+          ],
+          "CNEG05_09_VL415___MB0224B1__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_09_VL415___MB0224B1__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_09_VL415___MB0224B1__.R2.fastq"
+          ],
+          "CNEG05_10_VL415___MB0224B1__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_10_VL415___MB0224B1__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_10_VL415___MB0224B1__.R2.fastq"
+          ],
+          "CNEG05_11_VL415___MB0224B1__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_11_VL415___MB0224B1__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_11_VL415___MB0224B1__.R2.fastq"
+          ],
+          "CNEG05_12_VL415___MB0224B1__": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_12_VL415___MB0224B1__.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG05_12_VL415___MB0224B1__.R2.fastq"
+          ],
+          "CNEG06_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_01.R2.fastq"
+          ],
+          "CNEG06_01_MB0624A1_S1": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_01_MB0624A1_S1.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_01_MB0624A1_S1.R2.fastq"
+          ],
+          "CNEG06_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_02.R2.fastq"
+          ],
+          "CNEG06_02_MB0624A1_S1": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_02_MB0624A1_S1.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_02_MB0624A1_S1.R2.fastq"
+          ],
+          "CNEG06_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_04.R2.fastq"
+          ],
+          "CNEG06_04_MB0624A1_S1": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_04_MB0624A1_S1.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_04_MB0624A1_S1.R2.fastq"
+          ],
+          "CNEG06_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_05.R2.fastq"
+          ],
+          "CNEG06_05_MB0624A1_S1": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_05_MB0624A1_S1.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_05_MB0624A1_S1.R2.fastq"
+          ],
+          "CNEG06_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_06.R2.fastq"
+          ],
+          "CNEG06_06_MB0624A1_S1": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_06_MB0624A1_S1.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_06_MB0624A1_S1.R2.fastq"
+          ],
+          "CNEG06_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_08.R2.fastq"
+          ],
+          "CNEG06_08_MB0624A1_S1": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_08_MB0624A1_S1.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_08_MB0624A1_S1.R2.fastq"
+          ],
+          "CNEG06_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_09.R2.fastq"
+          ],
+          "CNEG06_09_MB0624A1_S1": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_09_MB0624A1_S1.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_09_MB0624A1_S1.R2.fastq"
+          ],
+          "CNEG06_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_10.R2.fastq"
+          ],
+          "CNEG06_10_MB0624A1_S1": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_10_MB0624A1_S1.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_10_MB0624A1_S1.R2.fastq"
+          ],
+          "CNEG06_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_11.R2.fastq"
+          ],
+          "CNEG06_11_MB0624A1_S1": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_11_MB0624A1_S1.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_11_MB0624A1_S1.R2.fastq"
+          ],
+          "CNEG06_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_12.R2.fastq"
+          ],
+          "CNEG06_12_MB0624A1_S1": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_12_MB0624A1_S1.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/CNEG06_12_MB0624A1_S1.R2.fastq"
+          ],
+          "SPY221633_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_01.R2.fastq"
+          ],
+          "SPY221633_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_02.R2.fastq"
+          ],
+          "SPY221633_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_03.R2.fastq"
+          ],
+          "SPY221633_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_04.R2.fastq"
+          ],
+          "SPY221633_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_05.R2.fastq"
+          ],
+          "SPY221633_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_06.R2.fastq"
+          ],
+          "SPY221633_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_07.R2.fastq"
+          ],
+          "SPY221633_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_08.R2.fastq"
+          ],
+          "SPY221633_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_09.R2.fastq"
+          ],
+          "SPY221633_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_10.R2.fastq"
+          ],
+          "SPY221633_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_11.R2.fastq"
+          ],
+          "SPY221633_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221633_12.R2.fastq"
+          ],
+          "SPY221634_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_01.R2.fastq"
+          ],
+          "SPY221634_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_02.R2.fastq"
+          ],
+          "SPY221634_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_03.R2.fastq"
+          ],
+          "SPY221634_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_04.R2.fastq"
+          ],
+          "SPY221634_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_05.R2.fastq"
+          ],
+          "SPY221634_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_06.R2.fastq"
+          ],
+          "SPY221634_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_07.R2.fastq"
+          ],
+          "SPY221634_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_08.R2.fastq"
+          ],
+          "SPY221634_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_09.R2.fastq"
+          ],
+          "SPY221634_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_10.R2.fastq"
+          ],
+          "SPY221634_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_11.R2.fastq"
+          ],
+          "SPY221634_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221634_12.R2.fastq"
+          ],
+          "SPY221635_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_01.R2.fastq"
+          ],
+          "SPY221635_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_02.R2.fastq"
+          ],
+          "SPY221635_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_03.R2.fastq"
+          ],
+          "SPY221635_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_04.R2.fastq"
+          ],
+          "SPY221635_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_05.R2.fastq"
+          ],
+          "SPY221635_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_06.R2.fastq"
+          ],
+          "SPY221635_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_07.R2.fastq"
+          ],
+          "SPY221635_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_08.R2.fastq"
+          ],
+          "SPY221635_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_09.R2.fastq"
+          ],
+          "SPY221635_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_10.R2.fastq"
+          ],
+          "SPY221635_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_11.R2.fastq"
+          ],
+          "SPY221635_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221635_12.R2.fastq"
+          ],
+          "SPY221636_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_01.R2.fastq"
+          ],
+          "SPY221636_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_02.R2.fastq"
+          ],
+          "SPY221636_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_03.R2.fastq"
+          ],
+          "SPY221636_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_04.R2.fastq"
+          ],
+          "SPY221636_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_05.R2.fastq"
+          ],
+          "SPY221636_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_06.R2.fastq"
+          ],
+          "SPY221636_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_07.R2.fastq"
+          ],
+          "SPY221636_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_08.R2.fastq"
+          ],
+          "SPY221636_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_09.R2.fastq"
+          ],
+          "SPY221636_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_10.R2.fastq"
+          ],
+          "SPY221636_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_11.R2.fastq"
+          ],
+          "SPY221636_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221636_12.R2.fastq"
+          ],
+          "SPY221637_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_01.R2.fastq"
+          ],
+          "SPY221637_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_02.R2.fastq"
+          ],
+          "SPY221637_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_03.R2.fastq"
+          ],
+          "SPY221637_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_04.R2.fastq"
+          ],
+          "SPY221637_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_05.R2.fastq"
+          ],
+          "SPY221637_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_06.R2.fastq"
+          ],
+          "SPY221637_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_07.R2.fastq"
+          ],
+          "SPY221637_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_08.R2.fastq"
+          ],
+          "SPY221637_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_09.R2.fastq"
+          ],
+          "SPY221637_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_10.R2.fastq"
+          ],
+          "SPY221637_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_11.R2.fastq"
+          ],
+          "SPY221637_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221637_12.R2.fastq"
+          ],
+          "SPY221638_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_01.R2.fastq"
+          ],
+          "SPY221638_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_02.R2.fastq"
+          ],
+          "SPY221638_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_03.R2.fastq"
+          ],
+          "SPY221638_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_04.R2.fastq"
+          ],
+          "SPY221638_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_05.R2.fastq"
+          ],
+          "SPY221638_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_06.R2.fastq"
+          ],
+          "SPY221638_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_07.R2.fastq"
+          ],
+          "SPY221638_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_08.R2.fastq"
+          ],
+          "SPY221638_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_09.R2.fastq"
+          ],
+          "SPY221638_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_10.R2.fastq"
+          ],
+          "SPY221638_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_11.R2.fastq"
+          ],
+          "SPY221638_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221638_12.R2.fastq"
+          ],
+          "SPY221639_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_01.R2.fastq"
+          ],
+          "SPY221639_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_02.R2.fastq"
+          ],
+          "SPY221639_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_03.R2.fastq"
+          ],
+          "SPY221639_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_04.R2.fastq"
+          ],
+          "SPY221639_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_05.R2.fastq"
+          ],
+          "SPY221639_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_06.R2.fastq"
+          ],
+          "SPY221639_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_07.R2.fastq"
+          ],
+          "SPY221639_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_08.R2.fastq"
+          ],
+          "SPY221639_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_09.R2.fastq"
+          ],
+          "SPY221639_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_10.R2.fastq"
+          ],
+          "SPY221639_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_11.R2.fastq"
+          ],
+          "SPY221639_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221639_12.R2.fastq"
+          ],
+          "SPY221640_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_01.R2.fastq"
+          ],
+          "SPY221640_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_02.R2.fastq"
+          ],
+          "SPY221640_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_03.R2.fastq"
+          ],
+          "SPY221640_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_04.R2.fastq"
+          ],
+          "SPY221640_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_05.R2.fastq"
+          ],
+          "SPY221640_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_06.R2.fastq"
+          ],
+          "SPY221640_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_07.R2.fastq"
+          ],
+          "SPY221640_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_08.R2.fastq"
+          ],
+          "SPY221640_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_09.R2.fastq"
+          ],
+          "SPY221640_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_10.R2.fastq"
+          ],
+          "SPY221640_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_11.R2.fastq"
+          ],
+          "SPY221640_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221640_12.R2.fastq"
+          ],
+          "SPY221641_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_01.R2.fastq"
+          ],
+          "SPY221641_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_02.R2.fastq"
+          ],
+          "SPY221641_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_03.R2.fastq"
+          ],
+          "SPY221641_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_04.R2.fastq"
+          ],
+          "SPY221641_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_05.R2.fastq"
+          ],
+          "SPY221641_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_06.R2.fastq"
+          ],
+          "SPY221641_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_07.R2.fastq"
+          ],
+          "SPY221641_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_08.R2.fastq"
+          ],
+          "SPY221641_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_09.R2.fastq"
+          ],
+          "SPY221641_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_10.R2.fastq"
+          ],
+          "SPY221641_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_11.R2.fastq"
+          ],
+          "SPY221641_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221641_12.R2.fastq"
+          ],
+          "SPY221642_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_01.R2.fastq"
+          ],
+          "SPY221642_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_02.R2.fastq"
+          ],
+          "SPY221642_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_03.R2.fastq"
+          ],
+          "SPY221642_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_04.R2.fastq"
+          ],
+          "SPY221642_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_05.R2.fastq"
+          ],
+          "SPY221642_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_06.R2.fastq"
+          ],
+          "SPY221642_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_07.R2.fastq"
+          ],
+          "SPY221642_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_08.R2.fastq"
+          ],
+          "SPY221642_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_09.R2.fastq"
+          ],
+          "SPY221642_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_10.R2.fastq"
+          ],
+          "SPY221642_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_11.R2.fastq"
+          ],
+          "SPY221642_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221642_12.R2.fastq"
+          ],
+          "SPY221643_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_01.R2.fastq"
+          ],
+          "SPY221643_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_02.R2.fastq"
+          ],
+          "SPY221643_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_03.R2.fastq"
+          ],
+          "SPY221643_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_04.R2.fastq"
+          ],
+          "SPY221643_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_05.R2.fastq"
+          ],
+          "SPY221643_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_06.R2.fastq"
+          ],
+          "SPY221643_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_07.R2.fastq"
+          ],
+          "SPY221643_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_08.R2.fastq"
+          ],
+          "SPY221643_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_09.R2.fastq"
+          ],
+          "SPY221643_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_10.R2.fastq"
+          ],
+          "SPY221643_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_11.R2.fastq"
+          ],
+          "SPY221643_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221643_12.R2.fastq"
+          ],
+          "SPY221644_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_01.R2.fastq"
+          ],
+          "SPY221644_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_02.R2.fastq"
+          ],
+          "SPY221644_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_03.R2.fastq"
+          ],
+          "SPY221644_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_04.R2.fastq"
+          ],
+          "SPY221644_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_05.R2.fastq"
+          ],
+          "SPY221644_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_06.R2.fastq"
+          ],
+          "SPY221644_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_07.R2.fastq"
+          ],
+          "SPY221644_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_08.R2.fastq"
+          ],
+          "SPY221644_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_09.R2.fastq"
+          ],
+          "SPY221644_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_10.R2.fastq"
+          ],
+          "SPY221644_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_11.R2.fastq"
+          ],
+          "SPY221644_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221644_12.R2.fastq"
+          ],
+          "SPY221645_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_01.R2.fastq"
+          ],
+          "SPY221645_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_02.R2.fastq"
+          ],
+          "SPY221645_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_03.R2.fastq"
+          ],
+          "SPY221645_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_04.R2.fastq"
+          ],
+          "SPY221645_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_05.R2.fastq"
+          ],
+          "SPY221645_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_06.R2.fastq"
+          ],
+          "SPY221645_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_07.R2.fastq"
+          ],
+          "SPY221645_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_08.R2.fastq"
+          ],
+          "SPY221645_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_09.R2.fastq"
+          ],
+          "SPY221645_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_10.R2.fastq"
+          ],
+          "SPY221645_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_11.R2.fastq"
+          ],
+          "SPY221645_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221645_12.R2.fastq"
+          ],
+          "SPY221646_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_01.R2.fastq"
+          ],
+          "SPY221646_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_02.R2.fastq"
+          ],
+          "SPY221646_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_03.R2.fastq"
+          ],
+          "SPY221646_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_04.R2.fastq"
+          ],
+          "SPY221646_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_05.R2.fastq"
+          ],
+          "SPY221646_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_06.R2.fastq"
+          ],
+          "SPY221646_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_07.R2.fastq"
+          ],
+          "SPY221646_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_08.R2.fastq"
+          ],
+          "SPY221646_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_09.R2.fastq"
+          ],
+          "SPY221646_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_10.R2.fastq"
+          ],
+          "SPY221646_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_11.R2.fastq"
+          ],
+          "SPY221646_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221646_12.R2.fastq"
+          ],
+          "SPY221647_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_01.R2.fastq"
+          ],
+          "SPY221647_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_02.R2.fastq"
+          ],
+          "SPY221647_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_03.R2.fastq"
+          ],
+          "SPY221647_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_04.R2.fastq"
+          ],
+          "SPY221647_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_05.R2.fastq"
+          ],
+          "SPY221647_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_06.R2.fastq"
+          ],
+          "SPY221647_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_07.R2.fastq"
+          ],
+          "SPY221647_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_08.R2.fastq"
+          ],
+          "SPY221647_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_09.R2.fastq"
+          ],
+          "SPY221647_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_10.R2.fastq"
+          ],
+          "SPY221647_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_11.R2.fastq"
+          ],
+          "SPY221647_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221647_12.R2.fastq"
+          ],
+          "SPY221648_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_01.R2.fastq"
+          ],
+          "SPY221648_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_02.R2.fastq"
+          ],
+          "SPY221648_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_03.R2.fastq"
+          ],
+          "SPY221648_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_04.R2.fastq"
+          ],
+          "SPY221648_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_05.R2.fastq"
+          ],
+          "SPY221648_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_06.R2.fastq"
+          ],
+          "SPY221648_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_07.R2.fastq"
+          ],
+          "SPY221648_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_08.R2.fastq"
+          ],
+          "SPY221648_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_09.R2.fastq"
+          ],
+          "SPY221648_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_10.R2.fastq"
+          ],
+          "SPY221648_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_11.R2.fastq"
+          ],
+          "SPY221648_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221648_12.R2.fastq"
+          ],
+          "SPY221649_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_01.R2.fastq"
+          ],
+          "SPY221649_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_02.R2.fastq"
+          ],
+          "SPY221649_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_03.R2.fastq"
+          ],
+          "SPY221649_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_04.R2.fastq"
+          ],
+          "SPY221649_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_05.R2.fastq"
+          ],
+          "SPY221649_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_06.R2.fastq"
+          ],
+          "SPY221649_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_07.R2.fastq"
+          ],
+          "SPY221649_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_08.R2.fastq"
+          ],
+          "SPY221649_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_09.R2.fastq"
+          ],
+          "SPY221649_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_10.R2.fastq"
+          ],
+          "SPY221649_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_11.R2.fastq"
+          ],
+          "SPY221649_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221649_12.R2.fastq"
+          ],
+          "SPY221650_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_01.R2.fastq"
+          ],
+          "SPY221650_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_02.R2.fastq"
+          ],
+          "SPY221650_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_03.R2.fastq"
+          ],
+          "SPY221650_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_04.R2.fastq"
+          ],
+          "SPY221650_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_05.R2.fastq"
+          ],
+          "SPY221650_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_06.R2.fastq"
+          ],
+          "SPY221650_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_07.R2.fastq"
+          ],
+          "SPY221650_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_08.R2.fastq"
+          ],
+          "SPY221650_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_09.R2.fastq"
+          ],
+          "SPY221650_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_10.R2.fastq"
+          ],
+          "SPY221650_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_11.R2.fastq"
+          ],
+          "SPY221650_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221650_12.R2.fastq"
+          ],
+          "SPY221651_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_01.R2.fastq"
+          ],
+          "SPY221651_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_02.R2.fastq"
+          ],
+          "SPY221651_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_03.R2.fastq"
+          ],
+          "SPY221651_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_04.R2.fastq"
+          ],
+          "SPY221651_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_05.R2.fastq"
+          ],
+          "SPY221651_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_06.R2.fastq"
+          ],
+          "SPY221651_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_07.R2.fastq"
+          ],
+          "SPY221651_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_08.R2.fastq"
+          ],
+          "SPY221651_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_09.R2.fastq"
+          ],
+          "SPY221651_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_10.R2.fastq"
+          ],
+          "SPY221651_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_11.R2.fastq"
+          ],
+          "SPY221651_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221651_12.R2.fastq"
+          ],
+          "SPY221652_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_01.R2.fastq"
+          ],
+          "SPY221652_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_02.R2.fastq"
+          ],
+          "SPY221652_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_03.R2.fastq"
+          ],
+          "SPY221652_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_04.R2.fastq"
+          ],
+          "SPY221652_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_05.R2.fastq"
+          ],
+          "SPY221652_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_06.R2.fastq"
+          ],
+          "SPY221652_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_07.R2.fastq"
+          ],
+          "SPY221652_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_08.R2.fastq"
+          ],
+          "SPY221652_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_09.R2.fastq"
+          ],
+          "SPY221652_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_10.R2.fastq"
+          ],
+          "SPY221652_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_11.R2.fastq"
+          ],
+          "SPY221652_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221652_12.R2.fastq"
+          ],
+          "SPY221655_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_01.R2.fastq"
+          ],
+          "SPY221655_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_02.R2.fastq"
+          ],
+          "SPY221655_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_03.R2.fastq"
+          ],
+          "SPY221655_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_04.R2.fastq"
+          ],
+          "SPY221655_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_05.R2.fastq"
+          ],
+          "SPY221655_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_06.R2.fastq"
+          ],
+          "SPY221655_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_07.R2.fastq"
+          ],
+          "SPY221655_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_08.R2.fastq"
+          ],
+          "SPY221655_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_09.R2.fastq"
+          ],
+          "SPY221655_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_10.R2.fastq"
+          ],
+          "SPY221655_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_11.R2.fastq"
+          ],
+          "SPY221655_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221655_12.R2.fastq"
+          ],
+          "SPY221656_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_01.R2.fastq"
+          ],
+          "SPY221656_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_02.R2.fastq"
+          ],
+          "SPY221656_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_03.R2.fastq"
+          ],
+          "SPY221656_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_04.R2.fastq"
+          ],
+          "SPY221656_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_05.R2.fastq"
+          ],
+          "SPY221656_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_07.R2.fastq"
+          ],
+          "SPY221656_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_08.R2.fastq"
+          ],
+          "SPY221656_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_09.R2.fastq"
+          ],
+          "SPY221656_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_10.R2.fastq"
+          ],
+          "SPY221656_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_11.R2.fastq"
+          ],
+          "SPY221656_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221656_12.R2.fastq"
+          ],
+          "SPY221874_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_01.R2.fastq"
+          ],
+          "SPY221874_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_02.R2.fastq"
+          ],
+          "SPY221874_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_03.R2.fastq"
+          ],
+          "SPY221874_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_04.R2.fastq"
+          ],
+          "SPY221874_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_05.R2.fastq"
+          ],
+          "SPY221874_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_06.R2.fastq"
+          ],
+          "SPY221874_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_07.R2.fastq"
+          ],
+          "SPY221874_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_08.R2.fastq"
+          ],
+          "SPY221874_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_09.R2.fastq"
+          ],
+          "SPY221874_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_10.R2.fastq"
+          ],
+          "SPY221874_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_11.R2.fastq"
+          ],
+          "SPY221874_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221874_12.R2.fastq"
+          ],
+          "SPY221875_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_01.R2.fastq"
+          ],
+          "SPY221875_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_02.R2.fastq"
+          ],
+          "SPY221875_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_03.R2.fastq"
+          ],
+          "SPY221875_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_04.R2.fastq"
+          ],
+          "SPY221875_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_05.R2.fastq"
+          ],
+          "SPY221875_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_06.R2.fastq"
+          ],
+          "SPY221875_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_07.R2.fastq"
+          ],
+          "SPY221875_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_08.R2.fastq"
+          ],
+          "SPY221875_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_09.R2.fastq"
+          ],
+          "SPY221875_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_10.R2.fastq"
+          ],
+          "SPY221875_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_11.R2.fastq"
+          ],
+          "SPY221875_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY221875_12.R2.fastq"
+          ],
+          "SPY231620_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_01.R2.fastq"
+          ],
+          "SPY231620_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_02.R2.fastq"
+          ],
+          "SPY231620_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_03.R2.fastq"
+          ],
+          "SPY231620_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_04.R2.fastq"
+          ],
+          "SPY231620_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_05.R2.fastq"
+          ],
+          "SPY231620_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_06.R2.fastq"
+          ],
+          "SPY231620_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_08.R2.fastq"
+          ],
+          "SPY231620_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_09.R2.fastq"
+          ],
+          "SPY231620_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_10.R2.fastq"
+          ],
+          "SPY231620_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_11.R2.fastq"
+          ],
+          "SPY231620_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231620_12.R2.fastq"
+          ],
+          "SPY231621_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_01.R2.fastq"
+          ],
+          "SPY231621_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_02.R2.fastq"
+          ],
+          "SPY231621_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_03.R2.fastq"
+          ],
+          "SPY231621_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_04.R2.fastq"
+          ],
+          "SPY231621_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_05.R2.fastq"
+          ],
+          "SPY231621_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_06.R2.fastq"
+          ],
+          "SPY231621_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_07.R2.fastq"
+          ],
+          "SPY231621_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_08.R2.fastq"
+          ],
+          "SPY231621_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_09.R2.fastq"
+          ],
+          "SPY231621_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_10.R2.fastq"
+          ],
+          "SPY231621_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_11.R2.fastq"
+          ],
+          "SPY231621_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231621_12.R2.fastq"
+          ],
+          "SPY231622_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_01.R2.fastq"
+          ],
+          "SPY231622_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_02.R2.fastq"
+          ],
+          "SPY231622_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_03.R2.fastq"
+          ],
+          "SPY231622_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_04.R2.fastq"
+          ],
+          "SPY231622_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_05.R2.fastq"
+          ],
+          "SPY231622_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_06.R2.fastq"
+          ],
+          "SPY231622_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_07.R2.fastq"
+          ],
+          "SPY231622_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_08.R2.fastq"
+          ],
+          "SPY231622_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_09.R2.fastq"
+          ],
+          "SPY231622_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_10.R2.fastq"
+          ],
+          "SPY231622_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_11.R2.fastq"
+          ],
+          "SPY231622_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231622_12.R2.fastq"
+          ],
+          "SPY231623_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_01.R2.fastq"
+          ],
+          "SPY231623_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_02.R2.fastq"
+          ],
+          "SPY231623_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_03.R2.fastq"
+          ],
+          "SPY231623_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_04.R2.fastq"
+          ],
+          "SPY231623_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_05.R2.fastq"
+          ],
+          "SPY231623_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_06.R2.fastq"
+          ],
+          "SPY231623_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_07.R2.fastq"
+          ],
+          "SPY231623_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_08.R2.fastq"
+          ],
+          "SPY231623_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_09.R2.fastq"
+          ],
+          "SPY231623_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_10.R2.fastq"
+          ],
+          "SPY231623_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_11.R2.fastq"
+          ],
+          "SPY231623_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231623_12.R2.fastq"
+          ],
+          "SPY231624_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_01.R2.fastq"
+          ],
+          "SPY231624_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_02.R2.fastq"
+          ],
+          "SPY231624_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_03.R2.fastq"
+          ],
+          "SPY231624_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_04.R2.fastq"
+          ],
+          "SPY231624_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_05.R2.fastq"
+          ],
+          "SPY231624_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_06.R2.fastq"
+          ],
+          "SPY231624_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_07.R2.fastq"
+          ],
+          "SPY231624_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_08.R2.fastq"
+          ],
+          "SPY231624_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_09.R2.fastq"
+          ],
+          "SPY231624_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_10.R2.fastq"
+          ],
+          "SPY231624_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_11.R2.fastq"
+          ],
+          "SPY231624_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231624_12.R2.fastq"
+          ],
+          "SPY231625_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_01.R2.fastq"
+          ],
+          "SPY231625_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_02.R2.fastq"
+          ],
+          "SPY231625_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_03.R2.fastq"
+          ],
+          "SPY231625_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_04.R2.fastq"
+          ],
+          "SPY231625_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_05.R2.fastq"
+          ],
+          "SPY231625_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_06.R2.fastq"
+          ],
+          "SPY231625_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_07.R2.fastq"
+          ],
+          "SPY231625_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_08.R2.fastq"
+          ],
+          "SPY231625_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_09.R2.fastq"
+          ],
+          "SPY231625_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_10.R2.fastq"
+          ],
+          "SPY231625_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_11.R2.fastq"
+          ],
+          "SPY231625_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231625_12.R2.fastq"
+          ],
+          "SPY231626_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_01.R2.fastq"
+          ],
+          "SPY231626_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_02.R2.fastq"
+          ],
+          "SPY231626_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_03.R2.fastq"
+          ],
+          "SPY231626_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_04.R2.fastq"
+          ],
+          "SPY231626_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_05.R2.fastq"
+          ],
+          "SPY231626_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_06.R2.fastq"
+          ],
+          "SPY231626_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_07.R2.fastq"
+          ],
+          "SPY231626_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_08.R2.fastq"
+          ],
+          "SPY231626_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_09.R2.fastq"
+          ],
+          "SPY231626_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_10.R2.fastq"
+          ],
+          "SPY231626_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_11.R2.fastq"
+          ],
+          "SPY231626_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231626_12.R2.fastq"
+          ],
+          "SPY231627_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_01.R2.fastq"
+          ],
+          "SPY231627_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_02.R2.fastq"
+          ],
+          "SPY231627_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_03.R2.fastq"
+          ],
+          "SPY231627_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_04.R2.fastq"
+          ],
+          "SPY231627_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_05.R2.fastq"
+          ],
+          "SPY231627_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_06.R2.fastq"
+          ],
+          "SPY231627_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_07.R2.fastq"
+          ],
+          "SPY231627_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_08.R2.fastq"
+          ],
+          "SPY231627_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_09.R2.fastq"
+          ],
+          "SPY231627_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_10.R2.fastq"
+          ],
+          "SPY231627_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_11.R2.fastq"
+          ],
+          "SPY231627_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231627_12.R2.fastq"
+          ],
+          "SPY231628_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_01.R2.fastq"
+          ],
+          "SPY231628_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_02.R2.fastq"
+          ],
+          "SPY231628_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_03.R2.fastq"
+          ],
+          "SPY231628_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_04.R2.fastq"
+          ],
+          "SPY231628_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_05.R2.fastq"
+          ],
+          "SPY231628_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_06.R2.fastq"
+          ],
+          "SPY231628_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_07.R2.fastq"
+          ],
+          "SPY231628_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_08.R2.fastq"
+          ],
+          "SPY231628_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_09.R2.fastq"
+          ],
+          "SPY231628_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_10.R2.fastq"
+          ],
+          "SPY231628_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_11.R2.fastq"
+          ],
+          "SPY231628_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231628_12.R2.fastq"
+          ],
+          "SPY231629_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_01.R2.fastq"
+          ],
+          "SPY231629_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_02.R2.fastq"
+          ],
+          "SPY231629_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_03.R2.fastq"
+          ],
+          "SPY231629_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_04.R2.fastq"
+          ],
+          "SPY231629_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_05.R2.fastq"
+          ],
+          "SPY231629_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_06.R2.fastq"
+          ],
+          "SPY231629_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_07.R2.fastq"
+          ],
+          "SPY231629_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_08.R2.fastq"
+          ],
+          "SPY231629_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_09.R2.fastq"
+          ],
+          "SPY231629_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_10.R2.fastq"
+          ],
+          "SPY231629_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_11.R2.fastq"
+          ],
+          "SPY231629_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231629_12.R2.fastq"
+          ],
+          "SPY231630_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_01.R2.fastq"
+          ],
+          "SPY231630_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_02.R2.fastq"
+          ],
+          "SPY231630_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_03.R2.fastq"
+          ],
+          "SPY231630_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_04.R2.fastq"
+          ],
+          "SPY231630_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_05.R2.fastq"
+          ],
+          "SPY231630_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_06.R2.fastq"
+          ],
+          "SPY231630_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_07.R2.fastq"
+          ],
+          "SPY231630_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_08.R2.fastq"
+          ],
+          "SPY231630_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_09.R2.fastq"
+          ],
+          "SPY231630_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_10.R2.fastq"
+          ],
+          "SPY231630_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_11.R2.fastq"
+          ],
+          "SPY231630_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231630_12.R2.fastq"
+          ],
+          "SPY231631_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_01.R2.fastq"
+          ],
+          "SPY231631_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_02.R2.fastq"
+          ],
+          "SPY231631_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_03.R2.fastq"
+          ],
+          "SPY231631_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_04.R2.fastq"
+          ],
+          "SPY231631_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_05.R2.fastq"
+          ],
+          "SPY231631_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_06.R2.fastq"
+          ],
+          "SPY231631_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_07.R2.fastq"
+          ],
+          "SPY231631_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_08.R2.fastq"
+          ],
+          "SPY231631_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_09.R2.fastq"
+          ],
+          "SPY231631_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_10.R2.fastq"
+          ],
+          "SPY231631_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_11.R2.fastq"
+          ],
+          "SPY231631_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231631_12.R2.fastq"
+          ],
+          "SPY231634_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_01.R2.fastq"
+          ],
+          "SPY231634_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_02.R2.fastq"
+          ],
+          "SPY231634_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_03.R2.fastq"
+          ],
+          "SPY231634_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_04.R2.fastq"
+          ],
+          "SPY231634_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_05.R2.fastq"
+          ],
+          "SPY231634_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_06.R2.fastq"
+          ],
+          "SPY231634_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_07.R2.fastq"
+          ],
+          "SPY231634_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_08.R2.fastq"
+          ],
+          "SPY231634_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_09.R2.fastq"
+          ],
+          "SPY231634_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_10.R2.fastq"
+          ],
+          "SPY231634_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_11.R2.fastq"
+          ],
+          "SPY231634_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231634_12.R2.fastq"
+          ],
+          "SPY231635_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_01.R2.fastq"
+          ],
+          "SPY231635_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_02.R2.fastq"
+          ],
+          "SPY231635_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_03.R2.fastq"
+          ],
+          "SPY231635_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_04.R2.fastq"
+          ],
+          "SPY231635_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_05.R2.fastq"
+          ],
+          "SPY231635_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_06.R2.fastq"
+          ],
+          "SPY231635_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_07.R2.fastq"
+          ],
+          "SPY231635_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_08.R2.fastq"
+          ],
+          "SPY231635_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_09.R2.fastq"
+          ],
+          "SPY231635_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_10.R2.fastq"
+          ],
+          "SPY231635_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_11.R2.fastq"
+          ],
+          "SPY231635_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231635_12.R2.fastq"
+          ],
+          "SPY231636_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_01.R2.fastq"
+          ],
+          "SPY231636_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_02.R2.fastq"
+          ],
+          "SPY231636_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_03.R2.fastq"
+          ],
+          "SPY231636_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_04.R2.fastq"
+          ],
+          "SPY231636_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_05.R2.fastq"
+          ],
+          "SPY231636_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_06.R2.fastq"
+          ],
+          "SPY231636_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_07.R2.fastq"
+          ],
+          "SPY231636_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_08.R2.fastq"
+          ],
+          "SPY231636_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_09.R2.fastq"
+          ],
+          "SPY231636_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_10.R2.fastq"
+          ],
+          "SPY231636_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_11.R2.fastq"
+          ],
+          "SPY231636_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231636_12.R2.fastq"
+          ],
+          "SPY231637_01": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_01.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_01.R2.fastq"
+          ],
+          "SPY231637_02": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_02.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_02.R2.fastq"
+          ],
+          "SPY231637_03": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_03.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_03.R2.fastq"
+          ],
+          "SPY231637_04": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_04.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_04.R2.fastq"
+          ],
+          "SPY231637_05": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_05.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_05.R2.fastq"
+          ],
+          "SPY231637_06": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_06.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_06.R2.fastq"
+          ],
+          "SPY231637_07": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_07.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_07.R2.fastq"
+          ],
+          "SPY231637_08": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_08.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_08.R2.fastq"
+          ],
+          "SPY231637_09": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_09.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_09.R2.fastq"
+          ],
+          "SPY231637_10": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_10.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_10.R2.fastq"
+          ],
+          "SPY231637_11": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_11.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_11.R2.fastq"
+          ],
+          "SPY231637_12": [
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_12.R1.fastq",
+            "/home/rzendehdel/seednap/outputs/01_trim/teleo/SPY231637_12.R2.fastq"
+          ]
+        }
+      },
+      "metadata": {}
+    },
+    "swarm": {
+      "name": "swarm",
+      "status": "completed",
+      "started_at": "2026-04-12 15:22:45.400429",
+      "completed_at": "2026-04-12 15:25:16.943763",
+      "duration_seconds": 151.543334,
+      "error_message": null,
+      "outputs": {
+        "query_fasta": "/home/rzendehdel/seednap/outputs/02_swarm/teleo/query.fasta",
+        "seqtab_clean_t": "/home/rzendehdel/seednap/outputs/02_swarm/teleo/otu_table.csv",
+        "otu_table_full": "/home/rzendehdel/seednap/outputs/02_swarm/teleo/otu_table_full.csv",
+        "merged_dir": "/home/rzendehdel/seednap/outputs/02_swarm/teleo/merged"
+      },
+      "metadata": {}
+    },
+    "taxonomy": {
+      "name": "taxonomy",
+      "status": "completed",
+      "started_at": "2026-04-12 15:25:16.950963",
+      "completed_at": "2026-04-12 15:25:35.733086",
+      "duration_seconds": 18.782123,
+      "error_message": null,
+      "outputs": {
+        "blast_output": "/home/rzendehdel/seednap/outputs/03_taxo/teleo/output_blastn.tsv",
+        "final_table": "/home/rzendehdel/seednap/outputs/teleo_blast.csv"
+      },
+      "metadata": {}
+    }
+  },
+  "current_step": null,
+  "metadata": {}
+}

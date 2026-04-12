@@ -11,20 +11,20 @@ marker:
     reverse: "CTTCCGGTACACTTACCATG"
     name: "Teleo"
     target: "12S rRNA"
-    amplicon_length: [100, 200]
+    amplicon_length: [40, 100]
 
 # File paths configuration
 paths:
-  raw_data: "/home/shared/edna/raw/ma_dj_djibou_2023/"
+  raw_data: "/home/shared/edna/raw/fw_na_namibia/Teleo/raw_for_dada2/"
   output: "outputs"
   logs: "logs"
-  references: "/home/shared/edna/reference_database"
+  references: "/home/shared/edna/reference_database/2025/teleo/"
 
 # Demultiplexing configuration
 demultiplex:
-  enabled: false
-  protocol: "none"  # Options: "ligation", "standard", "none"
-  # metadata: "metadata/lab_metadata.csv"  # Uncomment if using demultiplexing
+  enabled: true
+  protocol: "ligation"  # Options: "ligation", "standard", "none"
+  metadata: "/home/shared/edna/raw/fw_na_namibia/metadata/metadata_lab_fw_na_namibia_2023.csv"  # Uncomment if using demultiplexing
 
 # Primer trimming configuration (cutadapt)
 trimming:
@@ -34,6 +34,22 @@ trimming:
   cores: 12
   discard_untrimmed: true
   overlap: 3
+
+# SWARM
+swarm:
+  merge:
+    fastq_maxdiffs: 10    # Max differences in overlap region
+    fastq_minovlen: 10    # Min overlap length
+    allow_stagger: false  # Allow staggered read merging
+  clustering:
+    d: 1                  # Distance threshold
+    fastidious: true      # Refine singletons
+    boundary: 3           # Min mass for large OTUs (fastidious)
+    threads: 4            # CPU threads
+  chimera:
+    method: "denovo"      # "denovo" or "none"
+  min_sequence_length: 20 # Min sequence length after merging
+
 
 # DADA2 processing configuration
 dada2:
@@ -52,26 +68,9 @@ dada2:
   pool: false
   multithread: true
 
-# SWARM OTU clustering configuration (alternative to DADA2)
-# To use SWARM instead of DADA2, change pipeline.steps to:
-#   ["trim", "swarm", "taxonomy", "export"]
-swarm:
-  merge:
-    fastq_maxdiffs: 10
-    fastq_minovlen: 10
-    allow_stagger: false
-  clustering:
-    d: 1
-    fastidious: true
-    boundary: 3
-    threads: 4
-  chimera:
-    method: "denovo"  # Options: "denovo", "none"
-  min_sequence_length: 20
-
 # Taxonomic assignment configuration
 taxonomy:
-  method: "dada2"  # Options: "dada2", "decipher", "ecotag", "blast"
+  method: "blast"  # Options: "dada2", "decipher", "ecotag", "blast"
 
   # Database paths for each method
   databases:
@@ -82,13 +81,13 @@ taxonomy:
 
     # BLAST + LCA taxonomic assignment
     blast:
-      fasta: "/home/shared/edna/reference_database/2024/teleo/blast_db/refdb_all_fish_teleo.fasta"
+      fasta: "/home/shared/edna/reference_database/2025/teleo/CRABS_MITOFISH_MIDORI2_GB265_teleo_blast.fasta"
       perc_identity: 80.0
       qcov_hsp_perc: 80.0
-      evalue: 1.0e-25
-      max_target_seqs: 5
+      evalue: 1.0e-10
+      max_target_seqs: 10
       # Thresholds for taxonomic rank assignment by percent identity
-      threshold_species: 98.0
+      threshold_species: 100.0
       threshold_genus: 96.0
       threshold_family: 86.5
 
@@ -130,7 +129,6 @@ logging:
 pipeline:
   steps:
     - "trim"
-    - "dada2"
+    - "swarm"
     - "taxonomy"
-    - "export"
   skip: []  # List steps to skip, e.g., ["trim"] if data is already trimmed

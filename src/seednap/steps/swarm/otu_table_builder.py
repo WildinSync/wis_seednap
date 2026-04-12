@@ -186,7 +186,9 @@ class OtuTableBuilder:
                 parts = line.strip().split("\t")
                 if len(parts) < 4:
                     continue
-                cloud, mass, seed, seed_abundance = parts[0], parts[1], parts[2], parts[3]
+                cloud, mass, seed_raw, seed_abundance = parts[0], parts[1], parts[2], parts[3]
+                # Strip ;size=N; annotation so seed matches other parsers
+                seed = seed_raw.split(";size=")[0]
                 stats[seed] = int(mass)
                 seeds[seed] = (int(seed_abundance), int(cloud))
 
@@ -199,7 +201,6 @@ class OtuTableBuilder:
     def _parse_swarms(swarm_path: Union[str, Path]) -> Dict[str, List[str]]:
         """Parse SWARM membership file: seed → list of member amplicon IDs."""
         swarm_path = Path(swarm_path)
-        separator = r"_[0-9]+|;size=[0-9]+;| "
         swarms = {}
 
         with open(swarm_path) as f:
@@ -207,9 +208,21 @@ class OtuTableBuilder:
                 line = line.strip()
                 if not line:
                     continue
-                amplicons = re.split(separator, line)[0::2]
-                seed = amplicons[0]
-                swarms[seed] = amplicons
+                # Split on spaces to get individual amplicon entries,
+                # then strip abundance annotations (;size=N; or ;size=N or _N)
+                amplicons = []
+                for entry in line.split(" "):
+                    if not entry:
+                        continue
+                    if ";size=" in entry:
+                        amp = entry.split(";size=")[0]
+                    else:
+                        amp = re.sub(r"_\d+$", "", entry)
+                    if amp:
+                        amplicons.append(amp)
+                if amplicons:
+                    seed = amplicons[0]
+                    swarms[seed] = amplicons
 
         logger.debug(f"Parsed {len(swarms)} SWARM clusters")
         return swarms

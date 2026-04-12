@@ -510,9 +510,13 @@ class BlastTaxonomicAssigner:
         filtered["keep_for_analysis"] = filtered["blast_rank"] == 1
 
         # Resolve ambiguous hits with LCA
+        # Use include_groups=False to avoid pandas 2.x dropping the group key,
+        # then restore qseqid from the index
         filtered = (
-            filtered.groupby("qseqid", group_keys=False)
-            .apply(self.lca_resolver.resolve_ambiguous_hits)
+            filtered.groupby("qseqid", group_keys=True)
+            .apply(self.lca_resolver.resolve_ambiguous_hits, include_groups=False)
+            .reset_index(level="qseqid")
+            .reset_index(drop=True)
         )
 
         # Keep only resolved hits
@@ -522,8 +526,8 @@ class BlastTaxonomicAssigner:
         phylo_cols = BlastLCAResolver.TAXONOMIC_RANKS
         result = filtered[["qseqid", "pident"] + phylo_cols].rename(columns={"qseqid": "ASV_ID"})
 
-        # Load ASV count table
-        asv_count = pd.read_csv(asv_count_csv, sep=",", index_col=0).T
+        # Load ASV count table (sequences as rows, samples as columns)
+        asv_count = pd.read_csv(asv_count_csv, sep=",", index_col=0)
 
         # Load ASV sequences
         asv_sequences = fasta_to_df(asv_fasta)

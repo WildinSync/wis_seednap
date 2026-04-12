@@ -117,6 +117,10 @@ class TaxonomicAssigner:
         threshold_species: float = 98.0,
         threshold_genus: float = 96.0,
         threshold_family: float = 86.5,
+        perc_identity: float = 80.0,
+        qcov_hsp_perc: float = 80.0,
+        evalue: float = 1e-25,
+        max_target_seqs: int = 5,
         **kwargs,
     ) -> Dict[str, Path]:
         """
@@ -129,6 +133,10 @@ class TaxonomicAssigner:
             threshold_species: Percent identity threshold for species (default: 98.0)
             threshold_genus: Percent identity threshold for genus (default: 96.0)
             threshold_family: Percent identity threshold for family (default: 86.5)
+            perc_identity: Minimum percent identity for BLAST hits (default: 80.0)
+            qcov_hsp_perc: Minimum query coverage per HSP (default: 80.0)
+            evalue: Maximum e-value for BLAST hits (default: 1e-25)
+            max_target_seqs: Maximum target sequences to keep (default: 5)
 
         Returns:
             Dictionary with 'final_table' key pointing to output CSV
@@ -141,7 +149,12 @@ class TaxonomicAssigner:
         logger.info(f"Running BLAST taxonomic assignment")
 
         # Create BLAST database if needed
-        runner = BlastRunner()
+        runner = BlastRunner(
+            perc_identity=perc_identity,
+            qcov_hsp_perc=qcov_hsp_perc,
+            evalue=evalue,
+            max_target_seqs=max_target_seqs,
+        )
         if not runner.check_blast_db_exists(reference_fasta):
             logger.info("Creating BLAST database...")
             runner.create_blast_db(reference_fasta)
