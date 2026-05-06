@@ -38,25 +38,26 @@ That's it. See [docs/](docs/) for configuration details, step-by-step guides, an
 
 ## Requirements
 
-| Tool | Version | Purpose |
+| Tool | Pinned Version | Purpose |
 |---|---|---|
-| Python | >= 3.9 | Pipeline runtime |
-| Cutadapt | >= 4.0 | Primer trimming |
-| VSEARCH | >= 2.0 | Read merging, dereplication, chimera detection |
-| SWARM | >= 3.0 | OTU clustering |
-| BLAST+ | >= 2.12 | Taxonomic assignment |
-| R | >= 4.0 | DADA2 / DECIPHER (optional) |
+| Python | 3.9 | Pipeline runtime |
+| Cutadapt | 5.2 | Primer trimming |
+| VSEARCH | 2.30.5 | Read merging, dereplication, chimera detection |
+| SWARM | 3.1.6 | OTU clustering |
+| BLAST+ | 2.17.0 | Taxonomic assignment |
+| R | 4.2 | DADA2 / DECIPHER (optional) |
 
-All tools are included in `environment.yml`.
+External tool versions are pinned in `environment.yml` to the set we validate against. OBITools (for the optional `ecotag` method) lives in a separate env -- see [docs/ecotag-setup.md](docs/ecotag-setup.md).
 
 ## Pipeline Steps
 
 | Step | Tool | Description |
 |---|---|---|
+| **Demultiplex** *(optional)* | Built-in | Ligation-tag demultiplexing; `skip: true` for pre-demultiplexed inputs |
 | **Trim** | Cutadapt | Two-pass primer removal (5' then 3') |
 | **Cluster** | SWARM or DADA2 | OTU clustering or ASV denoising |
-| **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Taxonomic assignment with LCA resolution |
-| **Export** | Built-in | GBIF-compatible and DarwinCore output |
+| **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Taxonomic assignment with cascade-null per-rank thresholds and MEGAN-LR top-bitscore LCA (BLAST) or RDP bootstrap (DADA2) |
+| **Export** | Built-in | GBIF long format and DarwinCore occurrence CSV with deterministic `occurrenceID` and `contamination_flag` |
 
 ## CLI Commands
 
@@ -107,6 +108,7 @@ Full configuration reference: [docs/configuration.md](docs/configuration.md)
 | [docs/cli-reference.md](docs/cli-reference.md) | Full CLI command reference |
 | [docs/taxonomy-methods.md](docs/taxonomy-methods.md) | Taxonomy assignment methods comparison |
 | [docs/gbif-export.md](docs/gbif-export.md) | GBIF and DarwinCore export guide |
+| [docs/ecotag-setup.md](docs/ecotag-setup.md) | OBITools / ecotag installation and discovery |
 
 ## Project Structure
 

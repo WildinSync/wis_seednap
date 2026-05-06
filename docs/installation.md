@@ -26,17 +26,18 @@ If you prefer to manage dependencies yourself:
 pip install -e .
 ```
 
-You must separately install the external tools:
+You must separately install the external tools (versions match
+`environment.yml`):
 
 ```bash
 # Primer trimming
-pip install cutadapt
+pip install cutadapt==5.2
 
 # SWARM clustering
-conda install -c bioconda vsearch swarm
+conda install -c bioconda vsearch=2.30.5 swarm=3.1.6
 
 # BLAST taxonomy
-conda install -c bioconda blast
+conda install -c bioconda blast=2.17.0
 
 # DADA2 / DECIPHER (R packages)
 conda install -c bioconda bioconductor-dada2 bioconductor-decipher
@@ -60,13 +61,22 @@ Defined in `pyproject.toml`:
 
 ### External Tools
 
-| Tool | Min. Version | Required For | Install |
+The conda environment pins each tool to the version we validate against on
+the ETH ELE eDNA server. If you install manually, target these versions
+unless you have a reason not to.
+
+| Tool | Pinned Version | Required For | Install |
 |---|---|---|---|
-| Cutadapt | 4.0 | Primer trimming | `pip install cutadapt` |
-| VSEARCH | 2.0 | Read merging, dereplication, chimera detection | `conda install -c bioconda vsearch` |
-| SWARM | 3.0 | OTU clustering | `conda install -c bioconda swarm` |
-| BLAST+ | 2.12 | BLAST taxonomic assignment | `conda install -c bioconda blast` |
-| R | 4.0 | DADA2 and DECIPHER methods | `conda install r-base=4.2` |
+| Cutadapt | 5.2 | Primer trimming | `pip install cutadapt==5.2` |
+| VSEARCH | 2.30.5 | Read merging, dereplication, chimera detection | `conda install -c bioconda vsearch=2.30.5` |
+| SWARM | 3.1.6 | OTU clustering | `conda install -c bioconda swarm=3.1.6` |
+| BLAST+ | 2.17.0 | BLAST taxonomic assignment | `conda install -c bioconda blast=2.17.0` |
+| R | 4.2 | DADA2 and DECIPHER methods | `conda install r-base=4.2` |
+
+**ecotag (optional).** OBITools v1 has Python 2 dependencies that conflict
+with the rest of the environment, so it lives in its own conda env. The
+runner auto-discovers it via `SEEDNAP_OBITOOLS_BIN`, `PATH`, or a set of
+well-known install paths. See [ecotag-setup.md](ecotag-setup.md).
 
 ### R Packages (for DADA2/DECIPHER)
 
@@ -87,3 +97,22 @@ conda activate seednap
 ```
 
 All tools (cutadapt, vsearch, swarm, blast, R + packages) are already installed.
+OBITools (for the optional `ecotag` method) lives in
+`/opt/anaconda3/envs/obitools` and is auto-discovered; no extra activation
+needed.
+
+## Running the Test Suite
+
+The repository ships with a pytest suite that exercises the post-processing
+logic without invoking any external bioinformatics tools, so it runs
+locally in under a second.
+
+```bash
+pytest
+```
+
+Tests cover BLAST LCA / cascade-null behavior, the DarwinCore builder,
+SWARM OTU non-zero invariants, the shared taxonomy post-processor,
+demultiplex robustness, ecotag discovery, runner signatures, utility
+coverage, and YAML round-tripping. Add new tests under `tests/unit/` or
+`tests/integration/` when you change load-bearing logic.

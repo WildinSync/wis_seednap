@@ -63,7 +63,22 @@ demultiplex:
   enabled: false                             # Enable/disable demultiplexing
   protocol: "none"                           # "ligation", "standard", or "none"
   metadata: "/path/to/metadata.csv"          # Required if enabled
+  skip: false                                # True if raw inputs are already
+                                             #   demultiplexed (one FASTQ per
+                                             #   sample); the orchestrator
+                                             #   records the step as skipped
+                                             #   instead of running it.
+  max_sample_failure_rate: 0.5               # Abort the demultiplex step if
+                                             #   more than this fraction of
+                                             #   samples fail; otherwise log
+                                             #   the failures and continue.
 ```
+
+The `ligation` protocol processes one bad sample at a time with
+`try`/`except` and only fails the whole library when the per-sample
+failure rate crosses `max_sample_failure_rate` (default 50%). The
+`standard` protocol is reserved for future work and currently raises a
+`NotImplementedError` with a pointer to the ligation path.
 
 ### `trimming`
 
@@ -121,20 +136,50 @@ dada2:
 taxonomy:
   method: "blast"                            # "blast", "dada2", "decipher", "ecotag"
 
+  # Marker-level contaminant species. Matched against the assigned `species`
+  # column in the post-processor; matching rows get
+  # `is_contaminant_candidate=True`. Rows are NEVER deleted -- downstream
+  # decides what to do with the flag. Use the underscore-separated CRABS
+  # format. (Whitmore et al. 2023, Nat. Ecol. Evol.)
+  contaminants:
+    - "Homo_sapiens"
+    - "Bos_taurus"
+    - "Sus_scrofa"
+
   databases:
     blast:
       fasta: "/path/to/blast_db.fasta"       # Reference FASTA (required)
       perc_identity: 80.0                    # Min percent identity (default: 80.0)
-      qcov_hsp_perc: 80.0                   # Min query coverage per HSP (default: 80.0)
-      evalue: 1.0e-10                        # Max e-value (default: 1.0e-25)
-      max_target_seqs: 10                    # Max hits retained (default: 5)
-      threshold_species: 100.0               # %ID for species assignment (default: 98.0)
-      threshold_genus: 96.0                  # %ID for genus assignment (default: 96.0)
-      threshold_family: 86.5                 # %ID for family assignment (default: 86.5)
+      qcov_hsp_perc: 80.0                    # Min query coverage per HSP (default: 80.0)
+      evalue: 1.0e-25                        # Max e-value (default: 1.0e-25)
+      max_target_seqs: 5                     # Max hits retained (default: 5)
+      task: "megablast"                      # blastn task; "megablast" (default)
+                                             #   for short, high-identity vertebrate
+                                             #   amplicons against curated DBs;
+                                             #   "blastn" for divergent references.
+      # Per-rank cascade thresholds. If percent identity falls below the
+      # threshold for a rank, that rank AND every finer rank are nulled
+      # (cascade null), so the output never shows orphan ranks like
+      # "kingdom set, phylum None, class Mammalia". Defaults follow
+      # Pappalardo 2025 (Methods Ecol. Evol. 16:2380-2394) with rRNA-marker
+      # tweaks (family raised vs eDNAFlow).
+      threshold_species: 99.0                # (default: 99.0)
+      threshold_genus: 96.0                  # (default: 96.0)
+      threshold_family: 90.0                 # (default: 90.0)
+      threshold_order: 80.0                  # (default: 80.0)
+      threshold_class: 70.0                  # (default: 70.0)
+      # MEGAN-LR style top-bitscore band: hits within this percent of the
+      # best bitscore are considered together for LCA resolution.
+      # 0.0 = exact ties only.
+      top_bitscore_pct: 10.0                 # (default: 10.0)
 
     dada2:
-      all: "/path/to/dada2_all.fasta"        # RDP-format database
-      species: "/path/to/dada2_species.fasta" # Species-level database
+      all: "/path/to/dada2_all.fasta"        # RDP-format database (required)
+      species: "/path/to/dada2_species.fasta" # Species-level database (optional)
+      # Naive Bayesian (Wang 2007) bootstrap confidence threshold. Below
+      # this value, the rank is nulled AND every finer rank cascades to
+      # null. 80% is the published recommendation for short rRNA reads.
+      bootstrap_threshold: 80                # (default: 80)
 
     ecotag:
       tree: "/path/to/taxonomy/"             # NCBI taxonomy tree
@@ -147,6 +192,13 @@ taxonomy:
 ```
 
 You only need to provide the database section for the method you selected.
+
+**Defaults vs CLI shortcuts.** The pipeline (YAML) defaults above are the
+field-standard cascade thresholds used by the production runs. The
+standalone `seednap blast` and `seednap assign-taxonomy` commands keep
+their historical CLI defaults (`threshold_species=98.0`,
+`threshold_family=86.5`); pass `--threshold-*` explicitly or run via
+`run-pipeline` with a YAML config to use the cascade defaults.
 
 ### `export`
 

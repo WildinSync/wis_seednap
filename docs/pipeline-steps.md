@@ -10,6 +10,32 @@ Each step reads outputs from the previous step. The pipeline tracks state in a J
 
 ---
 
+## 0. Demultiplex (optional)
+
+**Tool:** Built-in (Cutadapt under the hood)
+**Input:** Raw library FASTQ files + a metadata CSV mapping samples to
+ligation tags
+**Output:** Per-sample FASTQ files in `outputs/00_demultiplex/{marker}/`
+
+The ligation protocol generates per-sample tag files, demultiplexes the
+library, detects primers in both orientations, and merges/realigns reads.
+
+**Robustness.** Each sample is processed inside its own
+`try`/`except`. A single bad sample does not crash the whole library;
+its error is logged and the run continues. If more than
+`demultiplex.max_sample_failure_rate` (default 0.5) of samples fail, the
+step aborts so an actually-broken library does not silently emit a
+mostly-empty output.
+
+**Pre-demultiplexed inputs.** When the raw inputs already arrive as one
+FASTQ per sample (most external collaborators), set
+`demultiplex.skip: true` in the YAML. The orchestrator records the step
+as skipped instead of running the protocol against pre-demultiplexed
+data. The `standard` protocol is reserved for future work and currently
+raises a `NotImplementedError` with a pointer to the ligation path.
+
+---
+
 ## 1. Primer Trimming
 
 **Tool:** Cutadapt (Martin, 2011)
@@ -137,8 +163,18 @@ Parses SWARM cluster membership, per-sample abundances, and chimera status to pr
 
 ## 3. Taxonomic Assignment
 
-**Input:** Representative sequences (`query.fasta`) and abundance table (`otu_table.csv`)
+**Input:** Representative sequences (`query.fasta`) and abundance table (`otu_table.csv` from SWARM, or `seqtab_clean.csv` from DADA2)
 **Output:** Taxonomy CSV in `outputs/03_taxo/{marker}/` and final table at `outputs/{marker}_{method}.csv`
+
+All four methods (BLAST, DADA2 RDP, DECIPHER, ecotag) share a common
+post-processor (`seednap.utils.taxonomy.link_taxonomy_with_abundance`),
+so the output schema is identical regardless of method: same columns,
+same null semantics for missing ranks (cascade null), and the same
+`is_contaminant_candidate` column when `taxonomy.contaminants` is set.
+
+The DADA2 RDP and DECIPHER paths take the query FASTA explicitly and
+work on either DADA2 ASVs or SWARM OTUs -- they no longer require a
+`seqtab_clean.rds` produced by the DADA2 step.
 
 See [taxonomy-methods.md](taxonomy-methods.md) for detailed method descriptions.
 
@@ -148,9 +184,15 @@ See [taxonomy-methods.md](taxonomy-methods.md) for detailed method descriptions.
 
 **Tool:** Built-in formatter
 **Input:** Taxonomy CSV from step 3
-**Output:** GBIF-compatible long-format CSV
+**Output:** GBIF-compatible long-format CSV; downstream, a DarwinCore
+occurrence CSV via `seednap create-gbif`.
 
-Transforms the wide-format taxonomy table (samples as columns) into GBIF long format (one row per sample-OTU observation). Adds `rank` (species/genus/family) and `taxon` (lowest available name) columns. Zero-count observations are removed.
+Transforms the wide-format taxonomy table (samples as columns) into GBIF
+long format (one row per sample-OTU observation). Adds `rank`
+(species/genus/family) and `taxon` (lowest available name) columns.
+Zero-count observations are removed. `is_contaminant_candidate` is
+carried through and surfaces in the DarwinCore output as
+`contamination_flag`.
 
 See [gbif-export.md](gbif-export.md) for the full DarwinCore publishing workflow.
 
@@ -160,6 +202,7 @@ See [gbif-export.md](gbif-export.md) for the full DarwinCore publishing workflow
 
 ```
 outputs/
+  00_demultiplex/{marker}/       # Demultiplexed FASTQ files (if enabled)
   01_trim/{marker}/              # Trimmed FASTQ files
   02_swarm/{marker}/             # SWARM outputs
     merged/                      #   Merged reads per sample

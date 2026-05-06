@@ -23,13 +23,19 @@ SeeDNAP supports four taxonomic assignment methods. Each method is selected via 
 
     ```
     blastn -query {query} -db {db}
+      -task {task}
       -outfmt "6 qseqid sseqid pident length mismatch gapopen
-               qstart qend sstart send evalue bitscore qseq sseq"
+               qstart qend sstart send evalue bitscore"
       -perc_identity {perc_identity}
       -qcov_hsp_perc {qcov_hsp_perc}
       -evalue {evalue}
       -max_target_seqs {max_target_seqs}
     ```
+
+    `task` defaults to `megablast` (word size 28), the right call for
+    short, high-identity vertebrate amplicons against curated reference
+    databases. Switch to `blastn` (word size 11) for divergent references
+    where the family/order tier of hits matters.
 
 3. **Phylogeny extraction:** Taxonomy is parsed from reference FASTA headers. Expected format:
 
@@ -37,17 +43,43 @@ SeeDNAP supports four taxonomic assignment methods. Each method is selected via 
     >ACCESSION\tKingdom;Phylum;Class;Order;Family;Genus;Species
     ```
 
-4. **Phylogenetic filtering:** Taxonomic ranks are set to null if percent identity is below threshold:
-    - Species: requires >= `threshold_species`
-    - Genus: requires >= `threshold_genus`
-    - Family: requires >= `threshold_family`
+    The reference parser hard-fails with a descriptive error on malformed
+    headers (wrong tab count, wrong semicolon count) so a corrupt DB
+    cannot silently produce empty assignments.
 
-5. **LCA resolution:** When multiple hits share the same best bitscore:
-    - If all hits agree on taxonomy at all ranks: keep first hit
-    - If hits disagree: create a consensus row where disagreeing ranks are set to null (Lowest Common Ancestor)
-    - Only the resolved best hit is retained per query
+4. **Cascade-null per-rank filtering.** The post-processor walks ranks
+   from species down to class. When the hit's percent identity is below
+   the threshold for a rank, that rank **and every finer rank** are set
+   to null. The output therefore never contains orphan ranks like
+   `kingdom=Metazoa, phylum=None, class=Mammalia`.
 
-6. **Output merging:** Taxonomy is joined with the OTU/ASV abundance table and representative sequences.
+   Per-rank thresholds (YAML defaults follow Pappalardo 2025,
+   *Methods in Ecology and Evolution* 16:2380-2394, with rRNA-marker
+   tweaks; family raised vs eDNAFlow):
+
+   | Rank | YAML default | CLI shortcut default |
+   |---|---|---|
+   | `threshold_species` | 99.0 | 98.0 |
+   | `threshold_genus` | 96.0 | 96.0 |
+   | `threshold_family` | 90.0 | 86.5 |
+   | `threshold_order` | 80.0 | (YAML only) |
+   | `threshold_class` | 70.0 | (YAML only) |
+
+5. **MEGAN-LR top-bitscore LCA.** The resolver no longer requires exact
+   bitscore ties. All hits within `top_bitscore_pct` (default 10%) of
+   the best bitscore are pooled, and disagreeing ranks across that pool
+   are nulled (Lowest Common Ancestor). Setting `top_bitscore_pct: 0`
+   reverts to the old exact-tie behavior.
+
+6. **Output merging.** Taxonomy is **left-joined** onto the OTU/ASV
+   abundance table so that OTUs without any BLAST hit surface in the
+   final output as `Unassigned` rows rather than being silently dropped.
+
+7. **Contamination flagging.** If `taxonomy.contaminants` is set, every
+   row whose `species` matches one of the listed names gets
+   `is_contaminant_candidate=True`. Rows are **never** deleted; the flag
+   propagates through the GBIF formatter into the DarwinCore output as
+   `contamination_flag` for downstream review.
 
 ### Reference Database Format
 
@@ -64,21 +96,29 @@ Databases built with [CRABS](https://github.com/gjeunen/reference_database_creat
 
 ### Configuration
 
-Example with recommended values for eDNA metabarcoding (software defaults in parentheses where different):
+Example with the production cascade defaults made explicit (software
+defaults shown in parentheses where they differ):
 
 ```yaml
 taxonomy:
   method: "blast"
+  contaminants:
+    - "Homo_sapiens"
+    - "Bos_taurus"
   databases:
     blast:
       fasta: "/path/to/reference.fasta"
       perc_identity: 80.0                    # (default: 80.0)
-      qcov_hsp_perc: 80.0                   # (default: 80.0)
-      evalue: 1.0e-10                        # (default: 1.0e-25)
-      max_target_seqs: 10                    # (default: 5)
-      threshold_species: 100.0               # (default: 98.0)
+      qcov_hsp_perc: 80.0                    # (default: 80.0)
+      evalue: 1.0e-25                        # (default: 1.0e-25)
+      max_target_seqs: 5                     # (default: 5)
+      task: "megablast"                      # (default: "megablast")
+      threshold_species: 99.0                # (default: 99.0)
       threshold_genus: 96.0                  # (default: 96.0)
-      threshold_family: 86.5                 # (default: 86.5)
+      threshold_family: 90.0                 # (default: 90.0)
+      threshold_order: 80.0                  # (default: 80.0)
+      threshold_class: 70.0                  # (default: 70.0)
+      top_bitscore_pct: 10.0                 # (default: 10.0)
 ```
 
 ---
@@ -87,18 +127,36 @@ taxonomy:
 
 Uses the naive Bayesian classifier from DADA2 (Wang et al., 2007; Callahan et al., 2016). Requires R and the `dada2` Bioconductor package.
 
+### Algorithm and Bootstrap Threshold
+
+`assignTaxonomy` returns a per-rank bootstrap confidence (0--100). The
+post-processor applies a configurable bootstrap threshold (`bootstrap_threshold`,
+default **80**, the Wang 2007 recommendation for short rRNA reads):
+ranks below the threshold are nulled, and every finer rank cascades to
+null in the same way as the BLAST path. The resulting frame matches the
+BLAST schema exactly (same column names, same null semantics, contaminant
+flag in the same position) so downstream tooling does not branch on
+method.
+
 ### Configuration
 
 ```yaml
 taxonomy:
   method: "dada2"
+  contaminants:
+    - "Homo_sapiens"
   databases:
     dada2:
       all: "/path/to/dada2_all.fasta"
       species: "/path/to/dada2_species.fasta"
+      bootstrap_threshold: 80                # (default: 80)
 ```
 
 The `all` database provides ranks kingdom through genus. The `species` database adds species-level exact matching.
+
+DADA2 RDP works on both DADA2 ASVs and SWARM OTUs; the runner accepts the
+query FASTA explicitly and no longer requires a `seqtab_clean.rds` from
+the DADA2 step.
 
 ---
 
@@ -120,13 +178,21 @@ taxonomy:
 
 The `threshold` parameter (0-100) controls confidence required for assignment. Lower values assign more sequences but with less certainty.
 
+DECIPHER results are post-processed through the same shared utility as
+BLAST and DADA2 RDP, so the output schema and contaminant flag column
+are identical across all four methods.
+
 ---
 
 ## ecotag (OBITools)
 
 Uses the ecotag algorithm from OBITools (Boyer et al., 2016). Requires an NCBI-format taxonomy tree and a reference sequence database.
 
-**Note:** ecotag requires OBITools v1, which has Python 2 dependencies. Use a separate conda environment.
+**Note:** ecotag requires OBITools v1, which has Python 2 dependencies. It
+lives in its own conda env. The runner auto-discovers the binary via
+`SEEDNAP_OBITOOLS_BIN`, the active `PATH`, or a set of well-known install
+paths -- no manual `conda activate obitools` needed when running through
+seednap. Setup details: [ecotag-setup.md](ecotag-setup.md).
 
 ### Configuration
 
@@ -146,6 +212,9 @@ taxonomy:
 - Boyer, F. et al. (2016). obitools: a unix-inspired software package for DNA metabarcoding. *Molecular Ecology Resources*, 16, 176-182.
 - Callahan, B.J. et al. (2016). DADA2: High-resolution sample inference from Illumina amplicon data. *Nature Methods*, 13, 581-583.
 - Camacho, C. et al. (2009). BLAST+: architecture and applications. *BMC Bioinformatics*, 10, 421.
+- Huson, D.H. et al. (2018). MEGAN-LR: new algorithms allow accurate binning and easy interactive exploration of metagenomic long reads and contigs. *Biology Direct*, 13, 6.
 - Jeunen, G.J. et al. (2023). crabs -- A software program to generate curated reference databases. *Molecular Ecology Resources*, 23, 725-738.
 - Murali, A., Bhargava, A. & Wright, E.S. (2018). IDTAXA: a novel approach for accurate taxonomic classification of microbiome sequences. *Microbiome*, 6, 140.
+- Pappalardo, P. et al. (2025). A field-standard set of identity thresholds for eDNA metabarcoding taxonomic assignment. *Methods in Ecology and Evolution*, 16, 2380-2394.
 - Wang, Q. et al. (2007). Naive Bayesian classifier for rapid assignment of rRNA sequences. *Applied and Environmental Microbiology*, 73, 5261-5267.
+- Whitmore, K. et al. (2023). Sources of contamination in environmental DNA studies. *Nature Ecology and Evolution*, 7, 1-3.

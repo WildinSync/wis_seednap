@@ -129,6 +129,13 @@ seednap blast outputs/02_swarm/teleo/query.fasta \
   --evalue 1e-10 --threshold-species 100
 ```
 
+**Pipeline knobs not exposed on the CLI.** The full pipeline supports a
+few additional BLAST settings via YAML only: `task` (megablast/blastn),
+`threshold_order`, `threshold_class`, and `top_bitscore_pct` (MEGAN-LR
+LCA band). To use them, run via `seednap run-pipeline` with a config.
+See [configuration.md](configuration.md#taxonomy) and
+[taxonomy-methods.md](taxonomy-methods.md#blast--lca-recommended).
+
 ---
 
 ## `assign-taxonomy`
