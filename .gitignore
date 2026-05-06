@@ -31,3 +31,5 @@ htmlcov/
 mkdocs.yml
 README.md.backup
 /swarm_gdc
+
+CLAUDE.md

@@ -2,21 +2,73 @@
 
 This module provides a Python wrapper around OBITools (ecotag, obiannotate, obitab)
 for taxonomic assignment of eDNA sequences.
+
+OBITools v1 has Python 2 dependencies that conflict with Python 3 tools (Cutadapt
+5.x, etc.) so it lives in a separate conda env. The runner auto-discovers the
+env by probing common install locations; users can override via the
+`SEEDNAP_OBITOOLS_BIN` environment variable.
 """
 
 import logging
+import os
+import shutil
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, List, Optional, Union
 
 from seednap.utils.subprocess import run_subprocess
 
 logger = logging.getLogger(__name__)
 
 
+# Standard OBITools installation locations to probe when ecotag is not on PATH.
+# Order matters: we prefer the explicit override, then well-known shared envs,
+# then the user's home conda envs.
+_OBITOOLS_CANDIDATE_BINS = [
+    "/opt/anaconda3/envs/obitools/bin",
+    "/opt/conda/envs/obitools/bin",
+    str(Path.home() / "miniconda3" / "envs" / "obitools" / "bin"),
+    str(Path.home() / ".conda" / "envs" / "obitools" / "bin"),
+    str(Path.home() / "anaconda3" / "envs" / "obitools" / "bin"),
+]
+
+_REQUIRED_OBITOOLS = ("ecotag", "obiannotate", "obitab")
+
+
 class EcotagError(Exception):
     """Exception raised for ecotag command errors."""
 
     pass
+
+
+def _find_obitools_bin() -> Optional[Path]:
+    """Locate a directory containing the required OBITools binaries.
+
+    Returns the first directory that has every required tool, or None if
+    OBITools cannot be found anywhere we know to look.
+
+    Resolution order:
+        1. ``SEEDNAP_OBITOOLS_BIN`` env var (user override).
+        2. Whatever's already on PATH (so an activated obitools env wins).
+        3. The well-known install locations in :data:`_OBITOOLS_CANDIDATE_BINS`.
+    """
+    override = os.environ.get("SEEDNAP_OBITOOLS_BIN")
+    if override:
+        candidates: List[Path] = [Path(override)]
+    else:
+        candidates = []
+
+    # If everything is already on PATH, use that.
+    if all(shutil.which(t) for t in _REQUIRED_OBITOOLS):
+        # Use the directory containing the first tool as the bin dir.
+        first = shutil.which(_REQUIRED_OBITOOLS[0])
+        candidates.insert(0, Path(first).parent)
+
+    candidates.extend(Path(p) for p in _OBITOOLS_CANDIDATE_BINS)
+
+    for d in candidates:
+        if d.is_dir() and all((d / t).is_file() for t in _REQUIRED_OBITOOLS):
+            return d
+    return None
 
 
 class EcotagRunner:
@@ -29,27 +81,59 @@ class EcotagRunner:
     - obitab: Convert FASTA to TSV table
     """
 
-    def __init__(self, timeout: int = 3600):
+    def __init__(self, timeout: int = 3600, bin_dir: Optional[Union[str, Path]] = None):
         """
         Initialize ecotag runner.
 
         Args:
             timeout: Command timeout in seconds (default: 3600 = 1 hour)
+            bin_dir: Optional path to the directory containing the OBITools
+                binaries. If not provided, the runner auto-discovers from
+                PATH / SEEDNAP_OBITOOLS_BIN / well-known conda env paths.
         """
         self.timeout = timeout
-        self._check_obitools_availability()
+        self.bin_dir = self._resolve_bin_dir(bin_dir)
 
-    def _check_obitools_availability(self) -> None:
-        """
-        Check if OBITools commands are available.
+    @staticmethod
+    def _resolve_bin_dir(bin_dir: Optional[Union[str, Path]]) -> Path:
+        """Find a usable OBITools bin directory or raise with a clear message."""
+        if bin_dir is not None:
+            d = Path(bin_dir)
+            missing = [t for t in _REQUIRED_OBITOOLS if not (d / t).is_file()]
+            if missing:
+                raise EcotagError(
+                    f"OBITools bin_dir '{d}' does not contain the required "
+                    f"tools: {missing}. Found: {[t for t in _REQUIRED_OBITOOLS if (d / t).is_file()]}"
+                )
+            return d
 
-        Raises:
-            EcotagError: If OBITools is not found
-        """
-        for cmd in ["ecotag", "obiannotate", "obitab"]:
-            run_subprocess(
-                [cmd, "--version"], timeout=10, error_class=EcotagError
+        d = _find_obitools_bin()
+        if d is None:
+            probed = [
+                "$SEEDNAP_OBITOOLS_BIN (env var override)",
+                "PATH",
+                *_OBITOOLS_CANDIDATE_BINS,
+            ]
+            raise EcotagError(
+                "OBITools not found. ecotag/obiannotate/obitab were not on "
+                "PATH and none of the standard install locations contained "
+                "all three binaries.\n\n"
+                "OBITools v1 has Python 2 dependencies that conflict with the "
+                "main seednap conda env, so it must be installed in a separate "
+                "env. On the ETH ELE eDNA server it lives at "
+                "/opt/anaconda3/envs/obitools.\n\n"
+                "To use ecotag taxonomy:\n"
+                "  conda activate obitools  # before running seednap\n"
+                "or set:\n"
+                "  export SEEDNAP_OBITOOLS_BIN=/opt/anaconda3/envs/obitools/bin\n\n"
+                f"Probed locations:\n  - " + "\n  - ".join(probed)
             )
+        logger.info(f"Discovered OBITools at {d}")
+        return d
+
+    def _tool(self, name: str) -> str:
+        """Return the absolute path to an OBITools binary."""
+        return str(self.bin_dir / name)
 
     def _run_command(
         self,
@@ -116,7 +200,7 @@ class EcotagRunner:
         output_fasta.parent.mkdir(parents=True, exist_ok=True)
 
         cmd = [
-            "ecotag",
+            self._tool("ecotag"),
             "-t",
             str(taxonomy_db),
             "-R",
@@ -194,7 +278,7 @@ class EcotagRunner:
                 "tail_quality",
             ]
 
-        cmd = ["obiannotate"]
+        cmd = [self._tool("obiannotate")]
         for tag in tags_to_delete:
             cmd.extend(["--delete-tag", tag])
         cmd.append(str(input_fasta))
@@ -237,7 +321,7 @@ class EcotagRunner:
 
         output_tsv.parent.mkdir(parents=True, exist_ok=True)
 
-        cmd = ["obitab", "-o", str(input_fasta)]
+        cmd = [self._tool("obitab"), "-o", str(input_fasta)]
 
         logger.info(f"Converting {input_fasta} to table")
         stdout = self._run_command(cmd, log_file)
@@ -328,15 +412,21 @@ class EcotagRunner:
         abundance_csv: Union[str, Path],
         output_csv: Union[str, Path],
         sequence_col: str = "sequence",
+        contaminants: Optional[list] = None,
     ) -> Path:
         """
-        Link ecotag taxonomy with DADA2 abundance table.
+        Link ecotag taxonomy with DADA2/SWARM abundance table.
+
+        Delegates to the shared taxonomy post-processor so ecotag, DECIPHER,
+        DADA2 RDP, and BLAST all share the same output schema and the same
+        correctness guarantees.
 
         Args:
             taxonomy_tsv: Path to ecotag taxonomy TSV
-            abundance_csv: Path to DADA2 abundance table (seqtab_clean_t.csv)
+            abundance_csv: Path to abundance table (seqtab_clean_t.csv)
             output_csv: Path to output CSV file
             sequence_col: Name of sequence column (default: 'sequence')
+            contaminants: Optional list of species to flag as contaminants
 
         Returns:
             Path to output CSV file with merged taxonomy and abundances
@@ -349,4 +439,5 @@ class EcotagRunner:
             output_path=output_csv,
             sequence_col=sequence_col,
             taxonomy_sep="\t",
+            contaminants=contaminants,
         )

@@ -67,6 +67,7 @@ class DecipherRunner(RScriptRunner):
         marker: str,
         output_dir: Union[str, Path],
         trained_classifier_path: Union[str, Path],
+        query_fasta: Union[str, Path],
         threshold: int = 60,
         processors: int = 8,
         script_path: Optional[Union[str, Path]] = None,
@@ -75,13 +76,20 @@ class DecipherRunner(RScriptRunner):
         """
         Run DECIPHER taxonomic assignment.
 
-        Uses the IdTaxa function from DECIPHER R package to assign taxonomy
-        with confidence scores.
+        Reads sequences from a query FASTA (produced by either DADA2 ASV or
+        SWARM OTU clustering), runs the IdTaxa classifier with a confidence
+        threshold, and writes a per-sequence taxonomy CSV. The merge with
+        the abundance table is done by the Python caller via
+        `seednap.utils.taxonomy.link_taxonomy_with_abundance`.
+
+        The script is cluster-method agnostic by design -- it does not read
+        seqtab_clean.rds.
 
         Args:
-            marker: Marker name
+            marker: Marker name (used for log messages and output filenames)
             output_dir: Base output directory
-            trained_classifier_path: Path to trained DECIPHER classifier (.rds file)
+            trained_classifier_path: Path to trained DECIPHER classifier (.rds)
+            query_fasta: Path to query.fasta (sequences to assign taxonomy to)
             threshold: Minimum confidence threshold (0-100, default: 60)
             processors: Number of CPU cores to use (default: 8)
             script_path: Path to R script (default: scripts/taxo_decipher_marker.R)
@@ -89,8 +97,8 @@ class DecipherRunner(RScriptRunner):
 
         Returns:
             Dictionary with paths to output files:
-            - taxonomy: Taxonomy table CSV (with confidence scores)
-            - final_table: Complete table with taxonomy and abundances
+            - taxonomy: Per-sequence taxonomy CSV (with confidence scores)
+            - final_table: Where the merged output WILL go (Python writes it)
 
         Raises:
             DecipherError: If DECIPHER assignment fails
@@ -100,35 +108,40 @@ class DecipherRunner(RScriptRunner):
             script_path = Path("scripts/taxo_decipher_marker.R")
 
         trained_classifier_path = Path(trained_classifier_path)
+        query_fasta = Path(query_fasta)
+        output_dir = Path(output_dir)
 
         if not trained_classifier_path.exists():
             raise FileNotFoundError(
                 f"Trained classifier not found: {trained_classifier_path}"
             )
+        if not query_fasta.exists():
+            raise FileNotFoundError(f"Query FASTA not found: {query_fasta}")
 
-        # Check that sequence table exists
-        output_dir = Path(output_dir)
-        seqtab_rds = output_dir / "02_dada2" / marker / "seqtab_clean.rds"
-        if not seqtab_rds.exists():
-            raise FileNotFoundError(
-                f"Sequence table not found: {seqtab_rds}. "
-                "Run DADA2 processing first."
-            )
+        marker_dir = output_dir / "02_dada2" / marker
+        marker_dir.mkdir(parents=True, exist_ok=True)
+        taxonomy_csv = marker_dir / "taxo_assigned_decipher.csv"
 
-        logger.info(f"Running DECIPHER taxonomic assignment for {marker}")
+        logger.info(
+            f"Running DECIPHER taxonomic assignment for {marker} "
+            f"(threshold={threshold}, query={query_fasta})"
+        )
 
-        # Run R script
         self._run_r_script(
             script_path=script_path,
-            args=[marker, str(trained_classifier_path), str(threshold), str(processors), str(output_dir)],
+            args=[
+                marker,
+                str(trained_classifier_path),
+                str(query_fasta),
+                str(taxonomy_csv),
+                str(threshold),
+                str(processors),
+            ],
             log_file=log_file,
         )
 
-        # Construct output paths
-        marker_dir = output_dir / "02_dada2" / marker
-
         return {
-            "taxonomy": marker_dir / "taxo_assigned_decipher.csv",
+            "taxonomy": taxonomy_csv,
             "final_table": output_dir / f"{marker}_decipher.csv",
         }
 
@@ -138,15 +151,22 @@ class DecipherRunner(RScriptRunner):
         abundance_csv: Union[str, Path],
         output_csv: Union[str, Path],
         sequence_col: str = "sequence",
+        contaminants: Optional[list] = None,
     ) -> Path:
         """
-        Link DECIPHER taxonomy with DADA2 abundance table.
+        Link DECIPHER taxonomy with the DADA2/SWARM abundance table.
+
+        Delegates to the shared taxonomy post-processor so DECIPHER, ecotag,
+        DADA2 RDP, and BLAST all share the same output schema and the same
+        correctness guarantees (left-merge from abundance side, cascade null,
+        contaminant flagging, stable column order).
 
         Args:
             taxonomy_csv: Path to DECIPHER taxonomy CSV
-            abundance_csv: Path to DADA2 abundance table (seqtab_clean_t.csv)
+            abundance_csv: Path to abundance table (seqtab_clean_t.csv)
             output_csv: Path to output CSV file
             sequence_col: Name of sequence column (default: 'sequence')
+            contaminants: Optional list of species to flag as contaminants
 
         Returns:
             Path to output CSV file with merged taxonomy and abundances
@@ -158,4 +178,5 @@ class DecipherRunner(RScriptRunner):
             abundance_path=abundance_csv,
             output_path=output_csv,
             sequence_col=sequence_col,
+            contaminants=contaminants,
         )

@@ -72,24 +72,51 @@ dada2:
 taxonomy:
   method: "blast"  # Options: "dada2", "decipher", "ecotag", "blast"
 
+  # Marker-level contaminant list applied regardless of method.
+  # Flagged in `is_contaminant_candidate` column; never deleted from output.
+  # See Whitmore et al. 2023 (Nat. Ecol. Evol.) on human genetic bycatch.
+  contaminants:
+    - "Homo_sapiens"
+    - "Bos_taurus"
+    - "Sus_scrofa"
+    - "Canis_lupus_familiaris"
+    - "Canis_familiaris"
+    - "Felis_catus"
+    - "Mus_musculus"
+    - "Gallus_gallus"
+    - "Ovis_aries"
+
   # Database paths for each method
   databases:
-    # DADA2 taxonomic assignment
+    # DADA2 taxonomic assignment (RDP naive Bayesian classifier)
     dada2:
       all: "/home/shared/edna/reference_database/2025/teleo/CRABS_MITOFISH_MIDORI2_GB265_teleo_dada2_all.fasta"
       species: "/home/shared/edna/reference_database/2025/teleo/CRABS_MITOFISH_MIDORI2_GB265_teleo_dada2_species.fasta"
+      # RDP bootstrap threshold for short rRNA reads (Wang 2007). Below this
+      # confidence the rank is nulled and every finer rank is cascaded.
+      bootstrap_threshold: 80
 
     # BLAST + LCA taxonomic assignment
     blast:
       fasta: "/home/shared/edna/reference_database/2025/teleo/CRABS_MITOFISH_MIDORI2_GB265_teleo_blast.fasta"
+      # blastn task. 'megablast' (word_size 28) is fastest and right for short,
+      # high-identity vertebrate amplicons. Switch to 'blastn' for divergent refs.
+      task: "megablast"
       perc_identity: 80.0
       qcov_hsp_perc: 80.0
       evalue: 1.0e-10
       max_target_seqs: 10
-      # Thresholds for taxonomic rank assignment by percent identity
-      threshold_species: 100.0
+      # Cascade rank-floor thresholds (percent identity). Below threshold for rank R,
+      # R and every finer rank are nulled in the output. Defaults follow Pappalardo 2025
+      # (Methods Ecol. Evol.) common-default series with rRNA-marker family tightening.
+      threshold_species: 99.0
       threshold_genus: 96.0
-      threshold_family: 86.5
+      threshold_family: 90.0
+      threshold_order: 80.0
+      threshold_class: 70.0
+      # MEGAN-LR style LCA: include hits within this percent of the best bitscore for
+      # LCA collapse. 0 = exact ties only. Default 10.0 follows MEGAN's `topPercent`.
+      top_bitscore_pct: 10.0
 
     # Ecotag (OBITools) taxonomic assignment
     ecotag:

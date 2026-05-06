@@ -1,20 +1,20 @@
 version: "0.1.0"
 
 marker:
-  name: "mifish"
-  description: "Fish eDNA metabarcoding using MiFish-U 12S rRNA"
+  name: "mam07_dada2"
+  description: "Mammal eDNA metabarcoding using MamP007 16S rRNA"
   primers:
-    forward: "GTCGGTAAAACTCGTGCCAGC"
-    reverse: "CATAGTGGGGTATCTAATCCCAGTTTG"
-    name: "MiFish-U"
-    target: "12S rRNA"
-    amplicon_length: [140, 220]
+    forward: "CGAGAAGACCCTATGGAGCT"
+    reverse: "CCGAGGTCRCCCCAACC"
+    name: "MamP007"
+    target: "16S rRNA"
+    amplicon_length: [50, 120]
 
 paths:
-  raw_data: "/home/shared/edna/raw/fw_ar_rewild_2025/mifish/"
-  output: "outputs_test/mifish"
+  raw_data: "/home/shared/edna/raw/fw_ch_greina_2025/mam07/"
+  output: "outputs_test/mam07_dada2"
   logs: "logs"
-  references: "/home/shared/edna/reference_database/2025/mifish/"
+  references: "/home/shared/edna/reference_database/2025/mamm07/"
 
 demultiplex:
   enabled: false
@@ -40,7 +40,7 @@ swarm:
     threads: 4
   chimera:
     method: "denovo"
-  min_sequence_length: 50
+  min_sequence_length: 20
 
 dada2:
   filter:
@@ -57,7 +57,7 @@ dada2:
   multithread: true
 
 taxonomy:
-  method: "blast"
+  method: "dada2"
   contaminants:
     - "Homo_sapiens"
     - "Bos_taurus"
@@ -69,8 +69,12 @@ taxonomy:
     - "Gallus_gallus"
     - "Ovis_aries"
   databases:
+    dada2:
+      all: "/home/shared/edna/reference_database/2025/mamm07/CRABS_MIDORI2_GB265_mamm07_dada2_all.fasta"
+      species: "/home/shared/edna/reference_database/2025/mamm07/CRABS_MIDORI2_GB265_mamm07_dada2_species.fasta"
+      bootstrap_threshold: 80
     blast:
-      fasta: "/home/shared/edna/reference_database/2025/mifish/CRABS_MITOFISH_MIDORI2_GB265_mifish_blast.fasta"
+      fasta: "/home/shared/edna/reference_database/2025/mamm07/CRABS_MIDORI2_GB265_mamm07_blast.fasta"
       task: "megablast"
       perc_identity: 80.0
       qcov_hsp_perc: 80.0
@@ -106,6 +110,6 @@ logging:
 pipeline:
   steps:
     - "trim"
-    - "swarm"
+    - "dada2"
     - "taxonomy"
   skip: []

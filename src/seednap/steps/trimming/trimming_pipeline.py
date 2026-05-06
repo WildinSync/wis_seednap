@@ -246,9 +246,15 @@ class LigationTrimmer:
         forward_primer: str,
         reverse_primer: str,
         gunzip_output: bool = True,
+        max_sample_failure_rate: float = 0.5,
     ) -> Path:
         """
         Process a single ligation-based library through complete workflow.
+
+        Per-sample errors (cutadapt failure, missing tag match, etc.) are
+        collected and logged; the library aborts only if more than
+        `max_sample_failure_rate` of samples fail. This prevents one bad
+        sample from killing an entire 200-sample library.
 
         Args:
             raw_reads_dir: Directory with raw library FASTQ files
@@ -258,13 +264,15 @@ class LigationTrimmer:
             forward_primer: Forward primer sequence
             reverse_primer: Reverse primer sequence
             gunzip_output: Gunzip final output files (default: True)
+            max_sample_failure_rate: Abort if more than this fraction of samples
+                fail. Default 0.5 (50%). Set to 1.0 to never abort.
 
         Returns:
             Path to realigned output directory
 
         Raises:
             FileNotFoundError: If input files not found
-            ValueError: If metadata is invalid
+            ValueError: If metadata is invalid or too many samples fail
         """
         logger.info(f"Processing ligation library: {library_name}")
 
@@ -336,52 +344,96 @@ class LigationTrimmer:
         primer_detect_dir = output_base_dir / "00_demultiplex_ligation" / "primer_detection"
         primer_detect_dir.mkdir(parents=True, exist_ok=True)
 
+        # Track per-sample failures so one bad sample doesn't kill the library.
+        failed_samples: List[str] = []
         for sample in samples:
-            self.cutadapt.detect_primers_no_trim(
-                r1_input=demux_dir / f"{sample}.R1.fastq.gz",
-                r1_output=primer_detect_dir / f"trim_round1_{sample}.R1.fastq.gz",
-                r2_input=demux_dir / f"{sample}.R2.fastq.gz",
-                r2_output=primer_detect_dir / f"trim_round1_{sample}.R2.fastq.gz",
-                adapter_5p_r1=pattern_r1_expected,
-                adapter_5p_r2=pattern_r2_expected,
-                discard_untrimmed=True,
-            )
+            try:
+                self.cutadapt.detect_primers_no_trim(
+                    r1_input=demux_dir / f"{sample}.R1.fastq.gz",
+                    r1_output=primer_detect_dir / f"trim_round1_{sample}.R1.fastq.gz",
+                    r2_input=demux_dir / f"{sample}.R2.fastq.gz",
+                    r2_output=primer_detect_dir / f"trim_round1_{sample}.R2.fastq.gz",
+                    adapter_5p_r1=pattern_r1_expected,
+                    adapter_5p_r2=pattern_r2_expected,
+                    discard_untrimmed=True,
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Step 3 (primer detect, expected orientation) failed for "
+                    f"sample '{sample}': {e}"
+                )
+                failed_samples.append(sample)
 
         # Step 4: Detect primers in reverse orientation (round 2)
         logger.info("Step 4: Detecting primers (reverse orientation)")
         for sample in samples:
-            self.cutadapt.detect_primers_no_trim(
-                r1_input=demux_dir / f"{sample}.R1.fastq.gz",
-                r1_output=primer_detect_dir / f"trim_round2_{sample}.R1.fastq.gz",
-                r2_input=demux_dir / f"{sample}.R2.fastq.gz",
-                r2_output=primer_detect_dir / f"trim_round2_{sample}.R2.fastq.gz",
-                adapter_5p_r1=pattern_r1_reverse,
-                adapter_5p_r2=pattern_r2_reverse,
-                discard_untrimmed=True,
+            if sample in failed_samples:
+                continue  # already failed in step 3
+            try:
+                self.cutadapt.detect_primers_no_trim(
+                    r1_input=demux_dir / f"{sample}.R1.fastq.gz",
+                    r1_output=primer_detect_dir / f"trim_round2_{sample}.R1.fastq.gz",
+                    r2_input=demux_dir / f"{sample}.R2.fastq.gz",
+                    r2_output=primer_detect_dir / f"trim_round2_{sample}.R2.fastq.gz",
+                    adapter_5p_r1=pattern_r1_reverse,
+                    adapter_5p_r2=pattern_r2_reverse,
+                    discard_untrimmed=True,
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Step 4 (primer detect, reverse orientation) failed for "
+                    f"sample '{sample}': {e}"
+                )
+                failed_samples.append(sample)
+
+        # Bail out early if too many samples failed.
+        if samples and (len(failed_samples) / len(samples)) > max_sample_failure_rate:
+            raise ValueError(
+                f"Demultiplexing failed for {len(failed_samples)} of "
+                f"{len(samples)} samples ({100 * len(failed_samples) / len(samples):.0f}%) "
+                f"in library '{library_name}', exceeding the "
+                f"max_sample_failure_rate of {max_sample_failure_rate:.0%}. "
+                f"Failed samples (first 10): {failed_samples[:10]}"
             )
 
-        # Step 5: Merge and realign reads
+        # Step 5: Merge and realign reads (skip failed samples)
         logger.info("Step 5: Merging and realigning reads")
         realigned_dir = output_base_dir / "00_demultiplex_ligation" / "realigned"
         realigned_dir.mkdir(parents=True, exist_ok=True)
 
         for sample in samples:
-            # Merge R1: round1_R1 + round2_R2 (swapped!)
-            self._merge_gzip_files(
-                [
-                    primer_detect_dir / f"trim_round1_{sample}.R1.fastq.gz",
-                    primer_detect_dir / f"trim_round2_{sample}.R2.fastq.gz",
-                ],
-                realigned_dir / f"{sample}.R1.fastq.gz",
-            )
+            if sample in failed_samples:
+                continue
+            try:
+                # Merge R1: round1_R1 + round2_R2 (swapped!)
+                self._merge_gzip_files(
+                    [
+                        primer_detect_dir / f"trim_round1_{sample}.R1.fastq.gz",
+                        primer_detect_dir / f"trim_round2_{sample}.R2.fastq.gz",
+                    ],
+                    realigned_dir / f"{sample}.R1.fastq.gz",
+                )
 
-            # Merge R2: round1_R2 + round2_R1 (swapped!)
-            self._merge_gzip_files(
-                [
-                    primer_detect_dir / f"trim_round1_{sample}.R2.fastq.gz",
-                    primer_detect_dir / f"trim_round2_{sample}.R1.fastq.gz",
-                ],
-                realigned_dir / f"{sample}.R2.fastq.gz",
+                # Merge R2: round1_R2 + round2_R1 (swapped!)
+                self._merge_gzip_files(
+                    [
+                        primer_detect_dir / f"trim_round1_{sample}.R2.fastq.gz",
+                        primer_detect_dir / f"trim_round2_{sample}.R1.fastq.gz",
+                    ],
+                    realigned_dir / f"{sample}.R2.fastq.gz",
+                )
+            except Exception as e:
+                logger.warning(
+                    f"Step 5 (merge realigned) failed for sample '{sample}': {e}"
+                )
+                failed_samples.append(sample)
+
+        if failed_samples:
+            logger.warning(
+                f"Demultiplex completed with {len(failed_samples)} failed sample(s) "
+                f"out of {len(samples)} for library '{library_name}': "
+                f"{failed_samples[:10]}"
+                f"{'...' if len(failed_samples) > 10 else ''}"
             )
 
         # Step 6: Gunzip if requested

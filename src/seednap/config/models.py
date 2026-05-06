@@ -78,6 +78,19 @@ class DemultiplexConfig(StrictModel):
         default="none", description="Demultiplexing protocol type"
     )
     metadata: Optional[Path] = Field(None, description="Path to metadata CSV file")
+    # When raw inputs are already demultiplexed (one FASTQ per sample),
+    # set skip=true so the orchestrator records the step as skipped rather
+    # than running the demultiplex protocol against pre-demultiplexed data.
+    skip: bool = Field(
+        default=False,
+        description="Skip the demultiplex step (use when raw inputs are pre-demultiplexed)",
+    )
+    # If more than this fraction of samples fail during demultiplexing, abort.
+    # Otherwise log the failures and continue. Default 0.5 = abort if >50% fail.
+    max_sample_failure_rate: float = Field(
+        default=0.5, ge=0.0, le=1.0,
+        description="Abort demultiplex if more than this fraction of samples fail",
+    )
 
     @field_validator("metadata")
     @classmethod
@@ -182,6 +195,14 @@ class Dada2DatabaseConfig(StrictModel):
 
     all: Path = Field(..., description="Path to database with all taxonomic ranks")
     species: Optional[Path] = Field(None, description="Path to species-level database")
+    # Naive Bayesian classifier bootstrap threshold (Wang 2007 RDP standard).
+    # Below this confidence, the rank is nulled and every finer rank is cascaded.
+    # 80 is the published recommendation for short rRNA reads (<= 250 bp);
+    # eDNA convention generally uses 80 or higher. 50 is too permissive.
+    bootstrap_threshold: int = Field(
+        default=80, ge=0, le=100,
+        description="Minimum RDP bootstrap (%) for a rank to be retained (Wang 2007)"
+    )
 
     @field_validator("all", "species")
     @classmethod
@@ -202,10 +223,26 @@ class BlastDatabaseConfig(StrictModel):
     )
     evalue: float = Field(default=1e-25, gt=0, description="Maximum e-value")
     max_target_seqs: int = Field(default=5, ge=1, description="Maximum number of target sequences")
-    # Thresholds for filtering by taxonomic rank
-    threshold_species: float = Field(default=98.0, ge=0, le=100, description="Species-level identity threshold")
+    # blastn task. 'megablast' (word_size 28) is fastest and the right call for short,
+    # high-identity vertebrate amplicons against curated reference DBs. Switch to 'blastn'
+    # (word_size 11) for divergent references where the family/order tier of hits matters.
+    task: Literal["megablast", "blastn", "dc-megablast", "blastn-short"] = Field(
+        default="megablast", description="blastn task type"
+    )
+    # Thresholds for filtering by taxonomic rank (cascade: below threshold for rank R nulls
+    # R and all finer ranks). Defaults follow the field-standard from Pappalardo 2025
+    # (Methods Ecol. Evol. 16:2380-2394) with rRNA-marker tweaks (family raised vs eDNAFlow).
+    threshold_species: float = Field(default=99.0, ge=0, le=100, description="Species-level identity threshold")
     threshold_genus: float = Field(default=96.0, ge=0, le=100, description="Genus-level identity threshold")
-    threshold_family: float = Field(default=86.5, ge=0, le=100, description="Family-level identity threshold")
+    threshold_family: float = Field(default=90.0, ge=0, le=100, description="Family-level identity threshold")
+    threshold_order: float = Field(default=80.0, ge=0, le=100, description="Order-level identity threshold")
+    threshold_class: float = Field(default=70.0, ge=0, le=100, description="Class-level identity threshold")
+    # LCA top-bitscore band (MEGAN-LR style): hits within this percent of the best
+    # bitscore are considered together for LCA resolution. 0 = exact ties only.
+    top_bitscore_pct: float = Field(
+        default=10.0, ge=0, le=100,
+        description="LCA bitscore band as percent of best hit (MEGAN-LR topPercent default: 10.0)"
+    )
 
     @field_validator("fasta")
     @classmethod
@@ -250,6 +287,15 @@ class TaxonomicAssignmentConfig(StrictModel):
         ..., description="Taxonomic assignment method"
     )
     databases: Dict[str, Any] = Field(default_factory=dict, description="Database configurations")
+    # Marker-level contaminant list applied to whichever method is selected.
+    # Species names matched against the assigned `species` column get an
+    # `is_contaminant_candidate=True` annotation in the output. Rows are
+    # NEVER deleted; downstream decides. Use the underscore-separated CRABS
+    # format (e.g. "Homo_sapiens"). See Whitmore et al. 2023, Nat. Ecol. Evol.
+    contaminants: List[str] = Field(
+        default_factory=list,
+        description="Species to flag as candidate contaminants (CRABS underscore format)",
+    )
 
     @field_validator("databases")
     @classmethod

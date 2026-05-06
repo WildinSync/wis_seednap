@@ -58,16 +58,30 @@ dada2:
 
 taxonomy:
   method: "blast"
+  contaminants:
+    - "Homo_sapiens"
+    - "Bos_taurus"
+    - "Sus_scrofa"
+    - "Canis_lupus_familiaris"
+    - "Canis_familiaris"
+    - "Felis_catus"
+    - "Mus_musculus"
+    - "Gallus_gallus"
+    - "Ovis_aries"
   databases:
     blast:
       fasta: "/home/shared/edna/reference_database/2025/mamm07/CRABS_MIDORI2_GB265_mamm07_blast.fasta"
+      task: "megablast"
       perc_identity: 80.0
       qcov_hsp_perc: 80.0
       evalue: 1.0e-10
       max_target_seqs: 10
-      threshold_species: 100.0
+      threshold_species: 99.0
       threshold_genus: 96.0
-      threshold_family: 86.5
+      threshold_family: 90.0
+      threshold_order: 80.0
+      threshold_class: 70.0
+      top_bitscore_pct: 10.0
 
 export:
   formats:

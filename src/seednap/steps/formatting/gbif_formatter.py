@@ -119,15 +119,30 @@ class GBIFFormatter:
         Returns:
             DataFrame in long format with 'eventID' and 'nb_reads' columns
         """
-        # Get sample columns (all columns except taxonomic ones)
-        sample_cols = [col for col in df.columns if col not in taxonomic_cols]
+        # Sample columns are everything that's NOT a known non-sample column.
+        # The post-Commit-F BLAST schema includes per-OTU annotations (ASV_ID,
+        # pident, is_contaminant_candidate) that must NOT be treated as samples.
+        # We identify samples by being numeric and not in the taxonomic / annotation set.
+        non_sample_known = set(taxonomic_cols) | {
+            "ASV_ID", "pident", "is_contaminant_candidate",
+        }
+        sample_cols = [
+            col for col in df.columns
+            if col not in non_sample_known
+            and pd.api.types.is_numeric_dtype(df[col])
+        ]
 
         if len(sample_cols) == 0:
             raise ValueError("No sample columns found in input file")
 
-        # Transform to long format
+        # Carry annotation columns through the melt as id_vars so they survive
+        # to the long-format output (per-OTU info should appear on every sample row).
+        annotation_cols = [
+            c for c in ("ASV_ID", "pident", "is_contaminant_candidate") if c in df.columns
+        ]
+
         df_long = df.melt(
-            id_vars=taxonomic_cols,
+            id_vars=taxonomic_cols + annotation_cols,
             value_vars=sample_cols,
             var_name="eventID",
             value_name="nb_reads",
@@ -221,6 +236,16 @@ class GBIFFormatter:
         # Remove X column if present (R index column)
         if "X" in df.columns:
             df = df.drop(columns=["X"])
+
+        # Normalize BLAST/post-processor schema. Commits A-G produce a
+        # `Sequence` column (capital S) and use the literal string "Unassigned"
+        # for missing taxonomy. Map them back to the lowercase / NaN form the
+        # rank-determination logic expects.
+        if "Sequence" in df.columns and "sequence" not in df.columns:
+            df = df.rename(columns={"Sequence": "sequence"})
+        for col in ("kingdom", "phylum", "class", "order", "family", "genus", "species"):
+            if col in df.columns:
+                df[col] = df[col].replace("Unassigned", pd.NA)
 
         # Define taxonomic columns to keep
         taxonomic_cols = [

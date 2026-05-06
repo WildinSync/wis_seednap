@@ -11,8 +11,9 @@ Author: Théophile Sanchez (original), refactored for seednap v0.1.0
 """
 
 import logging
+import warnings
 from pathlib import Path
-from typing import Dict, Union
+from typing import Dict, List, Optional, Union
 
 import pandas as pd
 
@@ -40,12 +41,15 @@ BlastDatabaseError = BlastError
 class BlastRunner:
     """Run BLAST commands (makeblastdb, blastn) via subprocess."""
 
+    VALID_TASKS = ("megablast", "blastn", "dc-megablast", "blastn-short")
+
     def __init__(
         self,
         perc_identity: float = 80.0,
         qcov_hsp_perc: float = 80.0,
         evalue: float = 1e-25,
         max_target_seqs: int = 5,
+        task: str = "megablast",
     ):
         """
         Initialize BLAST runner with search parameters.
@@ -55,11 +59,19 @@ class BlastRunner:
             qcov_hsp_perc: Minimum query coverage per HSP (default: 80.0)
             evalue: Maximum e-value for hits (default: 1e-25)
             max_target_seqs: Maximum number of target sequences to keep (default: 5)
+            task: blastn task. 'megablast' (word_size 28) is the right default for
+                short, high-identity vertebrate amplicons; 'blastn' (word_size 11)
+                is more sensitive for divergent matches. Default: 'megablast'.
         """
+        if task not in self.VALID_TASKS:
+            raise ValueError(
+                f"Invalid blastn task '{task}'. Must be one of: {self.VALID_TASKS}"
+            )
         self.perc_identity = perc_identity
         self.qcov_hsp_perc = qcov_hsp_perc
         self.evalue = evalue
         self.max_target_seqs = max_target_seqs
+        self.task = task
 
     def check_blast_db_exists(self, fasta_path: Union[str, Path]) -> bool:
         """
@@ -136,13 +148,16 @@ class BlastRunner:
 
         logger.info(f"Running BLAST search: {query_fasta} vs {db_fasta}")
         logger.info(
-            f"Parameters: pident={self.perc_identity}, qcov={self.qcov_hsp_perc}, "
-            f"evalue={self.evalue}, max_targets={self.max_target_seqs}"
+            f"Parameters: task={self.task}, pident={self.perc_identity}, "
+            f"qcov={self.qcov_hsp_perc}, evalue={self.evalue}, "
+            f"max_targets={self.max_target_seqs}"
         )
 
         # Build blastn command
         cmd = [
             "blastn",
+            "-task",
+            self.task,
             "-query",
             str(query_fasta),
             "-db",
@@ -150,7 +165,7 @@ class BlastRunner:
             "-out",
             str(output_tsv),
             "-outfmt",
-            "6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore qseq sseq",
+            "6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore",
             "-perc_identity",
             str(self.perc_identity),
             "-qcov_hsp_perc",
@@ -217,8 +232,6 @@ class BlastOutputFormatter:
         "send",
         "evalue",
         "bitscore",
-        "qseq",
-        "sseq",
     ]
 
     TAXONOMIC_RANKS = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
@@ -279,6 +292,17 @@ class BlastOutputFormatter:
         if not blast_tsv.exists():
             raise FileNotFoundError(f"BLAST output not found: {blast_tsv}")
 
+        # Empty BLAST output -> no hits at all. Return empty DF with full schema so the
+        # downstream left-merge produces an all-Unassigned final table.
+        if blast_tsv.stat().st_size == 0:
+            logger.warning(
+                f"BLAST output {blast_tsv} is empty: no hits at all. All OTUs will be "
+                f"marked 'Unassigned'."
+            )
+            return pd.DataFrame(
+                columns=self.BLAST_COLUMNS + self.TAXONOMIC_RANKS + ["blast_rank"]
+            )
+
         # Read BLAST TSV
         df = pd.read_csv(blast_tsv, sep="\t", header=None, names=self.BLAST_COLUMNS)
 
@@ -332,13 +356,28 @@ class BlastOutputFormatter:
 
 
 class BlastPhyloFilter:
-    """Filter BLAST hits by percent identity thresholds for each taxonomic rank."""
+    """Filter BLAST hits by percent identity thresholds for each taxonomic rank.
+
+    Applies a *cascade* nulling rule: when a hit's percent identity falls below the
+    threshold for rank R, R is nulled and so are all finer ranks below R. This avoids
+    the orphan-rank problem (e.g. order populated but family/genus/species nulled
+    individually with no consistency check).
+
+    Cascade ranks (coarse -> fine): class -> order -> family -> genus -> species.
+    Kingdom and phylum are never auto-nulled by threshold; they pass through if the
+    hit cleared the absolute BLAST `perc_identity` cutoff.
+    """
+
+    # Cascade ranks, ordered coarse to fine
+    CASCADE_RANKS = ["class", "order", "family", "genus", "species"]
 
     def __init__(
         self,
         threshold_species: float = 98.0,
         threshold_genus: float = 96.0,
         threshold_family: float = 86.5,
+        threshold_order: float = 80.0,
+        threshold_class: float = 70.0,
     ):
         """
         Initialize phylogenetic filter with thresholds.
@@ -347,31 +386,44 @@ class BlastPhyloFilter:
             threshold_species: Minimum percent identity for species-level assignment
             threshold_genus: Minimum percent identity for genus-level assignment
             threshold_family: Minimum percent identity for family-level assignment
+            threshold_order: Minimum percent identity for order-level assignment
+            threshold_class: Minimum percent identity for class-level assignment
         """
         self.thresholds = {
-            "species": threshold_species,
-            "genus": threshold_genus,
+            "class": threshold_class,
+            "order": threshold_order,
             "family": threshold_family,
+            "genus": threshold_genus,
+            "species": threshold_species,
         }
 
     def filter(self, df: pd.DataFrame) -> pd.DataFrame:
         """
-        Filter phylogenetic assignments by percent identity thresholds.
+        Cascade-null phylogenetic assignments below each rank's identity threshold.
 
-        Sets taxonomic rank to None if percent identity is below threshold.
+        For rank R with threshold T, rows where pident < T have R and every finer
+        rank set to None.
 
         Args:
             df: DataFrame with 'pident' and taxonomic rank columns
 
         Returns:
-            Filtered DataFrame
+            DataFrame with cascade-nulled taxonomy
         """
         df = df.copy()
+        if len(df) == 0:
+            return df
 
-        for phylo_level, threshold in self.thresholds.items():
-            # Set to None if below threshold
-            df.loc[pd.to_numeric(df["pident"]) < float(threshold), phylo_level] = None
-
+        pident = pd.to_numeric(df["pident"], errors="coerce")
+        for rank, threshold in self.thresholds.items():
+            if rank not in self.CASCADE_RANKS:
+                continue
+            mask = pident < float(threshold)
+            if not mask.any():
+                continue
+            rank_idx = self.CASCADE_RANKS.index(rank)
+            for finer in self.CASCADE_RANKS[rank_idx:]:
+                df.loc[mask, finer] = None
         return df
 
 
@@ -381,74 +433,115 @@ class BlastPhyloFilter:
 
 
 class BlastLCAResolver:
-    """Resolve ambiguous BLAST hits using LCA (Lowest Common Ancestor)."""
+    """Resolve ambiguous BLAST hits using LCA (Lowest Common Ancestor).
+
+    Implements a MEGAN-LR-style top-bitscore band: any hit whose bitscore is within
+    `top_bitscore_pct` percent of the best bitscore for a query is considered when
+    deciding the LCA. This is more robust than collapsing only over exact bitscore
+    ties, which is brittle to near-duplicate references.
+
+    When in-band hits all agree on every taxonomic rank, the best hit is kept as-is.
+    When they disagree at any rank, a synthetic combined row is produced with the
+    disagreed ranks (and every finer rank, by cascade) set to None. The combined
+    row's pident reports the best (max) pident in the band.
+    """
 
     TAXONOMIC_RANKS = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
 
-    @staticmethod
-    def resolve_ambiguous_hits(group: pd.DataFrame) -> pd.DataFrame:
+    def __init__(self, top_bitscore_pct: float = 10.0):
         """
-        Resolve ambiguous hits with identical bitscores using LCA.
+        Initialize LCA resolver.
 
-        When multiple hits have the same bitscore, this function finds the most recent
-        common ancestor (LCA) by identifying the lowest taxonomic rank where all hits agree.
+        Args:
+            top_bitscore_pct: Hits with bitscore within this percent of the best
+                are included in LCA resolution. 0 = exact ties only. Default 10.0
+                follows MEGAN-LR's `topPercent` default.
+        """
+        if top_bitscore_pct < 0 or top_bitscore_pct > 100:
+            raise ValueError(
+                f"top_bitscore_pct must be in [0, 100]; got {top_bitscore_pct}"
+            )
+        self.top_bitscore_pct = float(top_bitscore_pct)
+
+    def resolve_ambiguous_hits(self, group: pd.DataFrame) -> pd.DataFrame:
+        """
+        Resolve ambiguous hits within the top-bitscore band using LCA.
 
         Args:
             group: DataFrame of BLAST hits for a single query sequence
 
         Returns:
-            DataFrame with ambiguous hits resolved, marked with 'keep_for_analysis' column
+            DataFrame with `keep_for_analysis` set: at most one row per query is
+            True (either a single in-band hit, the best of an agreeing in-band
+            cohort, or a synthetic LCA-combined row).
         """
-        group = group.reset_index(drop=True)
+        group = group.reset_index(drop=True).copy()
 
-        if len(group) <= 1:
-            # No ambiguity, keep the single hit
+        if len(group) == 0:
+            group["keep_for_analysis"] = False
+            return group
+        if len(group) == 1:
             group["keep_for_analysis"] = True
             return group
 
-        # Get best bitscore
-        best_bitscore = group["bitscore"].iloc[0]
+        # Bitscore band
+        bitscores = pd.to_numeric(group["bitscore"], errors="coerce")
+        best_bitscore = bitscores.max()
+        if pd.isna(best_bitscore) or best_bitscore <= 0:
+            group["keep_for_analysis"] = False
+            return group
+        threshold = best_bitscore * (1.0 - self.top_bitscore_pct / 100.0)
+        in_band_mask = bitscores >= threshold
+        ambiguous_hits = group[in_band_mask]
 
-        # Find all hits with best bitscore
-        ambiguous_hits = group[group["bitscore"] == best_bitscore].copy()
+        # Helper: keep exactly one row by label
+        def _keep_one(group_df: pd.DataFrame, keep_label: int) -> pd.DataFrame:
+            keep_mask = pd.Series(False, index=group_df.index)
+            keep_mask.loc[keep_label] = True
+            group_df["keep_for_analysis"] = keep_mask
+            return group_df
 
         if len(ambiguous_hits) <= 1:
-            # Only one hit with best score, no ambiguity
-            group["keep_for_analysis"] = group["bitscore"] == best_bitscore
-            return group
+            # No ambiguity - just keep the single in-band hit (the best one)
+            return _keep_one(group, ambiguous_hits.index[0])
 
-        # Check if all ambiguous hits have the same phylogeny
+        # Multiple in-band hits: do they all agree on every taxonomic rank?
         same_phylo = all(
-            ambiguous_hits[col][ambiguous_hits[col].notna()].nunique() < 2
-            for col in BlastLCAResolver.TAXONOMIC_RANKS
+            ambiguous_hits[col].dropna().nunique() < 2
+            for col in self.TAXONOMIC_RANKS
         )
-
         if same_phylo:
-            # All hits agree, keep first one
-            group["keep_for_analysis"] = group["bitscore"] == best_bitscore
-            return group
+            # All agree - keep the best (first/max-bitscore) ambiguous hit
+            best_idx = bitscores[in_band_mask].idxmax()
+            return _keep_one(group, best_idx)
 
-        # Phylogeny differs - perform LCA
-        # Mark all original rows as not to keep
-        group["keep_for_analysis"] = False
-
-        # Create combined row with LCA
-        combined_row_data = []
+        # Disagreement: build LCA combined row from the agreed-on columns
+        combined_row = ambiguous_hits.iloc[[0]].copy()
         for col in ambiguous_hits.columns:
-            if ambiguous_hits[col].nunique() == 1:
-                # All hits agree on this column
-                combined_row_data.append(ambiguous_hits[col].iloc[0])
-            else:
-                # Hits disagree - set to None (this is the LCA point)
-                combined_row_data.append(None)
+            non_null = ambiguous_hits[col].dropna()
+            if non_null.nunique() > 1:
+                combined_row[col] = None
+        # Best pident in the band best represents the LCA's identity score
+        combined_row["pident"] = pd.to_numeric(
+            ambiguous_hits["pident"], errors="coerce"
+        ).max()
+        combined_row["bitscore"] = best_bitscore
 
-        combined_row = pd.DataFrame([combined_row_data], columns=ambiguous_hits.columns)
+        # Cascade: if a coarse rank is None, every finer rank is also None
+        for i, rank in enumerate(self.TAXONOMIC_RANKS):
+            if combined_row[rank].isna().all():
+                for finer_rank in self.TAXONOMIC_RANKS[i + 1:]:
+                    combined_row[finer_rank] = None
+                break
+
+        group["keep_for_analysis"] = False
         combined_row["keep_for_analysis"] = True
-
-        # Append combined row
-        result = pd.concat([group, combined_row], ignore_index=True)
-
-        return result
+        # The combined row has columns set to None where in-band hits disagreed.
+        # pandas 2.x emits a FutureWarning about all-NA column concat behavior;
+        # the current behavior is what we want, so suppress the noise.
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            return pd.concat([group, combined_row], ignore_index=True)
 
 
 # ---------------------------------------------------------------------------
@@ -459,12 +552,19 @@ class BlastLCAResolver:
 class BlastTaxonomicAssigner:
     """Complete BLAST-based taxonomic assignment pipeline."""
 
+    UNASSIGNED_LABEL = "Unassigned"
+    CONTAMINANT_FLAG_COL = "is_contaminant_candidate"
+
     def __init__(
         self,
         reference_fasta: Union[str, Path],
         threshold_species: float = 98.0,
         threshold_genus: float = 96.0,
         threshold_family: float = 86.5,
+        threshold_order: float = 80.0,
+        threshold_class: float = 70.0,
+        top_bitscore_pct: float = 10.0,
+        contaminants: Optional[List[str]] = None,
     ):
         """
         Initialize BLAST taxonomic assigner.
@@ -474,10 +574,23 @@ class BlastTaxonomicAssigner:
             threshold_species: Minimum percent identity for species-level assignment
             threshold_genus: Minimum percent identity for genus-level assignment
             threshold_family: Minimum percent identity for family-level assignment
+            threshold_order: Minimum percent identity for order-level assignment
+            threshold_class: Minimum percent identity for class-level assignment
+            top_bitscore_pct: LCA bitscore band as percent of best hit
+                (MEGAN-LR style; default 10.0)
+            contaminants: List of species names (CRABS underscore format) to flag as
+                candidate contaminants. Rows are NEVER deleted; only flagged.
         """
         self.formatter = BlastOutputFormatter(reference_fasta)
-        self.filter = BlastPhyloFilter(threshold_species, threshold_genus, threshold_family)
-        self.lca_resolver = BlastLCAResolver()
+        self.filter = BlastPhyloFilter(
+            threshold_species=threshold_species,
+            threshold_genus=threshold_genus,
+            threshold_family=threshold_family,
+            threshold_order=threshold_order,
+            threshold_class=threshold_class,
+        )
+        self.lca_resolver = BlastLCAResolver(top_bitscore_pct=top_bitscore_pct)
+        self.contaminants = list(contaminants) if contaminants else []
 
     def assign_taxonomy(
         self,
@@ -491,72 +604,112 @@ class BlastTaxonomicAssigner:
 
         This function:
         1. Formats BLAST output with phylogeny from reference DB
-        2. Filters hits by percent identity thresholds
-        3. Resolves ambiguous hits using LCA
-        4. Merges with ASV count table
-        5. Outputs final table with taxonomy and abundances
+        2. Cascade-filters hits by percent identity thresholds
+        3. Resolves ambiguous hits using LCA (top-bitscore band)
+        4. LEFT-merges taxonomy onto the ASV count table so every OTU survives;
+           OTUs with no BLAST hits are explicitly marked 'Unassigned'.
+        5. Outputs final table with taxonomy, sequences, and per-sample abundances
 
         Args:
             blast_tsv: Path to BLAST output TSV file
-            asv_count_csv: Path to ASV count table CSV (samples x ASVs)
+            asv_count_csv: Path to ASV count table CSV (sequences as rows, samples as columns)
             asv_fasta: Path to ASV sequences FASTA file
             output_path: Optional path to save final table
 
         Returns:
-            DataFrame with taxonomic assignments and ASV counts
+            DataFrame with taxonomic assignments and ASV counts. The row count
+            equals the number of OTUs in the abundance table (no silent drops).
 
         Raises:
             FileNotFoundError: If input files do not exist
         """
-        # Format BLAST output
-        formatted = self.formatter.format_blast_output(blast_tsv)
+        phylo_cols = BlastLCAResolver.TAXONOMIC_RANKS
 
-        # Replace 'None' strings with actual None
+        # 1. Format BLAST output (handles empty BLAST gracefully)
+        formatted = self.formatter.format_blast_output(blast_tsv)
         formatted = formatted.replace("None", None)
 
-        # Filter by thresholds
-        filtered = self.filter.filter(formatted)
+        # 2. Cascade-filter and 3. LCA-resolve, only if we have any hits
+        if len(formatted) == 0:
+            result = pd.DataFrame(columns=["ASV_ID", "pident"] + phylo_cols)
+        else:
+            filtered = self.filter.filter(formatted)
+            filtered["keep_for_analysis"] = filtered["blast_rank"] == 1
+            filtered = (
+                filtered.groupby("qseqid", group_keys=True)
+                .apply(self.lca_resolver.resolve_ambiguous_hits, include_groups=False)
+                .reset_index(level="qseqid")
+                .reset_index(drop=True)
+            )
+            filtered = filtered[filtered["keep_for_analysis"] == True]  # noqa: E712
+            result = (
+                filtered[["qseqid", "pident"] + phylo_cols]
+                .rename(columns={"qseqid": "ASV_ID"})
+                .reset_index(drop=True)
+            )
 
-        # Keep only best hit initially
-        filtered["keep_for_analysis"] = filtered["blast_rank"] == 1
-
-        # Resolve ambiguous hits with LCA
-        # Use include_groups=False to avoid pandas 2.x dropping the group key,
-        # then restore qseqid from the index
-        filtered = (
-            filtered.groupby("qseqid", group_keys=True)
-            .apply(self.lca_resolver.resolve_ambiguous_hits, include_groups=False)
-            .reset_index(level="qseqid")
-            .reset_index(drop=True)
-        )
-
-        # Keep only resolved hits
-        filtered = filtered[filtered["keep_for_analysis"] == True]  # noqa: E712
-
-        # Select columns for output
-        phylo_cols = BlastLCAResolver.TAXONOMIC_RANKS
-        result = filtered[["qseqid", "pident"] + phylo_cols].rename(columns={"qseqid": "ASV_ID"})
-
-        # Load ASV count table (sequences as rows, samples as columns)
+        # 4. Load ASV count table (sequences as rows, samples as columns)
         asv_count = pd.read_csv(asv_count_csv, sep=",", index_col=0)
+        sample_cols = list(asv_count.columns)
 
-        # Load ASV sequences
+        # Attach ASV_ID via the FASTA
         asv_sequences = fasta_to_df(asv_fasta)
         asv_sequences = asv_sequences.rename(columns={"id": "ASV_ID", "sequence": "Sequence"})
-
-        # Merge count table with sequences to get ASV_IDs
         asv_count = pd.merge(
             asv_count, asv_sequences, how="inner", left_index=True, right_on="Sequence"
         )
 
-        # Merge taxonomy with counts
-        final_table = pd.merge(result, asv_count, how="inner", on="ASV_ID")
+        # Diagnostic: how many OTUs got no BLAST hits at all?
+        otus_with_hits = set(result["ASV_ID"].dropna().unique()) if len(result) > 0 else set()
+        n_unassigned = (~asv_count["ASV_ID"].isin(otus_with_hits)).sum()
+        if n_unassigned > 0:
+            logger.warning(
+                f"{n_unassigned} of {len(asv_count)} OTUs had no BLAST hits and "
+                f"will be marked '{self.UNASSIGNED_LABEL}' in the output."
+            )
 
-        # Sort by ASV number
-        final_table["asv_num"] = final_table["ASV_ID"].str.extract(r"(\d+)").astype(int)
-        final_table = final_table.sort_values("asv_num").drop(columns="asv_num")
+        # 5. LEFT-merge so every OTU in the abundance table reaches the output.
+        # Without this, OTUs without BLAST hits were silently dropped.
+        final_table = pd.merge(asv_count, result, how="left", on="ASV_ID")
 
-        # Save if output path provided
+        # Fill missing taxonomy with 'Unassigned' (rank columns only). pident stays NaN
+        # for genuine no-hit rows so downstream can distinguish them.
+        for rank in phylo_cols:
+            final_table[rank] = final_table[rank].fillna(self.UNASSIGNED_LABEL)
+
+        # Flag candidate contaminants by species match. Never delete rows.
+        if self.contaminants:
+            contam_set = set(self.contaminants)
+            is_contam = final_table["species"].astype(str).isin(contam_set)
+            final_table[self.CONTAMINANT_FLAG_COL] = is_contam
+            n_flagged = int(is_contam.sum())
+            if n_flagged > 0:
+                breakdown = (
+                    final_table.loc[is_contam, "species"].value_counts().to_dict()
+                )
+                logger.warning(
+                    f"Flagged {n_flagged} OTUs as candidate contaminants "
+                    f"(by species match): {breakdown}"
+                )
+        else:
+            final_table[self.CONTAMINANT_FLAG_COL] = False
+
+        # Sort by ASV number for deterministic output
+        final_table["asv_num"] = (
+            final_table["ASV_ID"].astype(str).str.extract(r"(\d+)").astype("Int64")
+        )
+        final_table = final_table.sort_values("asv_num").drop(columns="asv_num").reset_index(
+            drop=True
+        )
+
+        # Stable column order: ASV_ID, pident, taxonomy, contaminant flag, samples, Sequence
+        ordered = (
+            ["ASV_ID", "pident"] + phylo_cols + [self.CONTAMINANT_FLAG_COL]
+            + sample_cols + ["Sequence"]
+        )
+        final_table = final_table[[c for c in ordered if c in final_table.columns]]
+
+        # Save if requested
         if output_path:
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)

@@ -1,77 +1,108 @@
-# Taxo using dada2
+# DECIPHER IdTaxa taxonomic assignment.
+#
+# Reads sequences from a FASTA file (query.fasta) so the script is
+# cluster-method agnostic: it works after either DADA2 ASV or SWARM OTU
+# clustering. Writes a per-sequence taxonomy CSV; the merge with the
+# abundance table is performed on the Python side via
+# seednap.utils.taxonomy.link_taxonomy_with_abundance so the output schema
+# matches every other taxonomy method.
 
-# Libs
-library(dada2); packageVersion("dada2")
-library(Biostrings)
-library(dplyr)
-library(DECIPHER)
+suppressMessages(suppressWarnings({
+  library(Biostrings)
+  library(DECIPHER)
+}))
 
-## FUNCTIONS
-
-# Decipher output unpractical file format, change it back to dataframe
-decipher_list_to_df <- function(file, confidence = FALSE){
-  
-  require(tidyverse)
-  file_df <- bind_rows(lapply(file, function(x){dplyr::as_data_frame(x)}), .id = "seq_uniq") %>% 
-    select(-confidence) %>% 
-    pivot_wider(names_from = rank, values_from = taxon, values_fn = list) %>% 
-    as.data.frame() %>% 
-    # remove column lists 
-    transmute_all(~sapply(., toString, sep=";"))
-  
-  if(confidence == TRUE){
-    
-    file_df_confidence <- bind_rows(lapply(file, function(x){dplyr::as_data_frame(x)}), .id = "seq_uniq") %>% 
-      select(-taxon) %>% 
-      pivot_wider(names_from = rank, values_from = confidence, names_prefix = "confidence_", values_fn = list) %>% 
-      as.data.frame() %>% 
-      # remove column lists 
-      transmute_all(~sapply(., toString, sep=";"))# %>% 
-      #mutate(seq_uniq = as.numeric(seq_uniq))%>%
-      #arrange(seq_uniq)
-    
-    file_df <- merge(file_df, file_df_confidence) 
-  }
-  return(file_df)
+# Convert IdTaxa's nested list output into a flat DataFrame with one row
+# per query sequence and columns kingdom..species (+ optional confidence).
+decipher_list_to_df <- function(ids, taxonomic_ranks, confidence = FALSE) {
+  rows <- lapply(seq_along(ids), function(i) {
+    rec <- ids[[i]]
+    out <- as.list(setNames(rep(NA_character_, length(taxonomic_ranks)), taxonomic_ranks))
+    if (confidence) {
+      conf_cols <- paste0("confidence_", taxonomic_ranks)
+      out_conf <- as.list(setNames(rep(NA_real_, length(taxonomic_ranks)), conf_cols))
+      out <- c(out, out_conf)
+    }
+    if (length(rec$taxon) == 0 || length(rec$rank) == 0) return(as.data.frame(out, stringsAsFactors = FALSE))
+    for (j in seq_along(rec$rank)) {
+      r <- tolower(rec$rank[j])
+      if (r %in% taxonomic_ranks) {
+        out[[r]] <- as.character(rec$taxon[j])
+        if (confidence) {
+          out[[paste0("confidence_", r)]] <- as.numeric(rec$confidence[j])
+        }
+      }
+    }
+    as.data.frame(out, stringsAsFactors = FALSE)
+  })
+  do.call(rbind, rows)
 }
-## END OF FUNCTIONS
 
-# Get the arguments
 args <- commandArgs(T)
 
-if (length(args) < 2) {
-  stop("Please provide marker and trained classifier path arguments.")
+if (length(args) < 4) {
+  stop(paste(
+    "Required args (in order):",
+    "  marker, trained_classifier, query_fasta, taxonomy_output_csv,",
+    "  [threshold (default 60)], [processors (default 8)]"
+  ))
 }
 
-marker <- tolower(args[1]) # Must be character
-path_decipher_trained <- args[2] # Must be character
-threshold <- if (length(args) >= 3) as.integer(args[3]) else 60
-processors <- if (length(args) >= 4) as.integer(args[4]) else 8
-output_dir <- if (length(args) >= 5) args[5] else "outputs"
+marker <- tolower(args[1])
+path_decipher_trained <- args[2]
+query_fasta <- args[3]
+output_csv <- args[4]
+threshold <- if (length(args) >= 5) as.integer(args[5]) else 60
+processors <- if (length(args) >= 6) as.integer(args[6]) else 8
 
-# Debug
-# marker <- "teleo"
-# path_decipher_trained <- "utils/teleo_trained.rds"
+cat(paste0(
+  "marker=", marker,
+  " | trained_classifier=", path_decipher_trained,
+  " | query=", query_fasta,
+  " | threshold=", threshold,
+  "\n"
+))
 
-# Open seqtab - abundance table output of dada2
-seqtab <- readRDS(file.path(output_dir, "02_dada2", marker, "seqtab_clean.rds"))
+if (!file.exists(query_fasta)) {
+  stop(paste("Query FASTA not found:", query_fasta))
+}
+if (!file.exists(path_decipher_trained)) {
+  stop(paste("Trained DECIPHER classifier not found:", path_decipher_trained))
+}
 
-dna <- DNAStringSet(getSequences(as.matrix(seqtab))) # Create a DNAStringSet from the ASVs
-dna@ranges@NAMES <- colnames(seqtab)
+dna <- readDNAStringSet(query_fasta)
+if (length(dna) == 0) {
+  stop(paste("Query FASTA has zero sequences:", query_fasta))
+}
+cat(paste("Loaded", length(dna), "sequences from query.fasta\n"))
+
 trainingset <- readRDS(path_decipher_trained)
-ids <- IdTaxa(dna, trainingset, strand="both", processors=processors, verbose=TRUE, threshold=threshold) # use configured processors/threshold
-ids_df <- decipher_list_to_df(ids, confidence = TRUE)
-colnames(ids_df)[1] <- "sequence"
- 
-write.csv(ids_df, file.path(output_dir, "02_dada2", marker, "taxo_assigned_decipher.csv"), row.names= FALSE)
+ids <- IdTaxa(
+  dna, trainingset,
+  strand = "both",
+  processors = processors,
+  verbose = TRUE,
+  threshold = threshold
+)
 
-# Now link it to abundance table
-# Open data 
-samples <- read.csv(file.path(output_dir, "02_dada2", marker, "seqtab_clean_t.csv"))
-colnames(samples)[1] <- "sequence"
+taxonomic_ranks <- c("kingdom", "phylum", "class", "order", "family", "genus", "species")
+ids_df <- decipher_list_to_df(ids, taxonomic_ranks, confidence = TRUE)
 
-# Now link 
-decipher_taxo_complete <- dplyr::left_join(ids_df, samples) 
+# Attach the actual sequence (one row per sequence in input order)
+ids_df$sequence <- as.character(dna)
 
-# Now write the output
-write.csv(decipher_taxo_complete, file.path(output_dir, paste0(marker, "_decipher.csv")), row.names=TRUE)
+# Reorder: sequence first, then ranks, then confidence columns
+conf_cols <- paste0("confidence_", taxonomic_ranks)
+out_cols <- c("sequence", taxonomic_ranks, conf_cols)
+ids_df <- ids_df[, out_cols]
+
+# Ensure output directory exists
+dir.create(dirname(output_csv), recursive = TRUE, showWarnings = FALSE)
+
+write.csv(ids_df, output_csv, row.names = FALSE)
+cat(paste("Wrote per-sequence taxonomy to", output_csv, "\n"))
+
+# Note: the merge with the abundance table is performed on the Python side via
+# seednap.utils.taxonomy.link_taxonomy_with_abundance so it goes through the
+# same correctness pass as every other taxonomy method (LEFT-merge from
+# abundance, cascade null, contaminant flag, BLAST-compatible schema).

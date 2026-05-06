@@ -1,5 +1,6 @@
 """Build DarwinCore-compliant GBIF occurrence CSVs from eDNA pipeline outputs."""
 
+import hashlib
 import logging
 import re
 from importlib import resources
@@ -13,12 +14,26 @@ from seednap.steps.formatting.taxonomy_enricher import TaxonomyEnricher
 
 logger = logging.getLogger(__name__)
 
-# ENVO environment medium mapping
+# ENVO environment medium mapping. Add new terms here -- unrecognised values
+# now raise (G3) instead of silently defaulting to water.
 _ENVO_TERMS = {
     "water": "liquid water [ENVO_00002006]",
     "soil": "soil [ENVO:00001998]",
     "river": "liquid water [ENVO_00002006]",
+    "marine": "sea water [ENVO_00002149]",
+    "sediment": "sediment [ENVO_00002007]",
 }
+
+# Required GBIF DwC eDNA-Occurrence fields. Empty values fail G1 validation.
+_DWC_REQUIRED_FIELDS = (
+    "occurrenceID",
+    "eventID",
+    "basisOfRecord",
+    "target_gene",
+    "pcr_primer_forward",
+    "pcr_primer_reverse",
+    "otu_db",
+)
 
 
 def _load_template(filename: str) -> pd.DataFrame:
@@ -88,6 +103,10 @@ class DarwinCoreBuilder:
         if "volume" in sample_meta.columns:
             sample_meta = sample_meta.rename(columns={"volume": "samp_size"})
 
+        # G3: validate input metadata BEFORE doing any work
+        self._validate_sample_metadata(sample_meta)
+        self._validate_project_metadata(project_meta)
+
         # PCR replicate summarisation
         if self.summarise_pcr_replicates:
             results = self._summarise_pcr_replicates(results)
@@ -102,18 +121,34 @@ class DarwinCoreBuilder:
         # Load bundled templates
         primers = _load_template("primers_list.csv")
 
-        # Marker info
-        marker = project_meta["marker"].iloc[0]
-        info_marker = primers[primers["name"] == marker]
+        # Marker info -- G1: hard-fail if missing rather than silently writing
+        # blank target_gene / primer columns into the GBIF submission. Match
+        # case-insensitively so "Teleo" matches "teleo" in the primers list.
+        marker = str(project_meta["marker"].iloc[0])
+        info_marker = primers[primers["name"].str.lower() == marker.lower()]
         if info_marker.empty:
-            logger.warning(f"Marker '{marker}' not found in primers list")
+            available = sorted(primers["name"].unique().tolist())
+            raise ValueError(
+                f"Marker '{marker}' not found in primers_list.csv. "
+                f"GBIF submission requires target_gene and primer info; "
+                f"please add an entry for this marker. "
+                f"Available markers: {available}"
+            )
+
+        # G2: surface contaminant flags before any filtering so they survive to output.
+        if "is_contaminant_candidate" in results.columns:
+            n_contam = int(results["is_contaminant_candidate"].sum())
+            if n_contam > 0:
+                logger.info(
+                    f"{n_contam} OTU rows are flagged as contaminant candidates "
+                    f"(propagated to GBIF output as `contamination_flag`)"
+                )
 
         # Filter non-target taxa
         results = NonTargetFilter().filter(results, marker)
 
-        # Sum reads per eventID and create taxon_seqindex
+        # Sum reads per eventID
         results = self._sum_reads(results)
-        results = self._create_taxon_seqindex(results)
 
         # Map env_medium to ENVO terms
         sample_meta["env_medium_envo"] = sample_meta["env_medium"].map(
@@ -126,8 +161,10 @@ class DarwinCoreBuilder:
         # Add project-level fields
         merged["recordedby"] = project_meta["recordedby"].iloc[0]
 
-        # Create occurrenceID
-        merged["occurrenceID"] = self._create_occurrence_id(merged)
+        # G5: stable occurrenceID = marker:eventID:sha256(sequence)[:8]
+        # Independent of run order and unique by sequence content. The previous
+        # scheme used a per-run taxon_seqindex which broke GBIF dataset versioning.
+        merged["occurrenceID"] = self._create_occurrence_id(merged, marker)
 
         # Protocol (optional column)
         protocol = ""
@@ -216,6 +253,15 @@ class DarwinCoreBuilder:
             "chimera_check", pd.Series([""])
         ).iloc[0]
 
+        # G2: propagate contamination flag from upstream taxonomy to GBIF output.
+        if "is_contaminant_candidate" in merged.columns:
+            out["contamination_flag"] = merged["is_contaminant_candidate"].fillna(False).astype(bool)
+        else:
+            out["contamination_flag"] = False
+
+        # G1: validate required DwC fields are populated BEFORE writing.
+        self._check_required_fields(out)
+
         # Write output
         self.output_path.parent.mkdir(parents=True, exist_ok=True)
         out.to_csv(self.output_path, index=False)
@@ -283,42 +329,119 @@ class DarwinCoreBuilder:
         return df
 
     @staticmethod
-    def _create_taxon_seqindex(df: pd.DataFrame) -> pd.DataFrame:
-        """Add taxon_seqindex column — unique index per sequence within each taxon."""
-        df = df.copy()
-        df["taxon_seqindex"] = df.groupby("taxon")["sequence"].transform(
-            lambda s: [f"{s.name}-{i + 1}" for i in pd.factorize(s)[0]]
-        )
-        return df
+    def _create_occurrence_id(df: pd.DataFrame, marker: str) -> pd.Series:
+        """Build a stable occurrenceID: marker:eventID:sha256(sequence)[:8].
 
-    @staticmethod
-    def _create_occurrence_id(df: pd.DataFrame) -> pd.Series:
-        """Build occurrenceID: eventID:class;order;family;genus;species;taxon_seqindex."""
+        The hash makes the ID deterministic across re-runs of the same data
+        (G5 fix). The previous scheme used a per-run `taxon_seqindex` which
+        meant resubmitting the same dataset to GBIF created new occurrences
+        instead of replacing the old ones.
+        """
+        seq = df.get("sequence", pd.Series("", index=df.index))
+        seq_hash = seq.fillna("").astype(str).apply(
+            lambda s: hashlib.sha256(s.upper().encode("ascii")).hexdigest()[:8]
+            if s
+            else "NOSEQ"
+        )
         return (
-            df["eventID"].astype(str)
-            + ":"
-            + df.get("class", pd.Series("", index=df.index)).fillna("").astype(str)
-            + ";"
-            + df.get("order", pd.Series("", index=df.index)).fillna("").astype(str)
-            + ";"
-            + df.get("family", pd.Series("", index=df.index)).fillna("").astype(str)
-            + ";"
-            + df.get("genus", pd.Series("", index=df.index)).fillna("").astype(str)
-            + ";"
-            + df.get("species", pd.Series("", index=df.index)).fillna("").astype(str)
-            + ";"
-            + df.get("taxon_seqindex", pd.Series("", index=df.index))
-            .fillna("")
-            .astype(str)
+            f"{marker}:" + df["eventID"].astype(str) + ":" + seq_hash
         )
 
     @staticmethod
     def _map_env_medium(term: str) -> str:
-        """Convert environment medium term to ENVO standard."""
+        """Convert environment medium term to ENVO standard.
+
+        Unrecognised values raise (G3). Previously they silently defaulted to
+        'water', which silently mislabelled terrestrial samples in GBIF.
+        """
         if pd.isna(term):
             return ""
-        result = _ENVO_TERMS.get(str(term).lower())
+        key = str(term).lower()
+        result = _ENVO_TERMS.get(key)
         if result is None:
-            logger.warning(f"Unknown env_medium '{term}' — defaulting to water")
-            return _ENVO_TERMS["water"]
+            raise ValueError(
+                f"Unknown env_medium '{term}'. Recognised values: "
+                f"{sorted(_ENVO_TERMS.keys())}. Add a mapping in "
+                f"darwincore_builder._ENVO_TERMS if you need a new one."
+            )
         return result
+
+    # ------------------------------------------------------------------
+    # G3: input metadata validation
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _validate_sample_metadata(sample_meta: pd.DataFrame) -> None:
+        """Sanity-check sample metadata before merging.
+
+        Raises ValueError on out-of-range coordinates or unknown env_medium.
+        """
+        required = ("eventID", "eventDate")
+        missing = [c for c in required if c not in sample_meta.columns]
+        if missing:
+            raise ValueError(
+                f"Sample metadata missing required columns: {missing}"
+            )
+
+        # Latitude / longitude range checks
+        if "decimalLatitude" in sample_meta.columns:
+            lat = pd.to_numeric(sample_meta["decimalLatitude"], errors="coerce")
+            bad_lat = lat[(lat < -90) | (lat > 90)]
+            if len(bad_lat) > 0:
+                raise ValueError(
+                    f"Invalid decimalLatitude (must be in [-90, 90]): "
+                    f"{bad_lat.tolist()}"
+                )
+        if "decimalLongitude" in sample_meta.columns:
+            lon = pd.to_numeric(sample_meta["decimalLongitude"], errors="coerce")
+            bad_lon = lon[(lon < -180) | (lon > 180)]
+            if len(bad_lon) > 0:
+                raise ValueError(
+                    f"Invalid decimalLongitude (must be in [-180, 180]): "
+                    f"{bad_lon.tolist()}"
+                )
+
+        # env_medium values must all map to known ENVO terms (or be NaN)
+        if "env_medium" in sample_meta.columns:
+            non_null = sample_meta["env_medium"].dropna().astype(str).str.lower().unique()
+            unknown = [v for v in non_null if v not in _ENVO_TERMS]
+            if unknown:
+                raise ValueError(
+                    f"Unknown env_medium values in sample metadata: {unknown}. "
+                    f"Recognised values: {sorted(_ENVO_TERMS.keys())}."
+                )
+
+    @staticmethod
+    def _validate_project_metadata(project_meta: pd.DataFrame) -> None:
+        """Sanity-check project metadata before building the GBIF output."""
+        required = ("marker", "recordedby", "identificationRemarks", "identificationReferences")
+        missing = [c for c in required if c not in project_meta.columns]
+        if missing:
+            raise ValueError(
+                f"Project metadata missing required columns: {missing}"
+            )
+        empty = [
+            c for c in required
+            if project_meta[c].iloc[0] in ("", None) or pd.isna(project_meta[c].iloc[0])
+        ]
+        if empty:
+            raise ValueError(
+                f"Project metadata fields are empty (required for GBIF): {empty}"
+            )
+
+    @staticmethod
+    def _check_required_fields(out: pd.DataFrame) -> None:
+        """Verify every DwC-required column has data before writing (G1)."""
+        empty_fields = []
+        for col in _DWC_REQUIRED_FIELDS:
+            if col not in out.columns:
+                empty_fields.append(col)
+                continue
+            series = out[col].astype(str)
+            if (series == "").all() or series.isna().all():
+                empty_fields.append(col)
+        if empty_fields:
+            raise ValueError(
+                f"GBIF output is missing required DarwinCore fields "
+                f"(all rows empty): {empty_fields}"
+            )

@@ -117,10 +117,15 @@ class TaxonomicAssigner:
         threshold_species: float = 98.0,
         threshold_genus: float = 96.0,
         threshold_family: float = 86.5,
+        threshold_order: float = 80.0,
+        threshold_class: float = 70.0,
+        top_bitscore_pct: float = 10.0,
+        contaminants: Optional[list] = None,
         perc_identity: float = 80.0,
         qcov_hsp_perc: float = 80.0,
         evalue: float = 1e-25,
         max_target_seqs: int = 5,
+        task: str = "megablast",
         **kwargs,
     ) -> Dict[str, Path]:
         """
@@ -133,6 +138,9 @@ class TaxonomicAssigner:
             threshold_species: Percent identity threshold for species (default: 98.0)
             threshold_genus: Percent identity threshold for genus (default: 96.0)
             threshold_family: Percent identity threshold for family (default: 86.5)
+            threshold_order: Percent identity threshold for order (default: 80.0)
+            threshold_class: Percent identity threshold for class (default: 70.0)
+            top_bitscore_pct: LCA bitscore band as percent of best (default: 10.0)
             perc_identity: Minimum percent identity for BLAST hits (default: 80.0)
             qcov_hsp_perc: Minimum query coverage per HSP (default: 80.0)
             evalue: Maximum e-value for BLAST hits (default: 1e-25)
@@ -154,6 +162,7 @@ class TaxonomicAssigner:
             qcov_hsp_perc=qcov_hsp_perc,
             evalue=evalue,
             max_target_seqs=max_target_seqs,
+            task=task,
         )
         if not runner.check_blast_db_exists(reference_fasta):
             logger.info("Creating BLAST database...")
@@ -173,6 +182,10 @@ class TaxonomicAssigner:
             threshold_species=threshold_species,
             threshold_genus=threshold_genus,
             threshold_family=threshold_family,
+            threshold_order=threshold_order,
+            threshold_class=threshold_class,
+            top_bitscore_pct=top_bitscore_pct,
+            contaminants=contaminants,
         )
 
         final_output = self.output_dir / f"{self.marker}_blast.csv"
@@ -197,6 +210,8 @@ class TaxonomicAssigner:
         rdp_db_path: Optional[Union[str, Path]] = None,
         species_db_path: Optional[Union[str, Path]] = None,
         multithread: bool = True,
+        bootstrap_threshold: int = 80,
+        contaminants: Optional[list] = None,
         **kwargs,
     ) -> Dict[str, Path]:
         """
@@ -219,6 +234,7 @@ class TaxonomicAssigner:
             raise ValueError("rdp_db_path and species_db_path are required for DADA2 method")
 
         from seednap.steps.taxonomic_assignment.dada2_taxonomy_runner import Dada2TaxonomyRunner
+        from seednap.utils.taxonomy import link_taxonomy_with_abundance
 
         runner = Dada2TaxonomyRunner()
         outputs = runner.run_dada2_taxonomy(
@@ -226,7 +242,22 @@ class TaxonomicAssigner:
             output_dir=self.output_dir,
             rdp_db_path=rdp_db_path,
             species_db_path=species_db_path,
+            query_fasta=query_fasta,
             multithread=multithread,
+            bootstrap_threshold=bootstrap_threshold,
+        )
+
+        # Merge per-sequence taxonomy with the abundance table via the shared
+        # post-processor (LEFT-merge, cascade null already done in R, contaminant
+        # flag, BLAST-compatible schema). The R script writes `bootstrap_min`
+        # which we expose as `pident` for schema parity with BLAST.
+        link_taxonomy_with_abundance(
+            taxonomy_path=outputs["taxonomy"],
+            abundance_path=asv_count_csv,
+            output_path=outputs["final_table"],
+            sequence_col="sequence",
+            contaminants=contaminants,
+            pident_col="bootstrap_min",
         )
 
         logger.info(f"DADA2 assignment completed: {outputs['final_table']}")
@@ -239,6 +270,7 @@ class TaxonomicAssigner:
         asv_count_csv: Path,
         taxonomy_db: Optional[Union[str, Path]] = None,
         reference_db: Optional[Union[str, Path]] = None,
+        contaminants: Optional[list] = None,
         **kwargs,
     ) -> Dict[str, Path]:
         """
@@ -249,6 +281,7 @@ class TaxonomicAssigner:
             asv_count_csv: ASV count table
             taxonomy_db: Path to taxonomy database (NCBI format, required)
             reference_db: Path to reference sequence database (required)
+            contaminants: Optional list of species to flag as contaminants
 
         Returns:
             Dictionary with 'taxonomy_tsv' and 'final_table' keys
@@ -270,12 +303,14 @@ class TaxonomicAssigner:
             marker=self.marker,
         )
 
-        # Link with abundance table
+        # Link with abundance table via the shared post-processor
+        # (LEFT-merge, cascade null, contaminant flag, BLAST-compatible schema)
         complete_output = self.output_dir / f"{self.marker}_ecotag.csv"
         runner.link_with_abundance_table(
             taxonomy_tsv=outputs["taxonomy_tsv"],
             abundance_csv=asv_count_csv,
             output_csv=complete_output,
+            contaminants=contaminants,
         )
 
         outputs["final_table"] = complete_output
@@ -291,6 +326,7 @@ class TaxonomicAssigner:
         trained_classifier_path: Optional[Union[str, Path]] = None,
         threshold: int = 60,
         processors: int = 8,
+        contaminants: Optional[list] = None,
         **kwargs,
     ) -> Dict[str, Path]:
         """
@@ -302,6 +338,7 @@ class TaxonomicAssigner:
             trained_classifier_path: Path to trained DECIPHER classifier (.rds, required)
             threshold: Confidence threshold (0-100, default: 60)
             processors: Number of CPU cores (default: 8)
+            contaminants: Optional list of species to flag as contaminants
 
         Returns:
             Dictionary with 'taxonomy' and 'final_table' keys
@@ -318,8 +355,19 @@ class TaxonomicAssigner:
             marker=self.marker,
             output_dir=self.output_dir,
             trained_classifier_path=trained_classifier_path,
+            query_fasta=query_fasta,
             threshold=threshold,
             processors=processors,
+        )
+
+        # The R script writes only the per-sequence taxonomy CSV; do the merge
+        # with the abundance table in Python via the shared post-processor so
+        # we get LEFT-merge + cascade-null + contaminant flag + BLAST schema.
+        runner.link_with_abundance_table(
+            taxonomy_csv=outputs["taxonomy"],
+            abundance_csv=asv_count_csv,
+            output_csv=outputs["final_table"],
+            contaminants=contaminants,
         )
 
         logger.info(f"DECIPHER assignment completed: {outputs['final_table']}")

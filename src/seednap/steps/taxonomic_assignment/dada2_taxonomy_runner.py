@@ -44,71 +44,91 @@ class Dada2TaxonomyRunner(RScriptRunner):
         output_dir: Union[str, Path],
         rdp_db_path: Union[str, Path],
         species_db_path: Union[str, Path],
+        query_fasta: Union[str, Path],
         multithread: bool = True,
+        bootstrap_threshold: int = 80,
         script_path: Optional[Union[str, Path]] = None,
         log_file: Optional[Union[str, Path]] = None,
     ) -> Dict[str, Path]:
         """
         Run DADA2 taxonomic assignment.
 
-        Uses DADA2's naive Bayesian classifier with RDP training set.
+        Reads sequences from a query FASTA (produced by either DADA2 ASV or
+        SWARM OTU clustering), applies the RDP naive Bayesian classifier
+        with a Wang 2007 bootstrap threshold (default 80%), cascade-nulls
+        finer ranks below the threshold, and writes a per-sequence taxonomy
+        CSV. The merge with the abundance table is done by the Python
+        caller via `seednap.utils.taxonomy.link_taxonomy_with_abundance`.
+
+        The script is cluster-method agnostic by design -- it does not read
+        seqtab_clean.rds and does not assume a particular output directory
+        layout. Pass the query FASTA explicitly.
 
         Args:
-            marker: Marker name
-            output_dir: Base output directory
-            rdp_db_path: Path to RDP-formatted database (genus-level)
-            species_db_path: Path to species-level database
+            marker: Marker name (used for log messages and output filename)
+            output_dir: Base output directory; the per-sequence taxonomy CSV
+                is written under output_dir/02_dada2/{marker}/ for backward
+                compatibility, and the merged final_table goes to
+                output_dir/{marker}_dada2RDP.csv.
+            rdp_db_path: Path to RDP-formatted database (kingdom..genus)
+            species_db_path: Path to species-level database (exact match)
+            query_fasta: Path to query.fasta (sequences to assign taxonomy to)
             multithread: Use multithreading (default: True)
+            bootstrap_threshold: Min bootstrap (%) for a rank to be retained
+                (default 80, per Wang 2007 RDP standard for short rRNA reads)
             script_path: Path to R script (default: scripts/taxo_dada2_marker.R)
             log_file: Path to log file
 
         Returns:
             Dictionary with paths to output files:
-            - taxonomy: Taxonomy table CSV
-            - final_table: Complete table with taxonomy and abundances
+            - taxonomy: Taxonomy table CSV (per-sequence, no abundances)
+            - final_table: Where the merged output WILL go (Python writes it)
 
         Raises:
             Dada2TaxonomyError: If taxonomy assignment fails
+            FileNotFoundError: If any input file is missing
         """
         if script_path is None:
             script_path = Path("scripts/taxo_dada2_marker.R")
 
         rdp_db_path = Path(rdp_db_path)
         species_db_path = Path(species_db_path)
+        query_fasta = Path(query_fasta)
+        output_dir = Path(output_dir)
 
         if not rdp_db_path.exists():
             raise FileNotFoundError(f"RDP database not found: {rdp_db_path}")
         if not species_db_path.exists():
             raise FileNotFoundError(f"Species database not found: {species_db_path}")
+        if not query_fasta.exists():
+            raise FileNotFoundError(f"Query FASTA not found: {query_fasta}")
 
-        # Check that sequence table exists
-        output_dir = Path(output_dir)
-        seqtab_rds = output_dir / "02_dada2" / marker / "seqtab_clean.rds"
-        if not seqtab_rds.exists():
-            raise FileNotFoundError(
-                f"Sequence table not found: {seqtab_rds}. "
-                "Run DADA2 processing first."
-            )
+        # The R script writes per-sequence taxonomy here; Python does the
+        # merge into final_table.
+        marker_dir = output_dir / "02_dada2" / marker
+        marker_dir.mkdir(parents=True, exist_ok=True)
+        taxonomy_csv = marker_dir / "taxonomy_dada2RDP.csv"
 
-        logger.info(f"Running DADA2 taxonomic assignment for {marker}")
+        logger.info(
+            f"Running DADA2 taxonomic assignment for {marker} "
+            f"(bootstrap_threshold={bootstrap_threshold}%, query={query_fasta})"
+        )
 
-        # Run taxonomy assignment
         self._run_r_script(
             script_path=script_path,
             args=[
                 marker,
                 str(rdp_db_path),
                 str(species_db_path),
-                str(output_dir),
+                str(query_fasta),
+                str(taxonomy_csv),
                 str(multithread).upper(),
+                str(bootstrap_threshold),
             ],
             log_file=log_file,
         )
 
-        # Construct output paths
-        marker_dir = output_dir / "02_dada2" / marker
-
         return {
-            "taxonomy": marker_dir / "taxonomy_dada2RDP.csv",
+            "taxonomy": taxonomy_csv,
             "final_table": output_dir / f"{marker}_dada2RDP.csv",
         }

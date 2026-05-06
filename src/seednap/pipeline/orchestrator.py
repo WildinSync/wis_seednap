@@ -18,7 +18,6 @@ from seednap.steps.dada2.processor import Dada2Processor
 from seednap.steps.formatting.gbif_formatter import GBIFFormatter
 from seednap.steps.swarm.processor import SwarmProcessor
 from seednap.steps.taxonomic_assignment.assigner import TaxonomicAssigner
-from seednap.steps.trimming.tag_generator import TagFileGenerator
 from seednap.steps.trimming.trimming_pipeline import LigationTrimmer, StandardTrimmer
 from seednap.utils.logging import get_logger, log_pipeline_step, setup_logging
 
@@ -189,6 +188,15 @@ class PipelineOrchestrator:
         """
         step_name = "demultiplex"
 
+        # D3: explicit skip flag for pre-demultiplexed inputs (one FASTQ per sample
+        # already in raw_data). Distinguishes "I don't want to demultiplex" from
+        # "demultiplexing isn't applicable to this data".
+        if self.config.demultiplex.skip:
+            self.state.skip_step(
+                step_name, reason="Demultiplexing skipped (raw inputs already demultiplexed)"
+            )
+            return {}
+
         if not self.config.demultiplex.enabled:
             self.state.skip_step(step_name, reason="Demultiplexing disabled in config")
             return {}
@@ -246,20 +254,23 @@ class PipelineOrchestrator:
             output_base_dir=output_dir,
             forward_primer=self.config.marker.primers.forward,
             reverse_primer=self.config.marker.primers.reverse,
+            max_sample_failure_rate=self.config.demultiplex.max_sample_failure_rate,
         )
 
         return {"demux_dir": output_dir, "trimmed_dir": outputs}
 
     def _run_standard_demux(self) -> Dict[str, Path]:
-        """Run standard demultiplexing."""
-        if self.config.demultiplex.metadata is None:
-            raise ValueError("Metadata file required for standard demultiplexing")
+        """Run standard demultiplexing.
 
-        # Generate tag files
-        tag_gen = TagFileGenerator()
-        tag_dir = self.config.paths.output / "tags"
-        tag_files = tag_gen.generate_standard_tag_files(
-            metadata_csv=self.config.demultiplex.metadata, output_dir=tag_dir
+        Note: this protocol is not yet implemented end-to-end. The tag-file
+        generation works but the actual cutadapt demultiplex call is missing.
+        Use protocol='ligation' or pre-demultiplex your data and set
+        demultiplex.skip=true.
+        """
+        raise NotImplementedError(
+            "Standard demultiplex protocol is not yet wired end-to-end. "
+            "Use protocol='ligation' for ligation-based libraries, or "
+            "set demultiplex.skip=true if your input is already demultiplexed."
         )
 
         # TODO: Implement standard demultiplexing workflow
@@ -494,6 +505,8 @@ class PipelineOrchestrator:
                     "rdp_db_path": db_config.all,
                     "species_db_path": db_config.species,
                     "multithread": self.config.dada2.multithread,
+                    "bootstrap_threshold": db_config.bootstrap_threshold,
+                    "contaminants": self.config.taxonomy.contaminants,
                 }
             elif self.config.taxonomy.method == "blast":
                 kwargs = {
@@ -501,21 +514,28 @@ class PipelineOrchestrator:
                     "threshold_species": db_config.threshold_species,
                     "threshold_genus": db_config.threshold_genus,
                     "threshold_family": db_config.threshold_family,
+                    "threshold_order": db_config.threshold_order,
+                    "threshold_class": db_config.threshold_class,
+                    "top_bitscore_pct": db_config.top_bitscore_pct,
+                    "contaminants": self.config.taxonomy.contaminants,
                     "perc_identity": db_config.perc_identity,
                     "qcov_hsp_perc": db_config.qcov_hsp_perc,
                     "evalue": db_config.evalue,
                     "max_target_seqs": db_config.max_target_seqs,
+                    "task": db_config.task,
                 }
             elif self.config.taxonomy.method == "ecotag":
                 kwargs = {
                     "taxonomy_db": db_config.tree,
                     "reference_db": db_config.fasta,
+                    "contaminants": self.config.taxonomy.contaminants,
                 }
             elif self.config.taxonomy.method == "decipher":
                 kwargs = {
                     "trained_classifier_path": db_config.trained,
                     "threshold": db_config.threshold,
                     "processors": db_config.processors,
+                    "contaminants": self.config.taxonomy.contaminants,
                 }
 
             # Run assignment
