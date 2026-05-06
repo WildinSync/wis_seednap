@@ -13,16 +13,42 @@
 
 SeeDNAP is an end-to-end Python pipeline for processing environmental DNA (eDNA) metabarcoding data. It takes raw paired-end FASTQ files and produces taxonomically assigned OTU/ASV tables ready for biodiversity analysis or GBIF submission.
 
-<p align="center">
-  <img src="media/pipeline_flowchart.png" alt="SeeDNAP Pipeline Flowchart" width="800">
-</p>
+```mermaid
+flowchart LR
+    raw[Raw FASTQ<br/>Paired-end R1 / R2]:::io
+    trim[Trim<br/>Cutadapt 2-pass]:::pass
+
+    subgraph s2 [STEP 2 : Cluster - pick one]
+        direction TB
+        swarm[SWARM<br/>VSEARCH + SWARM]:::recommended
+        dada2[DADA2<br/>R / Bioconductor]:::alt
+    end
+
+    subgraph s3 [STEP 3 : Taxonomy - pick one]
+        direction TB
+        blast[BLAST + LCA<br/>Recommended]:::recommended
+        rdp[DADA2 RDP<br/>Naive Bayesian]:::alt
+        decipher[DECIPHER<br/>IdTaxa classifier]:::alt
+        ecotag[ecotag<br/>OBITools]:::alt
+    end
+
+    export[Export<br/>GBIF / DarwinCore]:::pass
+    final[Final CSV<br/>Taxonomy + Abundances]:::io
+
+    raw --> trim --> s2 --> s3 --> export --> final
+
+    classDef io fill:#ffffff,stroke:#bbbbbb,stroke-width:1px,color:#000
+    classDef pass fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#000
+    classDef recommended fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#000
+    classDef alt fill:#ffffff,stroke:#bbbbbb,stroke-width:1px,color:#000
+```
 
 ## Quick Start
 
 ```bash
 # Install
-git clone https://gitlab.ethz.ch/ele-projects/edna/edna-app/seednap.git
-cd seednap
+git clone https://github.com/WildinSync/wis_seednap.git
+cd wis_seednap
 conda env create -f environment.yml
 conda activate seednap
 pip install -e .

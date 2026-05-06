@@ -1180,7 +1180,7 @@ def version() -> None:
     """Show version information."""
     console.print(f"\n[bold]seednap[/bold] version [cyan]{__version__}[/cyan]\n")
     console.print("eDNA metabarcoding pipeline with DADA2")
-    console.print("Repository: https://gitlab.ethz.ch/ele-projects/edna/edna-app/seednap\n")
+    console.print("Repository: https://github.com/WildinSync/wis_seednap\n")
 
 
 if __name__ == "__main__":

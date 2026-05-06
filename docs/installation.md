@@ -5,8 +5,8 @@
 The simplest way to install SeeDNAP with all dependencies:
 
 ```bash
-git clone https://gitlab.ethz.ch/ele-projects/edna/edna-app/seednap.git
-cd seednap
+git clone https://github.com/WildinSync/wis_seednap.git
+cd wis_seednap
 conda env create -f environment.yml
 conda activate seednap
 pip install -e .
