@@ -51,7 +51,10 @@ header that explains what each line means):
 
 A single self-contained `.html` file (no external assets, no CDN, no
 JavaScript — charts are embedded as base64 PNGs) styled like a typeset
-scientific paper. Sections:
+scientific paper. The title, abstract and run-summary table are shown up
+front; each section below is a **selectable panel** behind a sticky button
+bar (pure-CSS tabs — one panel visible at a time on screen, all panels
+expanded when the page is printed). Sections:
 
 1. **Dataset** — identity and provenance (see below).
 2. **Read tracking** — the read funnel and per-sample retention figures, the
@@ -67,6 +70,7 @@ scientific paper. Sections:
 6. **Run provenance** — per-step status and duration from the run state JSON.
 7. **Run log** — the complete console transcript, colorized by level *(when a
    run log is available; see below)*.
+8. **Notes & methods** — definitions and the thresholds used.
 
 Figures use a publication style (Computer Modern serif via matplotlib, a
 restrained grey + single sea-green accent palette). For runs with more than 50
@@ -78,16 +82,15 @@ renders as text and tables, with a `[WARN]`.
 
 ### Run-log section
 
-The report embeds the pipeline's full console transcript
-(`logs/<marker>_pipeline_run.log`) in a collapsible panel, colorized by log
-level with the **same palette as the live SeeDNAP console** — `INFO` navy,
-`WARNING` olive, `ERROR` maroon — produced by `rich`'s own HTML export so the
-colors match exactly. Short logs are shown whole and expanded; long ones are
-collapsed by default and truncated to keep the file portable, but **every
-`WARNING`/`ERROR` line is always kept** along with the run's start/end, and
-collapsed runs of routine lines are replaced by explicit `… N omitted …`
-markers (never a silent drop). The on-disk path to the complete log is printed
-in the section. In an orchestrator run the log is wired automatically; for the
+Its own selectable panel embeds the pipeline's full console transcript
+(`logs/<marker>_pipeline_run.log`), colorized by log level with the **same
+palette as the live SeeDNAP console** — `INFO` navy, `WARNING` olive, `ERROR`
+maroon — produced by `rich`'s own HTML export so the colors match exactly.
+Short logs are shown whole; long ones are truncated to keep the file portable,
+but **every `WARNING`/`ERROR` line is always kept** along with the run's
+start/end, and intervening runs of routine lines are replaced by explicit
+`… N omitted …` markers (never a silent drop). The transcript scrolls within
+the panel, and the on-disk path to the complete log is printed alongside it. In an orchestrator run the log is wired automatically; for the
 standalone `report` command it is auto-located under `logs/` (or supplied with
 `--log-file`). If no log is found, the section says so explicitly.
 

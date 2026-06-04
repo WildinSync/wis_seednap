@@ -2,11 +2,16 @@
 
 Renders a single portable ``.html`` file styled like a typeset scientific
 paper: a warm-paper page, serif (Computer Modern) typography, justified text,
-CSS-numbered sections, ``Figure N`` / ``Table N`` captions, and restrained
-monochrome publication figures with a single SeeDNAP-green accent.
+``Figure N`` / ``Table N`` captions, and restrained monochrome publication
+figures with a single SeeDNAP-green accent. The title block, abstract and
+run-summary table are front matter; each detailed section (Dataset, Read
+tracking, Taxonomy, Feature QC, Controls, Provenance, Run log, Notes) is a
+selectable panel behind a sticky button bar, implemented with pure CSS
+radio-tabs -- one panel visible at a time on screen, all panels expanded when
+printed.
 
 Charts are matplotlib PNGs embedded as base64, so there are no external
-assets, no CDN, and no JavaScript. It is dataset-agnostic: every number and
+assets, no CDN, and no JavaScript (the tab switching is pure CSS). It is dataset-agnostic: every number and
 label is derived from the data passed in (read-tracking df, optional taxonomy
 CSV, optional ``otu_table_full``, optional state JSON, optional run-log file).
 The optional run-log section embeds the pipeline's console transcript,
@@ -90,7 +95,7 @@ _TEMPLATE = Template(
   body{font-family:var(--serif); font-size:1rem; line-height:var(--leading); color:var(--ink);
        background:var(--paper); max-width:var(--measure); margin:0 auto; padding:3rem 1.25rem 5rem;
        text-rendering:optimizeLegibility; font-kerning:normal;
-       font-feature-settings:"kern" 1,"liga" 1; counter-reset:section;}
+       font-feature-settings:"kern" 1,"liga" 1;}
   .title-block{text-align:center; margin:0 0 2.2rem;}
   .title-block .org{font-variant-caps:small-caps; letter-spacing:.12em; font-size:.82rem; color:var(--muted); margin:0 0 .5rem;}
   h1{font-size:1.7rem; font-weight:700; line-height:1.25; margin:0 0 .35rem;}
@@ -103,9 +108,8 @@ _TEMPLATE = Template(
   .abstract p{text-align:justify; hyphens:auto;}
   p{margin:0 0 .85em; text-align:justify; hyphens:auto; -webkit-hyphens:auto; hyphenate-limit-chars:6 3 3;}
   h2,h3{font-family:var(--serif); font-weight:700; line-height:1.2; text-align:left; hyphens:manual;}
-  h2{font-size:1.28rem; margin:2.0em 0 .55em; counter-increment:section; border-bottom:1px solid var(--hair); padding-bottom:.2em;}
-  h2::before{content:counter(section) "\\00a0\\00a0"; color:var(--accent);}
-  h2.nonum{counter-increment:none;} h2.nonum::before{content:"";}
+  h2{font-size:1.28rem; margin:0 0 .7em; border-bottom:1px solid var(--hair); padding-bottom:.2em;}
+  h2 .h2-accent{color:var(--accent);}
   figure{margin:1.6rem 0; text-align:center;}
   figure img{max-width:100%; height:auto; display:block; margin:0 auto;}
   figcaption{font-size:.87rem; text-align:left; margin-top:.5rem; line-height:1.4;}
@@ -128,20 +132,33 @@ _TEMPLATE = Template(
   .warn-list div{margin:.12rem 0;}
   .warn-none{font-style:italic; color:var(--muted);}
   code{font-family:var(--mono); font-size:.85em;}
+  /* Tabbed panels (pure CSS, no JS): hidden radios drive which panel shows. The
+     <label>s render as a sticky button group; one panel is visible at a time. */
+  input.tab-radio{position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;}
+  .tabs{display:flex; flex-wrap:wrap; gap:.35rem; margin:1.6rem 0 1.8rem; padding:.55rem 0;
+        position:sticky; top:0; z-index:5; background:var(--paper); border-bottom:1px solid var(--hair);}
+  .tabs label{font-family:var(--serif); font-size:.86rem; cursor:pointer; user-select:none; white-space:nowrap;
+        padding:.32rem .72rem; border:1px solid var(--hair); border-radius:4px; color:var(--muted); background:#fff;}
+  .tabs label:hover{color:var(--ink); border-color:var(--accent);}
+  .tabs label:focus-within{outline:2px solid var(--accent); outline-offset:1px;}
+  .panel{display:none;} .panel h2{margin-top:0;}
+  {% for i in range(12) %}#tab-{{ i }}:checked ~ #panel-{{ i }}{% if not loop.last %},
+  {% endif %}{% endfor %}{display:block;}
+  {% for i in range(12) %}#tab-{{ i }}:checked ~ .tabs label[for="tab-{{ i }}"]{% if not loop.last %},
+  {% endif %}{% endfor %}{color:#fff; background:var(--accent); border-color:var(--accent); font-weight:700;}
   /* Run-log transcript: a light, framed monospace listing. Level colours match
      the rich console palette exactly (info navy, warning olive, error maroon),
      which is the standard ANSI palette tuned for a light background. */
-  .runlog-wrap{margin:1.1rem 0;}
-  .runlog-wrap summary{cursor:pointer; font-family:var(--mono); font-size:.82rem; color:var(--muted);
-             padding:.35rem 0; user-select:none;}
-  .runlog-wrap summary:hover{color:var(--ink);}
+  .runlog-meta{font-family:var(--mono); font-size:.78rem; color:var(--muted); margin:.2rem 0 .35rem;}
   .runlog{font-family:var(--mono); font-size:.74rem; line-height:1.5; color:#333;
           background:#f6f6f1; border:1px solid var(--hair); border-radius:3px;
           padding:.7rem .9rem; margin:.55rem 0 0; max-height:34rem; overflow:auto; white-space:pre; tab-size:2;}
   .lvl-info{color:#000080;} .lvl-warning{color:#808000; font-weight:600;} .lvl-error{color:#800000; font-weight:700;}
-  .methods{font-size:.84rem; margin-top:2.4rem; border-top:1px solid var(--hair); padding-top:1rem; color:var(--ink);}
-  .methods h2{font-size:1.02rem;}
   @media print{ body{max-width:100%; font-size:10.5pt; line-height:1.4; color:#000; background:#fff; padding:0;}
+    /* Print the whole document: expand every panel, drop the interactive nav. */
+    input.tab-radio, .tabs{display:none !important;}
+    .panel{display:block !important; margin:1.4rem 0; break-inside:avoid;}
+    .runlog{max-height:none;}
     h2,h3{break-after:avoid;} figure,table{break-inside:avoid;} @page{margin:2cm;} }
 </style></head>
 <body>
@@ -159,11 +176,16 @@ _TEMPLATE = Template(
 </div>
 {{ summary_table }}
 
-{% for s in sections %}<h2>{{ s.title }}</h2>
-{{ s.html }}
+{% for s in sections %}<input class="tab-radio" type="radio" name="rtab" id="tab-{{ loop.index0 }}"{% if loop.first %} checked{% endif %}>
 {% endfor %}
-
-<div class="methods"><h2 class="nonum">Notes &amp; methods</h2>{{ methods }}</div>
+<nav class="tabs" role="tablist" aria-label="Report sections">
+{% for s in sections %}<label for="tab-{{ loop.index0 }}">{{ s.title }}</label>
+{% endfor %}</nav>
+{% for s in sections %}<section class="panel" id="panel-{{ loop.index0 }}">
+<h2><span class="h2-accent">&#9656;</span> {{ s.title }}</h2>
+{{ s.html }}
+</section>
+{% endfor %}
 </body></html>
 """
 )
@@ -840,10 +862,10 @@ class HTMLReportBuilder:
         else:
             intro += "</p>"
 
-        is_open = " open" if len(items) <= 120 else ""
-        details = (f'<details class="runlog-wrap"{is_open}>'
-                   f'<summary>Run log &mdash; {" &middot; ".join(summary_bits)}</summary>{pre}</details>')
-        return intro + details
+        # This is its own selectable panel, so show the transcript directly (no
+        # extra disclosure); the meta line states size and event counts.
+        meta = f'<p class="runlog-meta">{" &middot; ".join(summary_bits)}</p>'
+        return intro + meta + pre
 
     def _summary_table_html(self) -> str:
         df = self.df
@@ -918,6 +940,7 @@ class HTMLReportBuilder:
         runlog = self._section_run_log()
         if runlog:
             sections.append({"title": "Run log", "html": runlog})
+        sections.append({"title": "Notes & methods", "html": self._methods()})
 
         return _TEMPLATE.render(
             marker=_esc(self.marker),
@@ -926,7 +949,6 @@ class HTMLReportBuilder:
             abstract=self._abstract(),
             summary_table=summary_table,
             sections=sections,
-            methods=self._methods(),
         )
 
     def write(self, output_path: Union[str, Path]) -> Path:

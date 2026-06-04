@@ -246,7 +246,7 @@ def test_run_log_section_colorized(tmp_path):
     ])
     b = ReadTrackingBuilder("m", logs_dir=logs)
     html = HTMLReportBuilder("m", b.build(), steps=b.steps, log_file=run_log).render()
-    assert ">Run log</h2>" in html
+    assert "Run log</h2>" in html        # the Run-log panel heading
     assert '<pre class="runlog">' in html
     # rich's standard ANSI palette: info navy, warning olive, error maroon
     assert "#000080" in html and "#808000" in html and "#800000" in html
@@ -263,7 +263,7 @@ def test_run_log_missing_is_explicit(tmp_path):
     df = b.build()
     # no log_file passed
     html_none = HTMLReportBuilder("m", df, steps=b.steps).render()
-    assert ">Run log</h2>" in html_none and "not embedded here" in html_none
+    assert "Run log</h2>" in html_none and "not embedded here" in html_none
     # log_file pointing at a nonexistent file
     html_missing = HTMLReportBuilder("m", df, steps=b.steps,
                                      log_file=tmp_path / "nope.log").render()
@@ -303,6 +303,29 @@ def test_read_tracking_warnings_have_header(tmp_path):
                                       "warn_step_loss_pct": 70.0}).render()
     assert 'class="warn-head"' in html and "Read-tracking warnings" in html
     assert "not necessarily errors" in html  # the explanatory context
+
+
+def test_html_report_tabbed_panels(tmp_path):
+    """Sections render as pure-CSS selectable tabs (no JS), one panel per section."""
+    import re
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    run_log = tmp_path / "m_pipeline_run.log"
+    _write_run_log(run_log, [("INFO", "go"), ("INFO", "done")])
+    b = ReadTrackingBuilder("m", logs_dir=logs)
+    html = HTMLReportBuilder("m", b.build(), steps=b.steps, log_file=run_log).render()
+    radios = re.findall(r'class="tab-radio"[^>]*id="tab-(\d+)"', html)
+    labels = re.findall(r'<label for="tab-(\d+)">([^<]+)</label>', html)
+    panels = re.findall(r'<section class="panel" id="panel-(\d+)">', html)
+    assert len(radios) == len(labels) == len(panels) >= 4   # several sections
+    assert 'id="tab-0" checked' in html                     # first panel selected by default
+    assert "#tab-0:checked ~ #panel-0" in html              # pure-CSS show rule
+    assert "<script" not in html.lower()                    # no JavaScript
+    assert "http://" not in html                            # self-contained
+    # the run log is its own dedicated, selectable panel
+    assert any(t == "Run log" for _, t in labels)
+    assert "Notes & methods" in {t for _, t in labels}      # methods is a panel too
 
 
 def test_report_config_defaults_and_strictness():
