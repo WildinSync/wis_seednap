@@ -122,9 +122,6 @@ _TEMPLATE = Template(
   .na{color:var(--muted); font-style:italic;}
   .warn-head{font-variant-caps:small-caps; letter-spacing:.06em; font-weight:700; font-size:.8rem;
              color:var(--accent); margin:.9rem 0 .25rem;}
-  .warn-list{font-family:var(--mono); font-size:.8rem; line-height:1.5; border-left:2px solid var(--accent);
-             padding:.3rem 0 .3rem 1rem; margin:.25rem 0 .8rem; max-height:22rem; overflow:auto;}
-  .warn-list div{margin:.12rem 0;}
   .warn-none{font-style:italic; color:var(--muted);}
   code{font-family:var(--mono); font-size:.85em;}
   /* Tabbed panels (pure CSS, no JS): hidden radios drive which panel shows.
@@ -166,15 +163,27 @@ _TEMPLATE = Template(
   .term-dot.r{background:#ff5f56;} .term-dot.y{background:#ffbd2e;} .term-dot.g{background:#27c93f;}
   .term-title{margin-left:.5rem; color:#c8ccd2; font-family:var(--mono); font-size:.8rem; letter-spacing:.01em;}
   .term-body{height:72vh; min-height:24rem; overflow:auto; background:#15171c;}
+  .term-body.compact{height:auto; max-height:26rem; min-height:0;}
   .runlog{font-family:var(--mono); font-size:.82rem; line-height:1.55; color:#d6d9df;
           background:transparent; margin:0; padding:1rem 1.15rem; white-space:pre; tab-size:2;}
+  /* Pure-CSS Fullscreen toggle for the run-log terminal (no JS). */
+  .term-max-toggle{position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;}
+  .term-max-btn{margin-left:auto; cursor:pointer; user-select:none; color:#c8ccd2;
+            font-family:var(--mono); font-size:.74rem; border:1px solid #555; border-radius:4px; padding:.08rem .55rem;}
+  .term-max-btn:hover{border-color:#9aa0a6; color:#fff;}
+  .lbl-close{display:none;}
+  #termmax:checked ~ .terminal{position:fixed; inset:0; width:100vw; height:100vh; max-width:none;
+            margin:0; transform:none; border-radius:0; z-index:9999;}
+  #termmax:checked ~ .terminal .term-body{height:calc(100vh - 2.7rem); max-height:none;}
+  #termmax:checked ~ .terminal .runlog{font-size:.95rem; line-height:1.6;}
+  #termmax:checked ~ .terminal .lbl-open{display:none;} #termmax:checked ~ .terminal .lbl-close{display:inline;}
   @media print{ body{font-size:10.5pt; line-height:1.4; color:#000; background:#fff; padding:0;}
     /* Print the whole document: expand every panel, drop the interactive nav. */
-    input.tab-radio, .topbar{display:none !important;}
+    input.tab-radio, .topbar, .term-max-btn{display:none !important;}
     .panel{display:block !important; margin:1.4rem auto; break-inside:avoid;}
     .terminal{width:100%; margin:1rem 0; transform:none; box-shadow:none;
               -webkit-print-color-adjust:exact; print-color-adjust:exact;}
-    .term-body{height:auto;}
+    .term-body, .term-body.compact{height:auto; max-height:none;}
     h2,h3{break-after:avoid;} figure,table{break-inside:avoid;} @page{margin:2cm;} }
 </style></head>
 <body>
@@ -655,9 +664,11 @@ class HTMLReportBuilder:
                 f"one step dropping more than {step_loss:.0f}% of a sample's reads). These mark "
                 f"where reads were lost; they are not necessarily errors (negative controls are "
                 f"<i>expected</i> to retain almost nothing).</p>")
-            items = "".join(f"<div>{_esc(w)}</div>" for w in self.warnings)
+            warn_pre = self._render_warn_terminal(self.warnings)
+            if warn_pre is None:  # rich unavailable -- plain escaped fallback
+                warn_pre = f'<pre class="runlog">{_esc(chr(10).join(self.warnings))}</pre>'
             parts.append('<p class="warn-head">Read-tracking warnings</p>'
-                         f'<div class="warn-list">{items}</div>')
+                         + self._terminal_window("read-tracking warnings", warn_pre, compact=True))
         else:
             parts.append('<p class="warn-none">No read-tracking warnings were raised: every '
                          'sample retained reads above the configured thresholds.</p>')
@@ -879,24 +890,15 @@ class HTMLReportBuilder:
             prev = i
         return items, True, n
 
-    def _render_log_html(self, items: List[Tuple[int, str]]) -> Optional[str]:
-        """Render selected log lines to a self-contained, level-colored ``<pre>``
-        using rich's own HTML export, so the palette matches the live console
-        exactly. Returns ``None`` if rich is unavailable (caller falls back)."""
-        try:
-            import io as _io
+    @staticmethod
+    def _themed_console():
+        """A rich recording console with the bright dark-terminal log palette
+        (info blue, warning amber, error red). Raises ImportError if rich is
+        absent so callers can fall back to plain text."""
+        import io as _io
 
-            from rich.console import Console
-            from rich.text import Text
-            from rich.theme import Theme
-        except ImportError as exc:  # pragma: no cover -- rich is a hard dependency
-            logger.warning(f"[WARN] html_report: expected=rich for colorized log, got=missing "
-                           f"({exc}), fallback=plain monospace log")
-            return None
-
-        # Bright ANSI palette tuned for a dark terminal background (the report
-        # renders the log in a real terminal window). Colours mirror the legend
-        # chips in the section intro.
+        from rich.console import Console
+        from rich.theme import Theme
         theme = Theme({
             "log.time": "#7d8590",
             "log.logger": "#6b7280",
@@ -906,8 +908,25 @@ class HTMLReportBuilder:
             "logging.level.error": "bold #ff6b6b",
             "logging.level.critical": "bold reverse #ff6b6b",
         }, inherit=True)
-        con = Console(record=True, width=400, file=_io.StringIO(),
-                      force_terminal=True, highlight=False, theme=theme)
+        return Console(record=True, width=400, file=_io.StringIO(),
+                       force_terminal=True, highlight=False, theme=theme)
+
+    @staticmethod
+    def _export(con) -> str:
+        return con.export_html(inline_styles=True, code_format='<pre class="runlog">{code}</pre>')
+
+    def _render_log_html(self, items: List[Tuple[int, str]]) -> Optional[str]:
+        """Render selected log lines to a self-contained, level-colored ``<pre>``
+        using rich's own HTML export, so the palette matches the live console
+        exactly. Returns ``None`` if rich is unavailable (caller falls back)."""
+        try:
+            from rich.text import Text
+            con = self._themed_console()
+        except ImportError as exc:  # pragma: no cover -- rich is a hard dependency
+            logger.warning(f"[WARN] html_report: expected=rich for colorized log, got=missing "
+                           f"({exc}), fallback=plain monospace log")
+            return None
+
         for idx, text in items:
             if idx == -1:  # omission marker
                 con.print(Text(text, style="#7d8590 italic"), soft_wrap=True, highlight=False)
@@ -923,7 +942,53 @@ class HTMLReportBuilder:
                 lvl = self._line_level(text)
                 line.append(text, style=f"logging.level.{lvl.lower()}" if lvl else "")
             con.print(line, soft_wrap=True, highlight=False)
-        return con.export_html(inline_styles=True, code_format='<pre class="runlog">{code}</pre>')
+        return self._export(con)
+
+    def _render_warn_terminal(self, warnings: List[str]) -> Optional[str]:
+        """Render read-tracking warnings as a colorized CLI transcript (the same
+        terminal palette as the run log). Returns ``None`` if rich is absent."""
+        try:
+            import re
+
+            from rich.text import Text
+            con = self._themed_console()
+        except ImportError:
+            return None
+        pat = re.compile(r"^\[WARN\]\s+(read_tracking)\s+(.+?):\s*(.*)$")
+        for w in warnings:
+            line = Text(no_wrap=True)
+            m = pat.match(w)
+            if m:
+                line.append("[WARN] ", style="logging.level.warning")
+                line.append(m.group(1) + " ", style="log.logger")
+                line.append(m.group(2) + ": ", style="logging.level.info")
+                line.append(m.group(3))
+            else:
+                line.append(w, style="logging.level.warning")
+            con.print(line, soft_wrap=True, highlight=False)
+        return self._export(con)
+
+    def _terminal_window(self, title: str, body_html: str, *,
+                         fullscreen: bool = False, compact: bool = False) -> str:
+        """Wrap pre-rendered terminal HTML in window chrome (dots + title bar).
+
+        ``fullscreen`` adds a pure-CSS maximize toggle; ``compact`` caps the
+        body height (for short transcripts such as the warnings list)."""
+        body_cls = "term-body compact" if compact else "term-body"
+        toggle, button = "", ""
+        if fullscreen:
+            toggle = '<input type="checkbox" id="termmax" class="term-max-toggle">'
+            button = ('<label for="termmax" class="term-max-btn">'
+                      '<span class="lbl-open">Fullscreen</span>'
+                      '<span class="lbl-close">Exit fullscreen</span></label>')
+        return (
+            f'{toggle}<div class="terminal">'
+            '<div class="term-bar">'
+            '<span class="term-dot r"></span><span class="term-dot y"></span>'
+            '<span class="term-dot g"></span>'
+            f'<span class="term-title">{_esc(title)}</span>{button}</div>'
+            f'<div class="{body_cls}">{body_html}</div></div>'
+        )
 
     def _section_run_log(self) -> Optional[str]:
         """Embed the full pipeline run log, colorized by level like the console.
@@ -979,17 +1044,10 @@ class HTMLReportBuilder:
         else:
             intro += "</p>"
 
-        # Render the transcript inside a real terminal window (chrome + dark body).
+        # Render the transcript inside a real terminal window (chrome + dark
+        # body) with a pure-CSS Fullscreen toggle for easier reading.
         meta = f'<p class="runlog-meta">{", ".join(summary_bits)}</p>'
-        terminal = (
-            '<div class="terminal">'
-            '<div class="term-bar">'
-            '<span class="term-dot r"></span><span class="term-dot y"></span>'
-            '<span class="term-dot g"></span>'
-            f'<span class="term-title">{_esc(path.name)}</span></div>'
-            f'<div class="term-body">{pre}</div>'
-            '</div>'
-        )
+        terminal = self._terminal_window(path.name, pre, fullscreen=True)
         return intro + meta + terminal
 
     def _summary_table_html(self) -> str:

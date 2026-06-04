@@ -304,6 +304,25 @@ def test_read_tracking_warnings_have_header(tmp_path):
                                       "warn_step_loss_pct": 70.0}).render()
     assert 'class="warn-head"' in html and "Read-tracking warnings" in html
     assert "not necessarily errors" in html  # the explanatory context
+    # warnings render in the same colorized terminal style as the run log
+    assert "read-tracking warnings</span>" in html      # terminal window title
+    assert "term-body compact" in html                  # compact terminal body
+    assert "#e3b341" in html                             # amber [WARN] colorization
+
+
+def test_run_log_has_css_fullscreen_toggle(tmp_path):
+    """The run-log terminal offers a pure-CSS Fullscreen toggle (no JS)."""
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    run_log = tmp_path / "m_pipeline_run.log"
+    _write_run_log(run_log, [("INFO", "start"), ("INFO", "done")])
+    b = ReadTrackingBuilder("m", logs_dir=logs)
+    html = HTMLReportBuilder("m", b.build(), steps=b.steps, log_file=run_log).render()
+    assert 'id="termmax"' in html and 'class="term-max-btn"' in html
+    assert "Fullscreen" in html and "Exit fullscreen" in html
+    assert "#termmax:checked ~ .terminal{position:fixed" in html  # CSS-only maximize
+    assert "<script" not in html.lower()                          # still no JavaScript
 
 
 def test_html_report_tabbed_panels(tmp_path):

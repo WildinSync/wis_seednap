@@ -40,7 +40,8 @@ stage.
 
 Two configurable thresholds drive warnings (written to the run log, and shown
 in the HTML report's Read-tracking section under a **Read-tracking warnings**
-header that explains what each line means):
+header that explains what each line means; the warnings are rendered in the
+same colorized terminal style as the run log):
 
 - `warn_below_retention_pct` (default **30**) — warn when a sample's final reads
   fall below this percentage of its raw reads.
@@ -88,10 +89,12 @@ renders as text and tables, with a `[WARN]`.
 ### Run-log section
 
 Its own tab renders the pipeline's full console transcript
-(`logs/<marker>_pipeline_run.log`) inside a **real terminal window** — dark
-chrome with traffic-light dots, a large scrolling body — colorized by log level
-with `rich`'s own HTML export so the styling matches the live console (here on
-a dark background: `INFO` blue, `WARNING` amber, `ERROR` red). Short logs are
+(`logs/<marker>_pipeline_run.log`) inside a **real terminal window**: dark
+chrome with traffic-light dots, a large scrolling body, and a **Fullscreen**
+button (pure CSS, no JavaScript) that expands the terminal to fill the viewport
+for easier reading. It is colorized by log level with `rich`'s own HTML export
+so the styling matches the live console (on a dark background: `INFO` blue,
+`WARNING` amber, `ERROR` red). Short logs are
 shown whole; long ones are truncated to keep the file portable, but **every
 `WARNING`/`ERROR` line is always kept** along with the run's start/end, and
 intervening runs of routine lines are replaced by explicit `… N omitted …`
