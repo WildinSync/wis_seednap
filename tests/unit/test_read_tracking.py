@@ -395,7 +395,14 @@ def test_report_has_no_em_or_curly_punctuation(tmp_path):
 
 def test_report_config_defaults_and_strictness():
     c = ReportConfig()
-    assert c.read_tracking is True and c.html_report is False
+    # Reporting (read-tracking + HTML) is on by default for every run.
+    assert c.read_tracking is True and c.html_report is True
+    assert c.output_dir is None  # defaults to <paths.output>/04_report
     assert c.warn_below_retention_pct == 30.0 and c.warn_step_loss_pct == 70.0
     with pytest.raises(Exception):
         ReportConfig(unknown_field=1)  # extra="forbid"
+
+
+def test_report_output_dir_expands_and_overrides(tmp_path):
+    c = ReportConfig(output_dir=str(tmp_path / "reports"))
+    assert c.output_dir == (tmp_path / "reports").resolve()

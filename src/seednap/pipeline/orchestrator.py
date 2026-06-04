@@ -453,6 +453,18 @@ class PipelineOrchestrator:
             log_pipeline_step(step_name, "error", logger)
             raise
 
+    def _report_dir(self) -> Path:
+        """Per-marker directory for report artifacts.
+
+        Honors ``report.output_dir`` (a per-marker subdirectory is created
+        inside it); otherwise defaults to ``<paths.output>/04_report/<marker>``.
+        """
+        marker = self.config.marker.name
+        base = self.config.report.output_dir
+        if base is not None:
+            return Path(base) / marker
+        return self.config.paths.output / "04_report" / marker
+
     def _build_read_tracking_report(self, method: str) -> None:
         """Build the read-tracking table (+ optional HTML report) after a
         clustering step.
@@ -469,7 +481,7 @@ class PipelineOrchestrator:
 
             marker = self.config.marker.name
             out = self.config.paths.output
-            report_dir = out / "04_report" / marker
+            report_dir = self._report_dir()
             kwargs = {
                 "marker": marker,
                 "logs_dir": out / "logs",
@@ -512,8 +524,9 @@ class PipelineOrchestrator:
     def _build_html_report(self) -> None:
         """Build the full HTML run report at run end (needs taxonomy + clustering).
 
-        Opt-in (``report.html_report``). Non-fatal: failures log a ``[WARN]`` and
-        never affect the run (CLAUDE.md section 4).
+        On by default (``report.html_report``, set ``false`` to disable).
+        Non-fatal: failures log a ``[WARN]`` and never affect the run
+        (CLAUDE.md section 4).
         """
         if not (self.config.report.read_tracking and self.config.report.html_report):
             return
@@ -573,7 +586,7 @@ class PipelineOrchestrator:
                     "subtitle": f"{len(df)} samples · marker {marker}",
                     "provenance": provenance,
                 },
-            ).write(out / "04_report" / marker / "report.html")
+            ).write(self._report_dir() / "report.html")
             logger.info(f"HTML run report: {html_path}")
         except Exception as exc:  # noqa: BLE001 -- reporting must never fail the run
             logger.warning(

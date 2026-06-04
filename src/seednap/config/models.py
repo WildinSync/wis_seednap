@@ -365,8 +365,13 @@ class ReportConfig(StrictModel):
         description="Generate the per-step read/sequence tracking table and data-loss warnings",
     )
     html_report: bool = Field(
-        default=False,
-        description="Generate a self-contained HTML run report with charts (thorough visualization)",
+        default=True,
+        description="Generate a self-contained HTML run report with charts (on by default)",
+    )
+    output_dir: Optional[Path] = Field(
+        default=None,
+        description="Base directory for report artifacts; a per-marker subdirectory is created "
+                    "inside it. Defaults to '<paths.output>/04_report' when unset.",
     )
     warn_below_retention_pct: float = Field(
         default=30.0, ge=0, le=100,
@@ -387,7 +392,7 @@ class ReportConfig(StrictModel):
                     "(recorder, sequencing method, reference DB); optional",
     )
 
-    @field_validator("sample_metadata", "project_metadata")
+    @field_validator("output_dir", "sample_metadata", "project_metadata")
     @classmethod
     def expand_optional_path(cls, v: Optional[Path]) -> Optional[Path]:
         return v.expanduser().resolve() if v is not None else v
