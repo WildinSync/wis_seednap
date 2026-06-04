@@ -1184,9 +1184,14 @@ def run_pipeline(
 @click.option("--html", "html_report", is_flag=True, help="Also generate the self-contained HTML run report")
 @click.option("--warn-retention", type=float, default=30.0, help="Warn below this overall retention %% (default: 30)")
 @click.option("--warn-step-loss", type=float, default=70.0, help="Warn when a step drops more than this %% (default: 70)")
+@click.option("--field-metadata", type=click.Path(exists=True, path_type=Path),
+              help="Per-sample (field) metadata CSV for the Dataset/provenance section (location, dates, sites)")
+@click.option("--project-metadata", type=click.Path(exists=True, path_type=Path),
+              help="Project metadata CSV for the Dataset section (recorder, sequencing, reference DB)")
 def report(
     marker: str, output_dir: Path, html_report: bool,
     warn_retention: float, warn_step_loss: float,
+    field_metadata: Optional[Path], project_metadata: Optional[Path],
 ) -> None:
     """
     Build the read/sequence tracking report from existing run outputs.
@@ -1276,13 +1281,31 @@ def report(
                 globbed = sorted(out.glob(f"{marker}_*.csv"))
                 taxo = globbed[0] if globbed else None
             otu_full = swarm_otu.parent / "otu_table_full.csv" if method == "SWARM" else None
+            # Auto-locate dataset metadata near the output if not given explicitly.
+            if field_metadata is None:
+                for cand in (out / f"metadata_field_{marker}.csv", out / "metadata" / f"metadata_field_{marker}.csv"):
+                    if cand.exists():
+                        field_metadata = cand
+                        break
+            if project_metadata is None:
+                for cand in (out / f"metadata_proj_{marker}.csv", out / "metadata" / f"metadata_proj_{marker}.csv"):
+                    if cand.exists():
+                        project_metadata = cand
+                        break
+            if field_metadata or project_metadata:
+                console.print(f"  dataset metadata: field={field_metadata or '—'}, project={project_metadata or '—'}")
+            else:
+                print_warning("No dataset metadata found; the Dataset section will note it is absent. "
+                              "Pass --field-metadata / --project-metadata to include provenance.")
             html_path = HTMLReportBuilder(
                 marker, df, warnings=warns, steps=builder.steps,
                 state=state, taxonomy_csv=taxo,
                 otu_table_full=otu_full if (otu_full and otu_full.exists()) else None,
+                field_metadata_csv=field_metadata, project_metadata_csv=project_metadata,
                 summary={
                     "warn_below_retention_pct": warn_retention,
                     "subtitle": f"{len(df)} samples · marker {marker}",
+                    "provenance": {"dataset_name": marker, "marker": marker},
                 },
             ).write(report_dir / "report.html")
             print_success(f"Wrote HTML report: {html_path}")

@@ -188,6 +188,43 @@ def test_html_report_scales_to_many_samples(tmp_path):
     assert "Retention distribution" in html or "data:image/png;base64," in html
 
 
+def test_dataset_provenance_section(tmp_path):
+    """Dataset section surfaces location/marker/recorder from field+project metadata."""
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    field = tmp_path / "field.csv"
+    pd.DataFrame({"eventID": ["S1", "S2", "Blank-ext-1"],
+                  "decimalLatitude": ["46.30", "46.40", "NA"],
+                  "decimalLongitude": ["7.17", "7.20", "NA"],
+                  "eventDate": ["2025.08.18", "2025.08.19", "NA"],
+                  "institution": ["ELE", "ELE", "ELE"], "body": ["river", "river", "NA"]}).to_csv(field, index=False)
+    proj = tmp_path / "proj.csv"
+    pd.DataFrame({"marker": ["teleo"], "recordedby": ["Ada L."], "seqmet": ["MiSeq"],
+                  "otu_db": ["MIDORI2"]}).to_csv(proj, index=False)
+    b = ReadTrackingBuilder("teleo_rhone", logs_dir=logs)
+    html = HTMLReportBuilder("teleo_rhone", b.build(), steps=b.steps,
+                             field_metadata_csv=field, project_metadata_csv=proj,
+                             summary={"provenance": {"dataset_name": "teleo_rhone", "marker": "teleo_rhone"}}).render()
+    assert "Dataset</h2>" in html
+    assert "46.30" in html and "7.17" in html        # location (controls excluded)
+    assert "Ada L." in html and "MiSeq" in html       # project provenance
+    assert ">teleo<" in html                          # marker = project's "teleo", not "teleo_rhone"
+    assert "2025.08.18" in html
+
+
+def test_dataset_section_no_metadata_is_explicit(tmp_path):
+    """No metadata -> explicit note, never a silent omission."""
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    b = ReadTrackingBuilder("m", logs_dir=logs)
+    html = HTMLReportBuilder("m", b.build(), steps=b.steps).render()
+    assert "Dataset</h2>" in html
+    # absence is stated explicitly, never silently skipped
+    assert "were not provided" in html
+
+
 def test_report_config_defaults_and_strictness():
     c = ReportConfig()
     assert c.read_tracking is True and c.html_report is False

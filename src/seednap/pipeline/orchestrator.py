@@ -541,14 +541,33 @@ class PipelineOrchestrator:
             if tstep is not None:
                 taxo_csv = tstep.outputs.get("final_table") or tstep.outputs.get("taxonomy_csv")
 
+            # Provenance from the pipeline config (always available).
+            reference_db = None
+            try:
+                db = self.config.taxonomy.get_database_config()
+                reference_db = str(getattr(db, "fasta", None) or getattr(db, "trained", None) or "") or None
+            except Exception:  # noqa: BLE001 -- provenance is best-effort, never fatal
+                reference_db = None
+            provenance = {
+                "dataset_name": marker,
+                "marker": marker,
+                "primer_fwd": self.config.marker.primers.forward,
+                "primer_rev": self.config.marker.primers.reverse,
+                "raw_data": str(self.config.paths.raw_data),
+                "reference_db": reference_db,
+            }
+
             html_path = HTMLReportBuilder(
                 marker, df, warnings=warns, steps=builder.steps,
                 state=self.state.model_dump(mode="json"),
                 taxonomy_csv=taxo_csv,
                 otu_table_full=otu_full,
+                field_metadata_csv=self.config.report.sample_metadata,
+                project_metadata_csv=self.config.report.project_metadata,
                 summary={
                     "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
                     "subtitle": f"{len(df)} samples · marker {marker}",
+                    "provenance": provenance,
                 },
             ).write(out / "04_report" / marker / "report.html")
             logger.info(f"HTML run report: {html_path}")

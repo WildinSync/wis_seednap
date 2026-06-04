@@ -164,6 +164,8 @@ class HTMLReportBuilder:
         state: Optional[Dict[str, object]] = None,
         taxonomy_csv: Optional[Union[str, Path]] = None,
         otu_table_full: Optional[Union[str, Path]] = None,
+        field_metadata_csv: Optional[Union[str, Path]] = None,
+        project_metadata_csv: Optional[Union[str, Path]] = None,
     ) -> None:
         self.marker = marker
         self.df = tracking_df if tracking_df is not None else pd.DataFrame()
@@ -172,6 +174,8 @@ class HTMLReportBuilder:
         self.state = state or {}
         self.taxonomy_csv = Path(taxonomy_csv) if taxonomy_csv else None
         self.otu_table_full = Path(otu_table_full) if otu_table_full else None
+        self.field_metadata_csv = Path(field_metadata_csv) if field_metadata_csv else None
+        self.project_metadata_csv = Path(project_metadata_csv) if project_metadata_csv else None
         if steps:
             self.steps = steps
         else:
@@ -219,6 +223,21 @@ class HTMLReportBuilder:
 
     def _tax_sample_cols(self, tax: pd.DataFrame) -> List[str]:
         return [c for c in tax.columns if c not in _TAX_META and c not in _RANKS]
+
+    def _read_meta(self, path: Optional[Path], kind: str) -> Optional[pd.DataFrame]:
+        if path is None:
+            return None
+        if not path.exists():
+            logger.warning(f"[WARN] html_report: expected={kind} metadata CSV, got=missing "
+                           f"({path}), fallback=omit it from the dataset section")
+            return None
+        try:
+            # utf-8-sig tolerates a BOM (some lab metadata files carry one).
+            return pd.read_csv(path, dtype=str, keep_default_na=False, encoding="utf-8-sig")
+        except (pd.errors.EmptyDataError, OSError) as exc:
+            logger.warning(f"[WARN] html_report: expected=readable {kind} metadata, got=unreadable "
+                           f"({path}: {exc}), fallback=omit it from the dataset section")
+            return None
 
     # ------------------------------------------------------------------ #
     # Numbers / metadata
@@ -279,7 +298,7 @@ class HTMLReportBuilder:
         clauses.append("All steps completed; "
                        + ("no retention warnings were raised." if nw == 0
                           else f"{nw} read-tracking warning{'s' if nw != 1 else ''} "
-                               f"are listed in Section 1."))
+                               f"are listed in the Read tracking section."))
         return " ".join(clauses)
 
     # ------------------------------------------------------------------ #
@@ -413,6 +432,85 @@ class HTMLReportBuilder:
     # ------------------------------------------------------------------ #
     # Section builders
     # ------------------------------------------------------------------ #
+    def _section_dataset(self) -> str:
+        """Dataset identity + provenance, from config facts + field/project metadata."""
+        prov = self.summary.get("provenance") or {}
+        field = self._read_meta(self.field_metadata_csv, "field")
+        proj = self._read_meta(self.project_metadata_csv, "project")
+        rows: List[Tuple[str, str]] = []
+
+        def add(label, value):
+            if value not in (None, "", "NA", "nan"):
+                rows.append((label, str(value)))
+
+        add("Dataset", prov.get("dataset_name") or self.marker)
+        # Prefer the project metadata's marker (authoritative, e.g. "teleo") over the
+        # run/dataset name passed on the CLI (e.g. "teleo_rhone").
+        add("Marker", self._proj_val(proj, "marker") or prov.get("marker"))
+        if prov.get("primer_fwd") or prov.get("primer_rev"):
+            add("Primers", f"{prov.get('primer_fwd', '?')} / {prov.get('primer_rev', '?')} (fwd / rev)")
+
+        # --- field metadata: location, dates, sites, institution ---
+        if field is not None:
+            # biological samples only (drop Blank* controls) for geography
+            idc = field.columns[0]
+            bio = field[~field[idc].astype(str).str.lower().str.startswith("blank")]
+            lat = pd.to_numeric(bio.get("decimalLatitude", pd.Series(dtype=str)), errors="coerce").dropna()
+            lon = pd.to_numeric(bio.get("decimalLongitude", pd.Series(dtype=str)), errors="coerce").dropna()
+            if not lat.empty and not lon.empty:
+                add("Location (lat, lon)",
+                    f"{lat.mean():.4f}, {lon.mean():.4f} centroid "
+                    f"(lat {lat.min():.3f}–{lat.max():.3f}, lon {lon.min():.3f}–{lon.max():.3f})")
+                n_sites = len({(round(a, 4), round(o, 4)) for a, o in zip(lat, lon)})
+                add("Distinct sites", f"{n_sites}")
+            for col, label in (("site_names", "Site names"), ("area_basin", "Area / basin"),
+                               ("ecosystem", "Ecosystem"), ("body", "Water body"),
+                               ("env_medium", "Environment")):
+                if col in field.columns:
+                    vals = sorted({v for v in bio[col].astype(str) if v not in ("", "NA", "nan")})
+                    if vals:
+                        shown = ", ".join(vals[:6]) + (" …" if len(vals) > 6 else "")
+                        add(label, shown)
+            dates = sorted({v for v in bio.get("eventDate", pd.Series(dtype=str)).astype(str)
+                            if v not in ("", "NA", "nan")})
+            if dates:
+                add("Sampling dates", f"{dates[0]} – {dates[-1]}" if len(dates) > 1 else dates[0])
+            depth = pd.to_numeric(bio.get("depth", pd.Series(dtype=str)), errors="coerce").dropna()
+            if not depth.empty:
+                add("Depth (m)", f"{depth.min():g}–{depth.max():g}" if depth.min() != depth.max() else f"{depth.min():g}")
+            for col, label in (("institution", "Institution"), ("laboratory", "Laboratory")):
+                if col in field.columns:
+                    vals = sorted({v for v in field[col].astype(str) if v not in ("", "NA", "nan")})
+                    if vals:
+                        add(label, ", ".join(vals[:3]))
+
+        # --- project metadata: recorder, sequencing, reference DB ---
+        add("Recorded by", self._proj_val(proj, "recordedby"))
+        add("Sequencing", self._proj_val(proj, "seqmet"))
+        add("Reference DB", self._proj_val(proj, "otu_db") or prov.get("reference_db"))
+        add("Assignment", self._proj_val(proj, "identificationRemarks"))
+        add("Raw data", prov.get("raw_data"))
+
+        if not rows:
+            return ("<p>No dataset metadata was provided. Pass <code>--field-metadata</code> and "
+                    "<code>--project-metadata</code> (the lab <code>metadata_field_*.csv</code> / "
+                    "<code>metadata_proj_*.csv</code>) to embed sampling location, dates, institution "
+                    "and sequencing provenance here.</p>")
+        body = [[_esc(k), _esc(v)] for k, v in rows]
+        note = ""
+        if field is None and proj is None:
+            note = ("<p>Sampling-location and sequencing metadata were not provided "
+                    "(<code>--field-metadata</code> / <code>--project-metadata</code>); the table below "
+                    "is limited to pipeline-configuration facts.</p>")
+        return note + self._table("Dataset identity and provenance.", ["field", "value"], body)
+
+    @staticmethod
+    def _proj_val(proj: Optional[pd.DataFrame], col: str) -> Optional[str]:
+        if proj is None or col not in proj.columns or proj.empty:
+            return None
+        v = str(proj[col].iloc[0]).strip()
+        return v or None
+
     def _section_read_tracking(self, figs) -> str:
         n = len(self.df)
         parts = []
@@ -616,6 +714,7 @@ class HTMLReportBuilder:
         summary_table = self._summary_table_html()   # Table 1
 
         sections: List[Dict[str, str]] = []
+        sections.append({"title": "Dataset", "html": self._section_dataset()})
         sections.append({"title": "Read tracking", "html": self._section_read_tracking(figs)})
         tax_html = self._section_taxonomy(figs)
         if tax_html:

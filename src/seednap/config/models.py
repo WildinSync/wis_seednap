@@ -376,6 +376,21 @@ class ReportConfig(StrictModel):
         default=70.0, ge=0, le=100,
         description="Warn when a single pipeline step drops more than this % of a sample's reads",
     )
+    sample_metadata: Optional[Path] = Field(
+        default=None,
+        description="Per-sample (field) metadata CSV for the report's Dataset/provenance section "
+                    "(location, dates, sites, institution); optional",
+    )
+    project_metadata: Optional[Path] = Field(
+        default=None,
+        description="Project metadata CSV for the report's Dataset section "
+                    "(recorder, sequencing method, reference DB); optional",
+    )
+
+    @field_validator("sample_metadata", "project_metadata")
+    @classmethod
+    def expand_optional_path(cls, v: Optional[Path]) -> Optional[Path]:
+        return v.expanduser().resolve() if v is not None else v
 
 
 class LoggingConfig(StrictModel):
