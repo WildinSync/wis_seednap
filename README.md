@@ -86,7 +86,7 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 | **Cluster** | SWARM or DADA2 | OTU clustering or ASV denoising |
 | **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Taxonomic assignment with cascade-null per-rank thresholds and MEGAN-LR top-bitscore LCA (BLAST) or RDP bootstrap (DADA2) |
 | **Export** | Built-in | GBIF long format and DarwinCore occurrence CSV with deterministic `occurrenceID` and `contamination_flag` |
-| **Report** | Built-in | Per-step read/sequence tracking table + data-loss warnings, and an optional self-contained HTML run report (dataset provenance, taxonomy headline, QC charts, and the colorized console run log) |
+| **Report** | Built-in | Generated automatically every run: a per-step read/sequence tracking table + data-loss warnings, and a self-contained HTML run report (dataset provenance, taxonomy headline, QC charts, and the colorized console run log). Configurable via the `report:` block; on by default |
 
 ## CLI Commands
 

@@ -5,14 +5,19 @@ SeeDNAP produces two reporting artifacts for every run:
 1. a **read/sequence tracking table** (`read_tracking.csv` + `.txt`) — how many
    reads/sequences survive each pipeline step, per sample, with data-loss
    warnings; and
-2. an optional, self-contained **HTML run report** (`report.html`) — a
+2. a self-contained **HTML run report** (`report.html`) — a
    scientific-paper-style document with dataset provenance, a taxonomy
    headline, QC figures, and a contamination check.
 
-Both are written under `outputs/04_report/<marker>/`. The read-tracking table
-is on by default; the HTML report is opt-in. Reporting only reads artifacts the
+**Both are generated automatically on every `run-pipeline`** (the HTML report is
+built at the end of the run). Set `report.html_report: false` (or
+`report.read_tracking: false`) in the marker YAML to turn either off. By default
+they are written under `<paths.output>/04_report/<marker>/`; set
+`report.output_dir` to store them elsewhere. Reporting only reads artifacts the
 pipeline already produced — it never alters the run, and a reporting failure is
-logged as a `[WARN]` and never fails the pipeline.
+logged as a `[WARN]` and never fails the pipeline. The same artifacts can also
+be regenerated from existing outputs at any time with the `report` command (see
+below).
 
 ## Read-tracking table
 
@@ -126,8 +131,9 @@ Reporting is controlled by the `report:` block in the marker YAML:
 
 ```yaml
 report:
-  read_tracking: true              # write read_tracking.{csv,txt} + warnings (default: true)
-  html_report: false               # also write report.html (default: false)
+  read_tracking: true              # read_tracking.{csv,txt} + warnings (default: true)
+  html_report: true                # write report.html (default: true; set false to disable)
+  output_dir: null                 # base dir for artifacts; null -> "<output>/04_report"
   warn_below_retention_pct: 30.0   # per-sample retention floor (raw -> final)
   warn_step_loss_pct: 70.0         # single-step loss ceiling
   # Optional dataset metadata for the Dataset/provenance section:
@@ -135,8 +141,20 @@ report:
   # project_metadata: "/path/to/metadata_proj_<dataset>.csv"
 ```
 
-All fields are optional and the block itself is optional (defaults apply). The
-config model is strict (`extra="forbid"`), so a typo errors at load time.
+All fields are optional and the block itself is optional (defaults apply, with
+both the table and the HTML report on). The config model is strict
+(`extra="forbid"`), so a typo errors at load time.
+
+**Where artifacts go.** By default the table and report are written to
+`<paths.output>/04_report/<marker>/`. Set `output_dir` to redirect them; a
+per-marker subdirectory is created inside it, so
+
+```yaml
+report:
+  output_dir: "/data/edna/reports"   # marker "teleo" -> /data/edna/reports/teleo/
+```
+
+`~` is expanded and relative paths are resolved at load time.
 
 ## CLI
 
@@ -168,8 +186,9 @@ to the output directory (or in an adjacent `metadata/` folder) and warns if none
 is found.
 
 During `run-pipeline`, the read-tracking table is written after the clustering
-step and the HTML report (if `html_report: true`) after the full run, so the
-taxonomy and provenance sections are populated.
+step and the HTML report after the full run (unless disabled with
+`html_report: false`), so the taxonomy and provenance sections are populated.
+The `report` command above is for regenerating these from an existing run.
 
 ## Outputs
 

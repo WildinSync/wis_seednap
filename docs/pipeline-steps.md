@@ -204,8 +204,12 @@ See [gbif-export.md](gbif-export.md) for the full DarwinCore publishing workflow
 **Input:** Cutadapt logs, the cluster output (SWARM `otu_table` / DADA2
 `track_reads.csv`), and — for the HTML report — the taxonomy table, the SWARM
 `otu_table_full.csv`, the run state JSON, and (optionally) dataset metadata.
-**Output:** `outputs/04_report/{marker}/read_tracking.{csv,txt}` and, when
-`report.html_report` is enabled, `report.html`.
+**Output:** `outputs/04_report/{marker}/read_tracking.{csv,txt}` and
+`report.html` (the report directory is configurable via `report.output_dir`).
+
+This step runs automatically at the end of every pipeline run; both the
+read-tracking table and the HTML report are on by default and can be turned off
+with `report.read_tracking: false` / `report.html_report: false`.
 
 The read-tracking table records per-sample read/sequence counts at each step
 (`raw → trimmed → clustered` for SWARM, `raw → trimmed → filtered → denoised →
@@ -213,7 +217,7 @@ merged → nonchim` for DADA2) with a `% retained` column, and emits data-loss
 warnings against configurable thresholds. Counts that cannot be measured are
 recorded as `NA` (never a silent `0`).
 
-The optional HTML run report is a single self-contained, scientific-paper-style
+The HTML run report is a single self-contained, scientific-paper-style
 file: dataset provenance, read-tracking funnel + per-sample retention, a
 taxonomy headline (assignment rate per rank, top taxa), feature QC (chimeras,
 length), a control/contamination check, the run timeline, and the full console
@@ -242,10 +246,10 @@ outputs/
     query.fasta                  #   Representative sequences
   02_dada2/{marker}/             # DADA2 outputs (if used)
   03_taxo/{marker}/              #   BLAST/taxonomy intermediate files
-  04_report/{marker}/            # Read-tracking table (+ HTML report if enabled)
+  04_report/{marker}/            # Read-tracking table + HTML report (configurable dir)
     read_tracking.csv            #   Per-sample counts at each step + % retained
     read_tracking.txt            #   Human-readable table
-    report.html                  #   Self-contained HTML run report (opt-in)
+    report.html                  #   Self-contained HTML run report (on by default)
   {marker}_{method}.csv          # Final taxonomy + abundance table (method = blast/ecotag/decipher/dada2RDP)
   .{marker}_state.json           # Pipeline state (for resume)
 ```

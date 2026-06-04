@@ -226,13 +226,15 @@ metrics:
 
 ### `report`
 
-Per-step read/sequence tracking and the optional HTML run report. See
-[reporting.md](reporting.md) for full details.
+Per-step read/sequence tracking and the HTML run report. **Both are generated
+on every `run-pipeline` by default** (the report is built automatically at the
+end of the run). See [reporting.md](reporting.md) for full details.
 
 ```yaml
 report:
-  read_tracking: true                        # write read_tracking.{csv,txt} + warnings (default: true)
-  html_report: false                         # also write a self-contained HTML report (default: false)
+  read_tracking: true                        # read_tracking.{csv,txt} + warnings (default: true)
+  html_report: true                          # self-contained HTML report (default: true; set false to disable)
+  output_dir: null                           # base dir for report artifacts; null -> "<output>/04_report"
   warn_below_retention_pct: 30.0             # warn for samples retaining < this % of raw reads
   warn_step_loss_pct: 70.0                   # warn when a single step drops more than this %
   # Optional dataset metadata for the report's "Dataset & provenance" section:
@@ -240,8 +242,11 @@ report:
   project_metadata: null                     # path to project metadata CSV; optional
 ```
 
-Artifacts are written to `outputs/04_report/<marker>/`. The whole section is
-optional; defaults apply when omitted.
+By default, artifacts are written to `<paths.output>/04_report/<marker>/`. Set
+`output_dir` to send them elsewhere; a per-marker subdirectory is created inside
+it (so `output_dir: /data/reports` for marker `teleo` writes to
+`/data/reports/teleo/`). `~` is expanded and relative paths are resolved. The
+whole section is optional; defaults apply when omitted.
 
 ### `logging`
 

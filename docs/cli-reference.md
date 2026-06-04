@@ -255,7 +255,9 @@ seednap validate CONFIG
 ## `report`
 
 Build the read/sequence-tracking report (and optionally the HTML run report)
-from an existing run's outputs.
+from an existing run's outputs. `run-pipeline` already generates both at the end
+of every run by default (see the `report:` config block); this command is for
+**regenerating** them from outputs that already exist.
 
 ```
 seednap report MARKER [OPTIONS]
