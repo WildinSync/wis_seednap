@@ -462,7 +462,7 @@ class PipelineOrchestrator:
         try:
             import pandas as pd
 
-            from seednap.steps.report import HTMLReportBuilder, ReadTrackingBuilder
+            from seednap.steps.report import ReadTrackingBuilder
 
             marker = self.config.marker.name
             out = self.config.paths.output
@@ -500,21 +500,62 @@ class PipelineOrchestrator:
                     }
                 else:
                     step.metadata["read_tracking"] = {"n_samples": 0, "n_warnings": len(warns)}
-
-            if self.config.report.html_report:
-                html_path = HTMLReportBuilder(
-                    marker, df, warnings=warns, steps=builder.steps,
-                    summary={
-                        "cluster": method.upper(),
-                        "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
-                        "subtitle": f"{len(df)} samples · marker {marker}",
-                    },
-                ).write(report_dir / "report.html")
-                logger.info(f"HTML run report: {html_path}")
         except Exception as exc:  # noqa: BLE001 -- reporting must never fail the run
             logger.warning(
-                f"[WARN] read_tracking report: expected=report generation for "
+                f"[WARN] read_tracking report: expected=read-tracking table for "
                 f"'{method}', got=error ({exc}), fallback=skipped (pipeline unaffected)",
+            )
+
+    def _build_html_report(self) -> None:
+        """Build the full HTML run report at run end (needs taxonomy + clustering).
+
+        Opt-in (``report.html_report``). Non-fatal: failures log a ``[WARN]`` and
+        never affect the run (CLAUDE.md section 4).
+        """
+        if not (self.config.report.read_tracking and self.config.report.html_report):
+            return
+        try:
+            from seednap.steps.report import HTMLReportBuilder, ReadTrackingBuilder
+
+            marker = self.config.marker.name
+            out = self.config.paths.output
+            steps = set(self.config.pipeline.steps)
+            kwargs = {
+                "marker": marker, "logs_dir": out / "logs",
+                "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
+                "warn_step_loss_pct": self.config.report.warn_step_loss_pct,
+            }
+            otu_full = None
+            if "dada2" in steps:
+                kwargs["dada2_dir"] = out / "02_dada2" / marker
+            elif "swarm" in steps:
+                kwargs["swarm_otu_table"] = out / "02_swarm" / marker / "otu_table.csv"
+                otu_full = out / "02_swarm" / marker / "otu_table_full.csv"
+
+            builder = ReadTrackingBuilder(**kwargs)
+            df = builder.build()
+            warns = builder.warnings(df, log=False)
+
+            taxo_csv = None
+            tstep = self.state.get_step("taxonomy")
+            if tstep is not None:
+                taxo_csv = tstep.outputs.get("final_table") or tstep.outputs.get("taxonomy_csv")
+
+            html_path = HTMLReportBuilder(
+                marker, df, warnings=warns, steps=builder.steps,
+                state=self.state.model_dump(mode="json"),
+                taxonomy_csv=taxo_csv,
+                otu_table_full=otu_full,
+                summary={
+                    "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
+                    "subtitle": f"{len(df)} samples · marker {marker}",
+                },
+            ).write(out / "04_report" / marker / "report.html")
+            logger.info(f"HTML run report: {html_path}")
+        except Exception as exc:  # noqa: BLE001 -- reporting must never fail the run
+            logger.warning(
+                f"[WARN] html_report: expected=HTML report generation, "
+                f"got=error ({exc}), fallback=skipped (run unaffected)",
             )
 
     def run_taxonomy(self) -> Dict[str, Path]:
@@ -743,6 +784,9 @@ class PipelineOrchestrator:
         # Mark pipeline as complete
         self.state.complete_pipeline()
         self._save_state()
+
+        # Full HTML run report (opt-in) -- after all steps so taxonomy is available.
+        self._build_html_report()
 
         logger.info("=" * 80)
         logger.info("Pipeline completed successfully!")

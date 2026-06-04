@@ -121,6 +121,52 @@ def test_html_report_is_self_contained(tmp_path):
     assert "S1" in html
 
 
+def test_html_report_rich_sections(tmp_path):
+    """With taxonomy + otu_full + state, the report gains taxonomy/contamination/timeline."""
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "DAR-1", raw=1000, trimmed=900)
+    otu = tmp_path / "otu_table.csv"
+    pd.DataFrame({"sequence": ["A"], "DAR-1": [800], "Blank-PCR-1": [2]}).to_csv(otu, index=False)
+    b = ReadTrackingBuilder("m", logs_dir=logs, swarm_otu_table=otu)
+    df = b.build()
+    # taxonomy CSV (blast schema): ranks + is_contaminant_candidate + sample cols + Sequence
+    tax = tmp_path / "m_blast.csv"
+    pd.DataFrame({
+        "ASV_ID": ["OTU_1", "OTU_2"], "pident": [100.0, ""],
+        "kingdom": ["Metazoa", "Unassigned"], "phylum": ["Chordata", "Unassigned"],
+        "class": ["Actinopteri", "Unassigned"], "order": ["Perciformes", "Unassigned"],
+        "family": ["Percidae", "Unassigned"], "genus": ["Perca", "Unassigned"],
+        "species": ["Perca_fluviatilis", "Unassigned"],
+        "is_contaminant_candidate": [False, False],
+        "DAR-1": [800, 50], "Blank-PCR-1": [2, 0], "Sequence": ["A", "C"],
+    }).to_csv(tax, index=False)
+    otu_full = tmp_path / "otu_table_full.csv"
+    pd.DataFrame({"OTU": ["1", "2", "3"], "total": [800, 50, 5], "length": [82, 83, 200],
+                  "chimera": ["N", "N", "Y"], "spread": [1, 1, 1]}).to_csv(otu_full, index=False)
+    state = {"steps": {"trim": {"status": "completed", "duration_seconds": 10.0},
+                       "swarm": {"status": "completed", "duration_seconds": 5.0}}}
+    html = HTMLReportBuilder("m", df, steps=b.steps, state=state,
+                             taxonomy_csv=tax, otu_table_full=otu_full,
+                             warnings=b.warnings(df, log=False)).render()
+    assert "Run timeline" in html and "completed" in html
+    assert "Top species" in html and "Perca" in html
+    assert "contamination" in html  # Blank-PCR-1 had reads
+    assert "data:image/png;base64," in html
+    assert "#44f187" in html and "#38bdf8" not in html  # green theme, no blue
+
+
+def test_html_report_degrades_without_extra_sources(tmp_path):
+    """No taxonomy/state -> still renders (read-tracking only), no crash."""
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    b = ReadTrackingBuilder("m", logs_dir=logs)
+    html = HTMLReportBuilder("m", b.build(), steps=b.steps).render()
+    assert "<html" in html and "Read tracking" in html
+    assert "Top species" not in html  # no taxonomy section
+
+
 def test_report_config_defaults_and_strictness():
     c = ReportConfig()
     assert c.read_tracking is True and c.html_report is False

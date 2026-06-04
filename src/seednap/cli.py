@@ -1256,10 +1256,31 @@ def report(
             print_warning(f"{len(warns)} data-loss/measurement warning(s) — see the run log.")
 
         if html_report:
+            import json as _json
+
+            state = None
+            state_file = out / f".{marker}_state.json"
+            if state_file.exists():
+                try:
+                    state = _json.loads(state_file.read_text())
+                except (ValueError, OSError):
+                    print_warning(f"Could not read state file {state_file}; timeline omitted.")
+            # Locate the final taxonomy table (for the taxonomy/contamination panels).
+            taxo = None
+            for suffix in ("blast", "dada2RDP", "dada2", "ecotag", "decipher"):
+                cand = out / f"{marker}_{suffix}.csv"
+                if cand.exists():
+                    taxo = cand
+                    break
+            if taxo is None:
+                globbed = sorted(out.glob(f"{marker}_*.csv"))
+                taxo = globbed[0] if globbed else None
+            otu_full = swarm_otu.parent / "otu_table_full.csv" if method == "SWARM" else None
             html_path = HTMLReportBuilder(
                 marker, df, warnings=warns, steps=builder.steps,
+                state=state, taxonomy_csv=taxo,
+                otu_table_full=otu_full if (otu_full and otu_full.exists()) else None,
                 summary={
-                    "cluster": method or "",
                     "warn_below_retention_pct": warn_retention,
                     "subtitle": f"{len(df)} samples · marker {marker}",
                 },
