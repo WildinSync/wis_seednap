@@ -310,6 +310,18 @@ def test_read_tracking_warnings_have_header(tmp_path):
     assert "#e3b341" in html                             # amber [WARN] colorization
 
 
+def test_tables_wrap_long_text_and_scroll(tmp_path):
+    """Tables wrap long values and give data tables natural, non-cramped widths."""
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    b = ReadTrackingBuilder("m", logs_dir=logs)
+    html = HTMLReportBuilder("m", b.build(), steps=b.steps).render()
+    assert "th, td{overflow-wrap:anywhere;}" in html          # long paths/names wrap
+    assert ".scroll table{width:auto; min-width:100%;" in html  # data tables get full width
+    assert ".scroll th, .scroll td{white-space:nowrap;}" in html  # one line + scroll, no cramping
+
+
 def test_run_log_has_css_fullscreen_toggle(tmp_path):
     """The run-log terminal offers a pure-CSS Fullscreen toggle (no JS)."""
     from seednap.steps.report import HTMLReportBuilder

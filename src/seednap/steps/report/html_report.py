@@ -111,13 +111,19 @@ _TEMPLATE = Template(
   figcaption b{font-weight:700;}
   table{border-collapse:collapse; margin:1.2rem auto; font-size:.9rem; width:100%;
         border-top:1.4px solid var(--rule); font-variant-numeric:tabular-nums lining-nums;}
-  caption{caption-side:top; text-align:left; font-size:.87rem; margin-bottom:.4rem;}
+  caption{caption-side:top; text-align:left; font-size:.87rem; margin-bottom:.4rem; overflow-wrap:anywhere;}
   caption b{font-weight:700;}
-  thead th{border-bottom:1px solid var(--rule); font-weight:700; text-align:right; padding:.3rem .7rem;}
+  thead th{border-bottom:1px solid var(--rule); font-weight:700; text-align:right; padding:.32rem .8rem; vertical-align:bottom;}
   thead th:first-child, tbody td:first-child{text-align:left;}
-  tbody td{padding:.26rem .7rem; text-align:right; border-bottom:1px solid var(--hair);}
+  tbody td{padding:.3rem .8rem; text-align:right; border-bottom:1px solid var(--hair); vertical-align:top;}
+  /* Long text (paths, names) wraps instead of overflowing the cell. */
+  th, td{overflow-wrap:anywhere;}
   tbody tr:last-child td{border-bottom:1.4px solid var(--rule);}
-  .scroll{max-height:30rem; overflow:auto;}
+  /* Wide data tables: keep natural column widths (never cramped), every cell on
+     one line, and scroll inside their box rather than overflowing the page. */
+  .scroll{max-height:30rem; overflow:auto; margin:1.2rem 0;}
+  .scroll table{width:auto; min-width:100%; margin:0;}
+  .scroll th, .scroll td{white-space:nowrap;}
   .flag-low{font-weight:700;} .flag-low::after{content:" *";}
   .na{color:var(--muted); font-style:italic;}
   .warn-head{font-variant-caps:small-caps; letter-spacing:.06em; font-weight:700; font-size:.8rem;
@@ -810,7 +816,7 @@ class HTMLReportBuilder:
                  f"identified by the <code>Blank*</code> name prefix and contamination is computed "
                  f"from blank read counts (not a precomputed flag).</p>")
         return intro + self._table("Features detected in negative controls, ranked by total control reads.",
-                                    ["feature taxon", *ctrl, "total in samples"], rows)
+                                    ["feature taxon", *ctrl, "total in samples"], rows, scroll=True)
 
     def _section_timeline(self) -> Optional[str]:
         steps = self.state.get("steps") if isinstance(self.state, dict) else None
