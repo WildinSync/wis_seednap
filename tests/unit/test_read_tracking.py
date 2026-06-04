@@ -149,11 +149,13 @@ def test_html_report_rich_sections(tmp_path):
     html = HTMLReportBuilder("m", df, steps=b.steps, state=state,
                              taxonomy_csv=tax, otu_table_full=otu_full,
                              warnings=b.warnings(df, log=False)).render()
-    assert "Run timeline" in html and "completed" in html
+    assert "Run provenance" in html and "completed" in html  # timeline table
     assert "Top species" in html and "Perca" in html
-    assert "contamination" in html  # Blank-PCR-1 had reads
+    assert "contamination" in html.lower()  # Blank-PCR-1 had reads
     assert "data:image/png;base64," in html
-    assert "#44f187" in html and "#38bdf8" not in html  # green theme, no blue
+    # LaTeX-paper theme: sea-green accent, no neon dashboard colors
+    assert "#2e8b57" in html and "#44f187" not in html and "#38bdf8" not in html
+    assert "Figure 1." in html and "Table 1." in html  # numbered figs/tables
 
 
 def test_html_report_degrades_without_extra_sources(tmp_path):
@@ -165,6 +167,25 @@ def test_html_report_degrades_without_extra_sources(tmp_path):
     html = HTMLReportBuilder("m", b.build(), steps=b.steps).render()
     assert "<html" in html and "Read tracking" in html
     assert "Top species" not in html  # no taxonomy section
+
+
+def test_html_report_scales_to_many_samples(tmp_path):
+    """>50 samples must not produce a metres-tall chart; report renders fine."""
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    otu = {"sequence": ["A", "C"]}
+    for i in range(120):
+        s = f"S{i:03d}"
+        _write_trim_logs(logs, s, raw=1000, trimmed=900)
+        otu[s] = [500, 300]
+    pd.DataFrame(otu).to_csv(tmp_path / "otu.csv", index=False)
+    b = ReadTrackingBuilder("m", logs_dir=logs, swarm_otu_table=tmp_path / "otu.csv")
+    df = b.build()
+    assert len(df) == 120
+    html = HTMLReportBuilder("m", df, steps=b.steps).render()
+    # report stays small (histogram, not a 120-bar chart) and renders all rows
+    assert len(html) < 1_500_000
+    assert "Retention distribution" in html or "data:image/png;base64," in html
 
 
 def test_report_config_defaults_and_strictness():
