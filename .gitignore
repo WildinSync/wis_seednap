@@ -33,3 +33,9 @@ README.md.backup
 /swarm_gdc
 
 CLAUDE.md
+
+# Working notes, status reports, audits, codebase deep-dives (not canon)
+docs/report/
+
+# outputs_test is a symlink to the local validation dataset (see seednap-data)
+/outputs_test
