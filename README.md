@@ -34,8 +34,10 @@ flowchart LR
 
     export[Export<br/>GBIF / DarwinCore]:::pass
     final[Final CSV<br/>Taxonomy + Abundances]:::io
+    report[Run report<br/>read tracking + HTML]:::pass
 
     raw --> trim --> s2 --> s3 --> export --> final
+    final --> report
 
     classDef io fill:#ffffff,stroke:#bbbbbb,stroke-width:1px,color:#000
     classDef pass fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#000
@@ -84,6 +86,7 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 | **Cluster** | SWARM or DADA2 | OTU clustering or ASV denoising |
 | **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Taxonomic assignment with cascade-null per-rank thresholds and MEGAN-LR top-bitscore LCA (BLAST) or RDP bootstrap (DADA2) |
 | **Export** | Built-in | GBIF long format and DarwinCore occurrence CSV with deterministic `occurrenceID` and `contamination_flag` |
+| **Report** | Built-in | Per-step read/sequence tracking table + data-loss warnings, and an optional self-contained HTML run report (dataset provenance, taxonomy headline, QC charts, and the colorized console run log) |
 
 ## CLI Commands
 
@@ -100,6 +103,8 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 | `format-gbif INPUT` | Convert results to GBIF long format |
 | `create-gbif TAXO SAMPLE_META PROJECT_META OUTPUT` | Build DarwinCore GBIF occurrence CSV |
 | `demultiplex READS LIB META` | Demultiplex ligation-based libraries |
+| `report MARKER` | Build the read-tracking report (+ `--html` for the visual run report) from existing outputs |
+| `version` | Print the installed SeeDNAP version |
 
 Run `seednap --help` or `seednap <command> --help` for full options.
 
@@ -134,6 +139,7 @@ Full configuration reference: [docs/configuration.md](docs/configuration.md)
 | [docs/cli-reference.md](docs/cli-reference.md) | Full CLI command reference |
 | [docs/taxonomy-methods.md](docs/taxonomy-methods.md) | Taxonomy assignment methods comparison |
 | [docs/gbif-export.md](docs/gbif-export.md) | GBIF and DarwinCore export guide |
+| [docs/reporting.md](docs/reporting.md) | Read-tracking table, data-loss warnings, and the HTML run report |
 | [docs/ecotag-setup.md](docs/ecotag-setup.md) | OBITools / ecotag installation and discovery |
 
 ## Project Structure
@@ -150,6 +156,7 @@ seednap/
       swarm/                        # VSEARCH + SWARM clustering
       taxonomic_assignment/         # BLAST, DADA2, DECIPHER, ecotag
       formatting/                   # GBIF + DarwinCore export
+      report/                       # Read-tracking table + HTML run report
     utils/                          # Subprocess, logging, sequence tools
   config/markers/                   # Example YAML configs
   scripts/                          # R scripts (DADA2, DECIPHER)

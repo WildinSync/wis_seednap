@@ -252,6 +252,36 @@ seednap validate CONFIG
 
 ---
 
+## `report`
+
+Build the read/sequence-tracking report (and optionally the HTML run report)
+from an existing run's outputs.
+
+```
+seednap report MARKER [OPTIONS]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `-o, --output-dir PATH` | `outputs/` | Base output directory of the run |
+| `--html` | | Also generate the self-contained HTML run report |
+| `--warn-retention FLOAT` | `30.0` | Warn for samples retaining below this % of raw reads |
+| `--warn-step-loss FLOAT` | `70.0` | Warn when a single step drops more than this % of a sample's reads |
+| `--field-metadata PATH` | auto | Field metadata CSV (location, dates, sites) for the Dataset section |
+| `--project-metadata PATH` | auto | Project metadata CSV (recorder, sequencing, reference DB) |
+| `--log-file PATH` | auto | Run log to embed (colorized) in the HTML report's Run-log section; auto-located under `logs/` if omitted |
+
+```bash
+seednap report teleo -o outputs --html \
+  --field-metadata metadata/metadata_field_my_dataset.csv \
+  --project-metadata metadata/metadata_proj_my_dataset.csv
+```
+
+Writes `outputs/04_report/<marker>/read_tracking.{csv,txt}` and, with `--html`,
+`report.html`. See [reporting.md](reporting.md) for details.
+
+---
+
 ## `version`
 
 Show detailed version information.

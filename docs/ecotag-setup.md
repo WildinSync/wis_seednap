@@ -10,8 +10,8 @@ The seednap pipeline auto-discovers OBITools in three ways, in this order:
 1. **`SEEDNAP_OBITOOLS_BIN` environment variable** -- explicit override.
 2. **`PATH`** -- whatever's already activated (`conda activate obitools`).
 3. **Well-known install locations** -- `/opt/anaconda3/envs/obitools/bin`,
-   `~/miniconda3/envs/obitools/bin`, `~/.conda/envs/obitools/bin`,
-   `~/anaconda3/envs/obitools/bin`.
+   `/opt/conda/envs/obitools/bin`, `~/miniconda3/envs/obitools/bin`,
+   `~/.conda/envs/obitools/bin`, `~/anaconda3/envs/obitools/bin`.
 
 If none of those work, the runner emits a clear error pointing here.
 

@@ -26,7 +26,7 @@ This checks YAML syntax, field types, required values, and reports any errors.
 version: "0.1.0"
 ```
 
-Config format version. Must match the pipeline version.
+Config format version (informational; free-form string, default `"0.1.0"`, not enforced at load time).
 
 ### `marker`
 
@@ -224,6 +224,25 @@ metrics:
     - "length_distribution"
 ```
 
+### `report`
+
+Per-step read/sequence tracking and the optional HTML run report. See
+[reporting.md](reporting.md) for full details.
+
+```yaml
+report:
+  read_tracking: true                        # write read_tracking.{csv,txt} + warnings (default: true)
+  html_report: false                         # also write a self-contained HTML report (default: false)
+  warn_below_retention_pct: 30.0             # warn for samples retaining < this % of raw reads
+  warn_step_loss_pct: 70.0                   # warn when a single step drops more than this %
+  # Optional dataset metadata for the report's "Dataset & provenance" section:
+  sample_metadata: null                      # path to per-sample (field) metadata CSV; optional
+  project_metadata: null                     # path to project metadata CSV; optional
+```
+
+Artifacts are written to `outputs/04_report/<marker>/`. The whole section is
+optional; defaults apply when omitted.
+
 ### `logging`
 
 ```yaml
@@ -253,5 +272,6 @@ See `config/markers/` for complete working examples:
 
 - `teleo.yaml` -- Teleo 12S fish marker (Namibia dataset, ligation demux)
 - `mifish.yaml` -- MiFish-U 12S fish marker (Argentina dataset)
-- `mam07.yaml` -- MamP007 16S mammal marker (Switzerland dataset)
+- `mam07.yaml` -- MamP007 16S mammal marker (Switzerland dataset, SWARM path)
+- `mam07_dada2.yaml` -- MamP007 16S mammal marker, DADA2 ASV path
 - `teleo_rhone.yaml` -- Teleo 12S (Switzerland Rhone dataset)

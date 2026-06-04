@@ -105,7 +105,7 @@ needed.
 
 The repository ships with a pytest suite that exercises the post-processing
 logic without invoking any external bioinformatics tools, so it runs
-locally in under a second.
+locally in a few seconds.
 
 ```bash
 pytest

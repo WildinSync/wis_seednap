@@ -3,7 +3,7 @@
 ## Overview
 
 ```
-demultiplex (optional) --> trim --> cluster (DADA2 or SWARM) --> taxonomy --> export
+demultiplex (optional) --> trim --> cluster (DADA2 or SWARM) --> taxonomy --> export --> report
 ```
 
 Each step reads outputs from the previous step. The pipeline tracks state in a JSON file, so you can resume from any failed step with `--resume`.
@@ -15,7 +15,7 @@ Each step reads outputs from the previous step. The pipeline tracks state in a J
 **Tool:** Built-in (Cutadapt under the hood)
 **Input:** Raw library FASTQ files + a metadata CSV mapping samples to
 ligation tags
-**Output:** Per-sample FASTQ files in `outputs/00_demultiplex/{marker}/`
+**Output:** Per-sample FASTQ files under `outputs/01_trim/{marker}/demux/`
 
 The ligation protocol generates per-sample tag files, demultiplexes the
 library, detects primers in both orientations, and merges/realigns reads.
@@ -164,7 +164,7 @@ Parses SWARM cluster membership, per-sample abundances, and chimera status to pr
 ## 3. Taxonomic Assignment
 
 **Input:** Representative sequences (`query.fasta`) and abundance table (`otu_table.csv` from SWARM, or `seqtab_clean.csv` from DADA2)
-**Output:** Taxonomy CSV in `outputs/03_taxo/{marker}/` and final table at `outputs/{marker}_{method}.csv`
+**Output:** Taxonomy CSV in `outputs/03_taxo/{marker}/` and final table at `outputs/{marker}_{method}.csv` (the `{method}` token is `blast` / `ecotag` / `decipher` / `dada2RDP`, e.g. `teleo_dada2RDP.csv` for the DADA2 RDP classifier)
 
 All four methods (BLAST, DADA2 RDP, DECIPHER, ecotag) share a common
 post-processor (`seednap.utils.taxonomy.link_taxonomy_with_abundance`),
@@ -198,12 +198,41 @@ See [gbif-export.md](gbif-export.md) for the full DarwinCore publishing workflow
 
 ---
 
+## 5. Run Report
+
+**Tool:** Built-in
+**Input:** Cutadapt logs, the cluster output (SWARM `otu_table` / DADA2
+`track_reads.csv`), and — for the HTML report — the taxonomy table, the SWARM
+`otu_table_full.csv`, the run state JSON, and (optionally) dataset metadata.
+**Output:** `outputs/04_report/{marker}/read_tracking.{csv,txt}` and, when
+`report.html_report` is enabled, `report.html`.
+
+The read-tracking table records per-sample read/sequence counts at each step
+(`raw → trimmed → clustered` for SWARM, `raw → trimmed → filtered → denoised →
+merged → nonchim` for DADA2) with a `% retained` column, and emits data-loss
+warnings against configurable thresholds. Counts that cannot be measured are
+recorded as `NA` (never a silent `0`).
+
+The optional HTML run report is a single self-contained, scientific-paper-style
+file: dataset provenance, read-tracking funnel + per-sample retention, a
+taxonomy headline (assignment rate per rank, top taxa), feature QC (chimeras,
+length), a control/contamination check, the run timeline, and the full console
+run log colorized by level (the same palette as the live console).
+
+The read-tracking table is written after the clustering step; the HTML report
+after the full run (so taxonomy/provenance are available). Both can be
+regenerated from existing outputs with `seednap report MARKER [--html]`.
+
+See [reporting.md](reporting.md) for full details.
+
+---
+
 ## Output Directory Structure
 
 ```
 outputs/
-  00_demultiplex/{marker}/       # Demultiplexed FASTQ files (if enabled)
   01_trim/{marker}/              # Trimmed FASTQ files
+    demux/                       #   Demultiplexed FASTQ (ligation demux, if enabled)
   02_swarm/{marker}/             # SWARM outputs
     merged/                      #   Merged reads per sample
     dereplicated/                #   Dereplicated per sample
@@ -213,7 +242,11 @@ outputs/
     query.fasta                  #   Representative sequences
   02_dada2/{marker}/             # DADA2 outputs (if used)
   03_taxo/{marker}/              #   BLAST/taxonomy intermediate files
-  {marker}_{method}.csv          # Final taxonomy + abundance table
+  04_report/{marker}/            # Read-tracking table (+ HTML report if enabled)
+    read_tracking.csv            #   Per-sample counts at each step + % retained
+    read_tracking.txt            #   Human-readable table
+    report.html                  #   Self-contained HTML run report (opt-in)
+  {marker}_{method}.csv          # Final taxonomy + abundance table (method = blast/ecotag/decipher/dada2RDP)
   .{marker}_state.json           # Pipeline state (for resume)
 ```
 
