@@ -248,8 +248,9 @@ def test_run_log_section_colorized(tmp_path):
     html = HTMLReportBuilder("m", b.build(), steps=b.steps, log_file=run_log).render()
     assert "Run log</h2>" in html        # the Run-log panel heading
     assert '<pre class="runlog">' in html
-    # rich's standard ANSI palette: info navy, warning olive, error maroon
-    assert "#000080" in html and "#808000" in html and "#800000" in html
+    assert '<div class="terminal">' in html and "term-dot" in html  # real terminal window
+    # bright ANSI palette tuned for the dark terminal: info blue, warning amber, error red
+    assert "#6cb6ff" in html and "#e3b341" in html and "#ff6b6b" in html
     assert "http://" not in html and "https://" not in html  # still self-contained
     assert "&lt;x&gt;" in html  # message HTML is escaped, never injected raw
 

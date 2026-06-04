@@ -51,10 +51,11 @@ header that explains what each line means):
 
 A single self-contained `.html` file (no external assets, no CDN, no
 JavaScript — charts are embedded as base64 PNGs) styled like a typeset
-scientific paper. The title, abstract and run-summary table are shown up
-front; each section below is a **selectable panel** behind a sticky button
-bar (pure-CSS tabs — one panel visible at a time on screen, all panels
-expanded when the page is printed). Sections:
+scientific paper. A **sticky top navigation bar** carries one button per
+section; clicking a button shows that **panel** (pure-CSS tabs — one panel
+visible at a time on screen, all panels expanded when the page is printed).
+The title, abstract and run-summary table sit below the bar as front matter.
+Sections:
 
 1. **Dataset** — identity and provenance (see below).
 2. **Read tracking** — the read funnel and per-sample retention figures, the
@@ -82,15 +83,16 @@ renders as text and tables, with a `[WARN]`.
 
 ### Run-log section
 
-Its own selectable panel embeds the pipeline's full console transcript
-(`logs/<marker>_pipeline_run.log`), colorized by log level with the **same
-palette as the live SeeDNAP console** — `INFO` navy, `WARNING` olive, `ERROR`
-maroon — produced by `rich`'s own HTML export so the colors match exactly.
-Short logs are shown whole; long ones are truncated to keep the file portable,
-but **every `WARNING`/`ERROR` line is always kept** along with the run's
-start/end, and intervening runs of routine lines are replaced by explicit
-`… N omitted …` markers (never a silent drop). The transcript scrolls within
-the panel, and the on-disk path to the complete log is printed alongside it. In an orchestrator run the log is wired automatically; for the
+Its own tab renders the pipeline's full console transcript
+(`logs/<marker>_pipeline_run.log`) inside a **real terminal window** — dark
+chrome with traffic-light dots, a large scrolling body — colorized by log level
+with `rich`'s own HTML export so the styling matches the live console (here on
+a dark background: `INFO` blue, `WARNING` amber, `ERROR` red). Short logs are
+shown whole; long ones are truncated to keep the file portable, but **every
+`WARNING`/`ERROR` line is always kept** along with the run's start/end, and
+intervening runs of routine lines are replaced by explicit `… N omitted …`
+markers (never a silent drop). The transcript scrolls within the terminal, and
+the on-disk path to the complete log is printed alongside it. In an orchestrator run the log is wired automatically; for the
 standalone `report` command it is auto-located under `logs/` (or supplied with
 `--log-file`). If no log is found, the section says so explicitly.
 

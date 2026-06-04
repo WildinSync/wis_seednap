@@ -93,10 +93,14 @@ _TEMPLATE = Template(
   *{box-sizing:border-box;}
   html{font-size:17px;-webkit-text-size-adjust:100%;}
   body{font-family:var(--serif); font-size:1rem; line-height:var(--leading); color:var(--ink);
-       background:var(--paper); max-width:var(--measure); margin:0 auto; padding:3rem 1.25rem 5rem;
+       background:var(--paper); margin:0; padding:0 0 5rem;
        text-rendering:optimizeLegibility; font-kerning:normal;
        font-feature-settings:"kern" 1,"liga" 1;}
-  .title-block{text-align:center; margin:0 0 2.2rem;}
+  /* Centered reading column for prose/tables; the top bar and the terminal
+     deliberately break out of it. */
+  .title-block,.abstract,.frontmatter,.panel{max-width:var(--measure); margin-left:auto;
+       margin-right:auto; padding-left:1.25rem; padding-right:1.25rem;}
+  .title-block{text-align:center; margin-top:2.6rem; margin-bottom:2.2rem;}
   .title-block .org{font-variant-caps:small-caps; letter-spacing:.12em; font-size:.82rem; color:var(--muted); margin:0 0 .5rem;}
   h1{font-size:1.7rem; font-weight:700; line-height:1.25; margin:0 0 .35rem;}
   .title-block .marker{font-style:italic;}
@@ -132,36 +136,68 @@ _TEMPLATE = Template(
   .warn-list div{margin:.12rem 0;}
   .warn-none{font-style:italic; color:var(--muted);}
   code{font-family:var(--mono); font-size:.85em;}
-  /* Tabbed panels (pure CSS, no JS): hidden radios drive which panel shows. The
-     <label>s render as a sticky button group; one panel is visible at a time. */
+  /* Tabbed panels (pure CSS, no JS): hidden radios drive which panel shows.
+     The labels live in a sticky top bar; one panel is visible at a time. */
   input.tab-radio{position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;}
-  .tabs{display:flex; flex-wrap:wrap; gap:.35rem; margin:1.6rem 0 1.8rem; padding:.55rem 0;
-        position:sticky; top:0; z-index:5; background:var(--paper); border-bottom:1px solid var(--hair);}
-  .tabs label{font-family:var(--serif); font-size:.86rem; cursor:pointer; user-select:none; white-space:nowrap;
-        padding:.32rem .72rem; border:1px solid var(--hair); border-radius:4px; color:var(--muted); background:#fff;}
+  .topbar{position:sticky; top:0; z-index:10; background:var(--paper);
+          border-bottom:1px solid var(--hair); box-shadow:0 1px 6px rgba(0,0,0,.04);}
+  .topbar-inner{display:flex; align-items:center; gap:.9rem; flex-wrap:wrap;
+          max-width:1180px; margin:0 auto; padding:.5rem 1.25rem;}
+  .brand{font-variant-caps:small-caps; letter-spacing:.12em; font-weight:700; color:var(--accent);
+          white-space:nowrap; font-size:.95rem;}
+  .brand .brand-sub{color:var(--muted); font-weight:400; font-variant-caps:normal; letter-spacing:0;
+          font-size:.8rem; margin-left:.4rem;}
+  .tabs{display:flex; flex-wrap:wrap; gap:.35rem;}
+  .tabs label{font-family:var(--serif); font-size:.85rem; cursor:pointer; user-select:none; white-space:nowrap;
+        padding:.3rem .7rem; border:1px solid var(--hair); border-radius:5px; color:var(--muted); background:#fff;}
   .tabs label:hover{color:var(--ink); border-color:var(--accent);}
-  .tabs label:focus-within{outline:2px solid var(--accent); outline-offset:1px;}
-  .panel{display:none;} .panel h2{margin-top:0;}
+  .panel{display:none;} .panel h2{margin-top:.2rem;} .panel{padding-top:1.4rem; padding-bottom:1rem;}
   {% for i in range(12) %}#tab-{{ i }}:checked ~ #panel-{{ i }}{% if not loop.last %},
   {% endif %}{% endfor %}{display:block;}
-  {% for i in range(12) %}#tab-{{ i }}:checked ~ .tabs label[for="tab-{{ i }}"]{% if not loop.last %},
+  {% for i in range(12) %}#tab-{{ i }}:checked ~ .topbar label[for="tab-{{ i }}"]{% if not loop.last %},
   {% endif %}{% endfor %}{color:#fff; background:var(--accent); border-color:var(--accent); font-weight:700;}
-  /* Run-log transcript: a light, framed monospace listing. Level colours match
-     the rich console palette exactly (info navy, warning olive, error maroon),
-     which is the standard ANSI palette tuned for a light background. */
-  .runlog-meta{font-family:var(--mono); font-size:.78rem; color:var(--muted); margin:.2rem 0 .35rem;}
-  .runlog{font-family:var(--mono); font-size:.74rem; line-height:1.5; color:#333;
-          background:#f6f6f1; border:1px solid var(--hair); border-radius:3px;
-          padding:.7rem .9rem; margin:.55rem 0 0; max-height:34rem; overflow:auto; white-space:pre; tab-size:2;}
-  .lvl-info{color:#000080;} .lvl-warning{color:#808000; font-weight:600;} .lvl-error{color:#800000; font-weight:700;}
-  @media print{ body{max-width:100%; font-size:10.5pt; line-height:1.4; color:#000; background:#fff; padding:0;}
+  {% for i in range(12) %}#tab-{{ i }}:focus-visible ~ .topbar label[for="tab-{{ i }}"]{% if not loop.last %},
+  {% endif %}{% endfor %}{outline:2px solid var(--accent); outline-offset:2px;}
+  /* Run-log transcript rendered as a real terminal window: dark chrome with
+     traffic-light dots, a large dark body, and the bright ANSI palette that
+     reads on black (info blue, warning yellow, error red). The window breaks
+     out of the reading column so it is genuinely terminal-sized. */
+  .runlog-meta{font-family:var(--mono); font-size:.78rem; color:var(--muted); margin:.2rem 0 .6rem;}
+  .term-legend{font-family:var(--mono); font-size:.78rem; color:var(--muted);}
+  .lvl-chip{font-family:var(--mono); padding:.04rem .42rem; border-radius:3px; background:#1b1d23; margin:0 .12rem;}
+  .lvl-info{color:#6cb6ff;} .lvl-warning{color:#e3b341; font-weight:600;} .lvl-error{color:#ff6b6b; font-weight:700;}
+  .terminal{width:min(95vw,1200px); margin:1.1rem 0; margin-left:50%; transform:translateX(-50%);
+            border-radius:9px; overflow:hidden; border:1px solid #000;
+            box-shadow:0 10px 34px rgba(0,0,0,.30); background:#15171c;}
+  .term-bar{display:flex; align-items:center; gap:.5rem; padding:.55rem .8rem;
+            background:linear-gradient(#3a3d44,#2b2e34); border-bottom:1px solid #000;}
+  .term-dot{width:12px; height:12px; border-radius:50%; box-shadow:inset 0 0 0 .5px rgba(0,0,0,.25);}
+  .term-dot.r{background:#ff5f56;} .term-dot.y{background:#ffbd2e;} .term-dot.g{background:#27c93f;}
+  .term-title{margin-left:.5rem; color:#c8ccd2; font-family:var(--mono); font-size:.8rem; letter-spacing:.01em;}
+  .term-body{height:72vh; min-height:24rem; overflow:auto; background:#15171c;}
+  .runlog{font-family:var(--mono); font-size:.82rem; line-height:1.55; color:#d6d9df;
+          background:transparent; margin:0; padding:1rem 1.15rem; white-space:pre; tab-size:2;}
+  @media print{ body{font-size:10.5pt; line-height:1.4; color:#000; background:#fff; padding:0;}
     /* Print the whole document: expand every panel, drop the interactive nav. */
-    input.tab-radio, .tabs{display:none !important;}
-    .panel{display:block !important; margin:1.4rem 0; break-inside:avoid;}
-    .runlog{max-height:none;}
+    input.tab-radio, .topbar{display:none !important;}
+    .panel{display:block !important; margin:1.4rem auto; break-inside:avoid;}
+    .terminal{width:100%; margin:1rem 0; transform:none; box-shadow:none;
+              -webkit-print-color-adjust:exact; print-color-adjust:exact;}
+    .term-body{height:auto;}
     h2,h3{break-after:avoid;} figure,table{break-inside:avoid;} @page{margin:2cm;} }
 </style></head>
 <body>
+
+{% for s in sections %}<input class="tab-radio" type="radio" name="rtab" id="tab-{{ loop.index0 }}"{% if loop.first %} checked{% endif %}>
+{% endfor %}
+<header class="topbar">
+  <div class="topbar-inner">
+    <span class="brand">SeeDNAP<span class="brand-sub">{{ marker }}</span></span>
+    <nav class="tabs" role="tablist" aria-label="Report sections">
+{% for s in sections %}      <label for="tab-{{ loop.index0 }}">{{ s.title }}</label>
+{% endfor %}    </nav>
+  </div>
+</header>
 
 <div class="title-block">
   <p class="org">SeeDNAP &middot; eDNA metabarcoding pipeline</p>
@@ -174,13 +210,8 @@ _TEMPLATE = Template(
   <p class="label">Summary</p>
   <p>{{ abstract }}</p>
 </div>
-{{ summary_table }}
+<div class="frontmatter">{{ summary_table }}</div>
 
-{% for s in sections %}<input class="tab-radio" type="radio" name="rtab" id="tab-{{ loop.index0 }}"{% if loop.first %} checked{% endif %}>
-{% endfor %}
-<nav class="tabs" role="tablist" aria-label="Report sections">
-{% for s in sections %}<label for="tab-{{ loop.index0 }}">{{ s.title }}</label>
-{% endfor %}</nav>
 {% for s in sections %}<section class="panel" id="panel-{{ loop.index0 }}">
 <h2><span class="h2-accent">&#9656;</span> {{ s.title }}</h2>
 {{ s.html }}
@@ -786,23 +817,36 @@ class HTMLReportBuilder:
 
             from rich.console import Console
             from rich.text import Text
+            from rich.theme import Theme
         except ImportError as exc:  # pragma: no cover -- rich is a hard dependency
             logger.warning(f"[WARN] html_report: expected=rich for colorized log, got=missing "
                            f"({exc}), fallback=plain monospace log")
             return None
 
+        # Bright ANSI palette tuned for a dark terminal background (the report
+        # renders the log in a real terminal window). Colours mirror the legend
+        # chips in the section intro.
+        theme = Theme({
+            "log.time": "#7d8590",
+            "log.logger": "#6b7280",
+            "logging.level.debug": "#56b6c2",
+            "logging.level.info": "#6cb6ff",
+            "logging.level.warning": "#e3b341",
+            "logging.level.error": "bold #ff6b6b",
+            "logging.level.critical": "bold reverse #ff6b6b",
+        }, inherit=True)
         con = Console(record=True, width=400, file=_io.StringIO(),
-                      force_terminal=True, highlight=False)
+                      force_terminal=True, highlight=False, theme=theme)
         for idx, text in items:
             if idx == -1:  # omission marker
-                con.print(Text(text, style="dim italic"), soft_wrap=True, highlight=False)
+                con.print(Text(text, style="#7d8590 italic"), soft_wrap=True, highlight=False)
                 continue
             parts = text.split(" | ", 3)
             line = Text(no_wrap=True)
             if len(parts) == 4 and parts[1].strip().upper() in _LOG_LEVELS:
                 line.append(parts[0] + " | ", style="log.time")
                 line.append(parts[1] + " | ", style=f"logging.level.{parts[1].strip().lower()}")
-                line.append(parts[2] + " | ", style="dim")
+                line.append(parts[2] + " | ", style="log.logger")
                 line.append(parts[3])
             else:
                 lvl = self._line_level(text)
@@ -852,8 +896,10 @@ class HTMLReportBuilder:
 
         intro = ("<p>Complete console transcript of the run "
                  f"(<code>{_esc(path.name)}</code>), colorized by log level exactly as the live "
-                 "SeeDNAP console renders it: <span class=\"lvl-info\">info</span>, "
-                 "<span class=\"lvl-warning\">warning</span>, <span class=\"lvl-error\">error</span>. ")
+                 "SeeDNAP console renders it: "
+                 "<span class=\"term-legend\"><span class=\"lvl-chip lvl-info\">info</span> "
+                 "<span class=\"lvl-chip lvl-warning\">warning</span> "
+                 "<span class=\"lvl-chip lvl-error\">error</span></span>. ")
         if truncated:
             intro += (f"The log is long ({total:,} lines), so every warning and error is kept "
                       "alongside the run's start and end, and intervening routine lines are "
@@ -862,10 +908,18 @@ class HTMLReportBuilder:
         else:
             intro += "</p>"
 
-        # This is its own selectable panel, so show the transcript directly (no
-        # extra disclosure); the meta line states size and event counts.
+        # Render the transcript inside a real terminal window (chrome + dark body).
         meta = f'<p class="runlog-meta">{" &middot; ".join(summary_bits)}</p>'
-        return intro + meta + pre
+        terminal = (
+            '<div class="terminal">'
+            '<div class="term-bar">'
+            '<span class="term-dot r"></span><span class="term-dot y"></span>'
+            '<span class="term-dot g"></span>'
+            f'<span class="term-title">{_esc(path.name)}</span></div>'
+            f'<div class="term-body">{pre}</div>'
+            '</div>'
+        )
+        return intro + meta + terminal
 
     def _summary_table_html(self) -> str:
         df = self.df
