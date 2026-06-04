@@ -52,6 +52,9 @@ extract_pattern_samplename <- function(input_string) {
   sub(".*/([^/]+)\\.[Rr][12].*", "\\1", input_string)
 }
 
+# Number of reads represented by a dada/merger object (DADA2 'track' idiom)
+getN <- function(x) sum(getUniques(x))
+
 # END of FUNCTIONS
 # ------------------------------ #
 
@@ -106,7 +109,9 @@ filter_args <- list(
 )
 if (min_len > 0) filter_args$minLen <- min_len
 if (max_len > 0) filter_args$maxLen <- max_len
-do.call(filterAndTrim, filter_args)
+# Capture the per-file [reads.in, reads.out] matrix for the read-tracking table.
+# Assigning the return value does not change filterAndTrim's side effects.
+out <- do.call(filterAndTrim, filter_args)
 
 # Generate QC images - after filtering
 invisible(mclapply(seq_along(paste0(filtpathFR, "/", fastqFs)), function(i) {
@@ -153,6 +158,8 @@ if (pool) {
   # Per-sample mode (default)
   mergers <- vector("list", length(sample.names))
   names(mergers) <- sample.names
+  # Per-sample forward-denoised read counts for the read-tracking table.
+  denoisedF <- setNames(numeric(length(sample.names)), sample.names)
   for(sam in sample.names) {
     cat("Processing:", sam, "\n")
     derepF <- derepFastq(filtFs[[sam]])
@@ -162,6 +169,7 @@ if (pool) {
     merger <- mergePairs(ddF, derepF, ddR, derepR,
                          minOverlap=min_overlap, maxMismatch=max_mismatch)
     mergers[[sam]] <- merger
+    denoisedF[[sam]] <- getN(ddF)
   }
   rm(derepF); rm(derepR)
 }
@@ -182,6 +190,36 @@ saveRDS(seqtab, file.path(marker_dir, "seqtab_clean.rds"))
 #saveRDS(t(seqtab), file.path(marker_dir, "seqtab_clean_t.rds"))
 
 write.csv(t(seqtab), file.path(marker_dir, "seqtab_clean_t.csv"), row.names = TRUE)
+
+# -------------------------------------------------------------------- #
+# Read-tracking table: per-sample read counts at each step. Additive only;
+# reads existing objects (out / dadaFs / mergers / seqtab) and writes a new
+# file. Does NOT modify seqtab or any existing output.
+if (pool) {
+  dadaFs_list <- if (is.list(dadaFs)) dadaFs else setNames(list(dadaFs), sample.names)
+  denoisedF <- sapply(dadaFs_list, getN)
+}
+track_in <- as.data.frame(out)                       # cols: reads.in, reads.out
+rownames(track_in) <- sapply(strsplit(rownames(track_in), "\\."), `[`, 1)
+mergers_list <- if (is.data.frame(mergers)) setNames(list(mergers), sample.names) else mergers
+mergedN <- sapply(mergers_list, getN)
+nonchim <- rowSums(seqtab)
+samp <- rownames(track_in)
+track <- data.frame(
+  sample   = samp,
+  input    = as.integer(track_in[[1]]),
+  filtered = as.integer(track_in[[2]]),
+  denoised = as.integer(denoisedF[samp]),
+  merged   = as.integer(mergedN[samp]),
+  nonchim  = as.integer(nonchim[samp]),
+  row.names = NULL,
+  stringsAsFactors = FALSE
+)
+# Samples dropped after filtering have no downstream count: a genuine 0
+# (real data loss surfaced in the report), not an error.
+for (col in c("denoised", "merged", "nonchim")) track[[col]][is.na(track[[col]])] <- 0L
+write.csv(track, file.path(marker_dir, "track_reads.csv"), row.names = FALSE)
+cat("[INFO] Wrote read-tracking table:", file.path(marker_dir, "track_reads.csv"), "\n")
 
 # Output a fasta for ecotag and blast
 df_seq <- data.frame(sequence = colnames(seqtab))

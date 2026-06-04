@@ -1176,6 +1176,103 @@ def run_pipeline(
 
 
 @main.command()
+@click.argument("marker", type=str)
+@click.option(
+    "--output-dir", "-o", type=click.Path(path_type=Path), default=Path("outputs"),
+    help="Base output directory (default: outputs/)",
+)
+@click.option("--html", "html_report", is_flag=True, help="Also generate the self-contained HTML run report")
+@click.option("--warn-retention", type=float, default=30.0, help="Warn below this overall retention %% (default: 30)")
+@click.option("--warn-step-loss", type=float, default=70.0, help="Warn when a step drops more than this %% (default: 70)")
+def report(
+    marker: str, output_dir: Path, html_report: bool,
+    warn_retention: float, warn_step_loss: float,
+) -> None:
+    """
+    Build the read/sequence tracking report from existing run outputs.
+
+    MARKER: marker name (e.g. teleo, mam07).
+
+    Rebuilds the per-step read-loss table (raw -> trimmed -> ... -> final) from
+    the on-disk Cutadapt logs and the DADA2/SWARM outputs. Pass --html for the
+    full self-contained visual report.
+    """
+    import pandas as pd
+
+    from seednap.steps.report import HTMLReportBuilder, ReadTrackingBuilder
+
+    out = output_dir
+    dada2_dir = out / "02_dada2" / marker
+    swarm_otu = out / "02_swarm" / marker / "otu_table.csv"
+
+    kwargs = {
+        "marker": marker, "logs_dir": out / "logs",
+        "warn_below_retention_pct": warn_retention, "warn_step_loss_pct": warn_step_loss,
+    }
+    method = None
+    if (dada2_dir / "track_reads.csv").exists():
+        kwargs["dada2_dir"] = dada2_dir
+        method = "DADA2"
+    elif swarm_otu.exists():
+        kwargs["swarm_otu_table"] = swarm_otu
+        method = "SWARM"
+    else:
+        print_warning(
+            f"No DADA2 track_reads.csv or SWARM otu_table.csv found under {out} "
+            f"for marker '{marker}'; reporting raw/trimmed counts from logs only."
+        )
+
+    console.print(
+        f"\n[bold]Read tracking report:[/bold] {marker}"
+        + (f"  [cyan]({method})[/cyan]" if method else "")
+    )
+    try:
+        builder = ReadTrackingBuilder(**kwargs)
+        df = builder.build()
+        if df.empty:
+            print_error(f"No samples found under {out} (need logs/ and a cluster output).")
+            sys.exit(1)
+
+        report_dir = out / "04_report" / marker
+        paths = builder.write(report_dir, df=df)
+        warns = builder.warnings(df, log=False)  # keep the console clean; shown below + in HTML
+
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("sample")
+        for step in builder.steps:
+            table.add_column(step, justify="right")
+        table.add_column("% retained", justify="right")
+        for _, row in df.iterrows():
+            cells = [str(row["sample"])]
+            for step in builder.steps:
+                cells.append("NA" if pd.isna(row[step]) else f"{int(row[step]):,}")
+            pr = row["pct_retained"]
+            cells.append("NA" if pd.isna(pr) else f"{pr:.1f}%")
+            table.add_row(*cells)
+        console.print(table)
+
+        print_success(f"Wrote {paths['read_tracking_csv']}")
+        if warns:
+            print_warning(f"{len(warns)} data-loss/measurement warning(s) — see the run log.")
+
+        if html_report:
+            html_path = HTMLReportBuilder(
+                marker, df, warnings=warns, steps=builder.steps,
+                summary={
+                    "cluster": method or "",
+                    "warn_below_retention_pct": warn_retention,
+                    "subtitle": f"{len(df)} samples · marker {marker}",
+                },
+            ).write(report_dir / "report.html")
+            print_success(f"Wrote HTML report: {html_path}")
+        console.print()
+
+    except Exception as e:
+        print_error(f"Report failed: {e}")
+        sys.exit(1)
+
+
+@main.command()
 def version() -> None:
     """Show version information."""
     console.print(f"\n[bold]seednap[/bold] version [cyan]{__version__}[/cyan]\n")

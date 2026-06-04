@@ -387,6 +387,7 @@ class PipelineOrchestrator:
             )
 
             self.state.complete_step(step_name, outputs)
+            self._build_read_tracking_report("dada2")
             self._save_state()
             log_pipeline_step(step_name, "complete", logger)
             return outputs
@@ -438,6 +439,7 @@ class PipelineOrchestrator:
             )
 
             self.state.complete_step(step_name, outputs)
+            self._build_read_tracking_report("swarm")
             self._save_state()
             log_pipeline_step(step_name, "complete", logger)
             return outputs
@@ -447,6 +449,73 @@ class PipelineOrchestrator:
             self._save_state()
             log_pipeline_step(step_name, "error", logger)
             raise
+
+    def _build_read_tracking_report(self, method: str) -> None:
+        """Build the read-tracking table (+ optional HTML report) after a
+        clustering step.
+
+        Non-fatal: a reporting failure logs a ``[WARN]`` and never fails the
+        run (CLAUDE.md section 4 -- the report is observational only).
+        """
+        if not self.config.report.read_tracking:
+            return
+        try:
+            import pandas as pd
+
+            from seednap.steps.report import HTMLReportBuilder, ReadTrackingBuilder
+
+            marker = self.config.marker.name
+            out = self.config.paths.output
+            report_dir = out / "04_report" / marker
+            kwargs = {
+                "marker": marker,
+                "logs_dir": out / "logs",
+                "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
+                "warn_step_loss_pct": self.config.report.warn_step_loss_pct,
+            }
+            if method == "dada2":
+                kwargs["dada2_dir"] = out / "02_dada2" / marker
+            elif method == "swarm":
+                kwargs["swarm_otu_table"] = out / "02_swarm" / marker / "otu_table.csv"
+
+            builder = ReadTrackingBuilder(**kwargs)
+            df = builder.build()
+            builder.write(report_dir, df=df)
+            warns = builder.warnings(df)
+
+            # Persist a compact summary into the step state (resume-safe).
+            step = self.state.get_step(method)
+            if step is not None:
+                if not df.empty:
+                    raw = pd.to_numeric(df["raw"], errors="coerce")
+                    final = pd.to_numeric(df[builder.steps[-1]], errors="coerce")
+                    pr = pd.to_numeric(df["pct_retained"], errors="coerce")
+                    step.metadata["read_tracking"] = {
+                        "n_samples": int(len(df)),
+                        "raw_reads_total": int(raw.sum()) if raw.notna().any() else None,
+                        "final_step": builder.steps[-1],
+                        "final_reads_total": int(final.sum()) if final.notna().any() else None,
+                        "mean_retention_pct": round(float(pr.mean()), 2) if pr.notna().any() else None,
+                        "n_warnings": len(warns),
+                    }
+                else:
+                    step.metadata["read_tracking"] = {"n_samples": 0, "n_warnings": len(warns)}
+
+            if self.config.report.html_report:
+                html_path = HTMLReportBuilder(
+                    marker, df, warnings=warns, steps=builder.steps,
+                    summary={
+                        "cluster": method.upper(),
+                        "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
+                        "subtitle": f"{len(df)} samples · marker {marker}",
+                    },
+                ).write(report_dir / "report.html")
+                logger.info(f"HTML run report: {html_path}")
+        except Exception as exc:  # noqa: BLE001 -- reporting must never fail the run
+            logger.warning(
+                f"[WARN] read_tracking report: expected=report generation for "
+                f"'{method}', got=error ({exc}), fallback=skipped (pipeline unaffected)",
+            )
 
     def run_taxonomy(self) -> Dict[str, Path]:
         """

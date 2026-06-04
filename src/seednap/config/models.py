@@ -357,6 +357,27 @@ class MetricsConfig(StrictModel):
     )
 
 
+class ReportConfig(StrictModel):
+    """Run reporting: per-step read/sequence tracking and an optional HTML report."""
+
+    read_tracking: bool = Field(
+        default=True,
+        description="Generate the per-step read/sequence tracking table and data-loss warnings",
+    )
+    html_report: bool = Field(
+        default=False,
+        description="Generate a self-contained HTML run report with charts (thorough visualization)",
+    )
+    warn_below_retention_pct: float = Field(
+        default=30.0, ge=0, le=100,
+        description="Warn for samples whose final non-chimeric reads fall below this % of raw reads",
+    )
+    warn_step_loss_pct: float = Field(
+        default=70.0, ge=0, le=100,
+        description="Warn when a single pipeline step drops more than this % of a sample's reads",
+    )
+
+
 class LoggingConfig(StrictModel):
     """Logging configuration."""
 
@@ -402,6 +423,9 @@ class PipelineConfig(StrictModel):
     )
     metrics: MetricsConfig = Field(
         default_factory=MetricsConfig, description="Metrics configuration"
+    )
+    report: ReportConfig = Field(
+        default_factory=ReportConfig, description="Run reporting configuration"
     )
     logging: LoggingConfig = Field(
         default_factory=LoggingConfig, description="Logging configuration"

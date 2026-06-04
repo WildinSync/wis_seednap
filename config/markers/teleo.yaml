@@ -145,6 +145,13 @@ metrics:
     - "quality_scores"
     - "length_distribution"
 
+# Run reporting: per-step read/sequence tracking + optional HTML report
+report:
+  read_tracking: true        # write outputs/04_report/<marker>/read_tracking.{csv,txt} + data-loss warnings
+  html_report: false         # also generate a self-contained HTML run report with charts (thorough vis)
+  warn_below_retention_pct: 30.0   # warn for samples retaining < this % of raw reads (raw -> final)
+  warn_step_loss_pct: 70.0         # warn when a single step drops more than this % of a sample's reads
+
 # Logging configuration
 logging:
   level: "INFO"  # Options: "DEBUG", "INFO", "WARNING", "ERROR"

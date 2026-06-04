@@ -27,6 +27,7 @@ dependencies:
   - numpy>=1.24
   - biopython>=1.80
   - pyyaml>=6.0
+  - matplotlib>=3.5  # charts for the optional HTML run report
 
   # Python CLI and utilities (conda packages)
   - click>=8.0
