@@ -329,6 +329,39 @@ def test_html_report_tabbed_panels(tmp_path):
     assert "Notes & methods" in {t for _, t in labels}      # methods is a panel too
 
 
+def test_summary_is_its_own_tab_not_repeated(tmp_path):
+    """The summary is a single first tab, never duplicated above other panels."""
+    import re
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    b = ReadTrackingBuilder("m", logs_dir=logs)
+    html = HTMLReportBuilder("m", b.build(), steps=b.steps).render()
+    labels = re.findall(r'<label for="tab-\d+">([^<]+)</label>', html)
+    assert labels[0] == "Summary"                 # first tab
+    assert html.count("Summary</h2>") == 1        # appears once, not on every panel
+    assert html.count("Table 1.") == 1            # the run-summary table is not repeated
+    # the old always-visible front matter is gone
+    assert 'class="title-block"' not in html and 'class="abstract"' not in html
+
+
+def test_report_has_no_em_or_curly_punctuation(tmp_path):
+    """No em/en dashes or curly quotes in the rendered report (de-AI house style)."""
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "Blank-PCR-1", raw=10000, trimmed=50)  # triggers warnings prose
+    run_log = tmp_path / "m_pipeline_run.log"
+    _write_run_log(run_log, [("INFO", "start"), ("WARNING", "low yield"), ("INFO", "done")])
+    b = ReadTrackingBuilder("m", logs_dir=logs)
+    df = b.build()
+    html = HTMLReportBuilder("m", df, steps=b.steps, warnings=b.warnings(df, log=False),
+                             log_file=run_log,
+                             summary={"warn_below_retention_pct": 30.0,
+                                      "warn_step_loss_pct": 70.0}).render()
+    for bad in ("—", "–", "&mdash;", "&ndash;", "‘", "’", "&lsquo;", "&rsquo;", "&middot;"):
+        assert bad not in html, f"found {bad!r} in report"
+
+
 def test_report_config_defaults_and_strictness():
     c = ReportConfig()
     assert c.read_tracking is True and c.html_report is False

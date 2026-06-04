@@ -50,28 +50,32 @@ header that explains what each line means):
 ## HTML run report (`--html`)
 
 A single self-contained `.html` file (no external assets, no CDN, no
-JavaScript — charts are embedded as base64 PNGs) styled like a typeset
+JavaScript; charts are embedded as base64 PNGs) styled like a typeset
 scientific paper. A **sticky top navigation bar** carries one button per
-section; clicking a button shows that **panel** (pure-CSS tabs — one panel
+section; clicking a button shows that **panel** (pure-CSS tabs: one panel
 visible at a time on screen, all panels expanded when the page is printed).
-The title, abstract and run-summary table sit below the bar as front matter.
-Sections:
+Each section is fully self-contained in its own tab, so nothing is repeated
+across tabs. Sections:
 
-1. **Dataset** — identity and provenance (see below).
-2. **Read tracking** — the read funnel and per-sample retention figures, the
+1. **Summary** — the run descriptor, the abstract, and the run-summary table.
+2. **Dataset** — identity and provenance (see below).
+3. **Read tracking** — the read funnel and per-sample retention figures, the
    full per-sample table, and the data-loss warnings.
-3. **Taxonomic assignment** — feature count, assignment rate per rank,
-   best-hit identity distribution, and top species/genera *(when a taxonomy
-   table is available)*.
-4. **OTU / feature QC** — chimera classification and sequence-length
+4. **Per-sample detail** — reads retained, features detected (richness), and
+   retention per sample, as a figure and a table.
+5. **Taxonomic assignment** — assignment rate per rank (figure plus an exact
+   per-rank table), best-hit identity distribution, detected species with read
+   counts and sample occupancy, and top genera *(when a taxonomy table is
+   available)*.
+6. **OTU / feature QC** — chimera classification and sequence-length
    distribution *(SWARM path only)*.
-5. **Controls & contamination** — features detected in negative controls,
+7. **Controls & contamination** — features detected in negative controls,
    computed from the blank sample columns *(when a taxonomy table is
    available)*.
-6. **Run provenance** — per-step status and duration from the run state JSON.
-7. **Run log** — the complete console transcript, colorized by level *(when a
+8. **Run provenance** — per-step status and duration from the run state JSON.
+9. **Run log** — the complete console transcript, colorized by level *(when a
    run log is available; see below)*.
-8. **Notes & methods** — definitions and the thresholds used.
+10. **Notes & methods** — definitions and the thresholds used.
 
 Figures use a publication style (Computer Modern serif via matplotlib, a
 restrained grey + single sea-green accent palette). For runs with more than 50

@@ -3,12 +3,12 @@
 Renders a single portable ``.html`` file styled like a typeset scientific
 paper: a warm-paper page, serif (Computer Modern) typography, justified text,
 ``Figure N`` / ``Table N`` captions, and restrained monochrome publication
-figures with a single SeeDNAP-green accent. The title block, abstract and
-run-summary table are front matter; each detailed section (Dataset, Read
-tracking, Taxonomy, Feature QC, Controls, Provenance, Run log, Notes) is a
-selectable panel behind a sticky button bar, implemented with pure CSS
-radio-tabs -- one panel visible at a time on screen, all panels expanded when
-printed.
+figures with a single SeeDNAP-green accent. Every section (Summary, Dataset,
+Read tracking, Per-sample detail, Taxonomy, Feature QC, Controls, Provenance,
+Run log, Notes) is a self-contained selectable panel behind a sticky top
+navigation bar, implemented with pure CSS radio-tabs -- one panel visible at a
+time on screen, all panels expanded when printed. Nothing is repeated across
+tabs.
 
 Charts are matplotlib PNGs embedded as base64, so there are no external
 assets, no CDN, and no JavaScript (the tab switching is pure CSS). It is dataset-agnostic: every number and
@@ -82,7 +82,7 @@ _TEMPLATE = Template(
     """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>SeeDNAP run report &mdash; {{ marker }}</title>
+<title>SeeDNAP run report: {{ marker }}</title>
 <style>
   :root {
     --serif:"Latin Modern Roman","CMU Serif","STIX Two Text","Nimbus Roman","Times New Roman",Georgia,Cambria,"DejaVu Serif",Times,serif;
@@ -98,22 +98,13 @@ _TEMPLATE = Template(
        font-feature-settings:"kern" 1,"liga" 1;}
   /* Centered reading column for prose/tables; the top bar and the terminal
      deliberately break out of it. */
-  .title-block,.abstract,.frontmatter,.panel{max-width:var(--measure); margin-left:auto;
-       margin-right:auto; padding-left:1.25rem; padding-right:1.25rem;}
-  .title-block{text-align:center; margin-top:2.6rem; margin-bottom:2.2rem;}
-  .title-block .org{font-variant-caps:small-caps; letter-spacing:.12em; font-size:.82rem; color:var(--muted); margin:0 0 .5rem;}
-  h1{font-size:1.7rem; font-weight:700; line-height:1.25; margin:0 0 .35rem;}
-  .title-block .marker{font-style:italic;}
-  .title-block .meta{color:var(--muted); font-size:.95rem; margin:.12rem 0;}
-  .title-block .descriptor{font-style:italic; margin-top:.35rem;}
-  .title-block::after{content:""; display:block; width:4rem; height:2px; background:var(--accent); margin:1.1rem auto 0;}
-  .abstract{margin:0 auto 2.2rem; max-width:94%; font-size:.95rem;}
-  .abstract .label{text-align:center; font-weight:700; font-variant-caps:small-caps; letter-spacing:.08em; margin:0 0 .45rem;}
-  .abstract p{text-align:justify; hyphens:auto;}
+  .panel{max-width:var(--measure); margin-left:auto; margin-right:auto;
+       padding-left:1.25rem; padding-right:1.25rem;}
+  .descriptor{color:var(--muted); font-size:.95rem; margin:0 0 1rem;}
+  .summary-lead{font-size:1.02rem;}
   p{margin:0 0 .85em; text-align:justify; hyphens:auto; -webkit-hyphens:auto; hyphenate-limit-chars:6 3 3;}
   h2,h3{font-family:var(--serif); font-weight:700; line-height:1.2; text-align:left; hyphens:manual;}
   h2{font-size:1.28rem; margin:0 0 .7em; border-bottom:1px solid var(--hair); padding-bottom:.2em;}
-  h2 .h2-accent{color:var(--accent);}
   figure{margin:1.6rem 0; text-align:center;}
   figure img{max-width:100%; height:auto; display:block; margin:0 auto;}
   figcaption{font-size:.87rem; text-align:left; margin-top:.5rem; line-height:1.4;}
@@ -192,28 +183,15 @@ _TEMPLATE = Template(
 {% endfor %}
 <header class="topbar">
   <div class="topbar-inner">
-    <span class="brand">SeeDNAP<span class="brand-sub">{{ marker }}</span></span>
+    <span class="brand">SeeDNAP<span class="brand-sub">{{ marker }} run report</span></span>
     <nav class="tabs" role="tablist" aria-label="Report sections">
 {% for s in sections %}      <label for="tab-{{ loop.index0 }}">{{ s.title }}</label>
 {% endfor %}    </nav>
   </div>
 </header>
 
-<div class="title-block">
-  <p class="org">SeeDNAP &middot; eDNA metabarcoding pipeline</p>
-  <h1>Run report &mdash; marker <span class="marker">{{ marker }}</span></h1>
-  <p class="meta">{{ run_date }}</p>
-  <p class="descriptor">{{ descriptor }}</p>
-</div>
-
-<div class="abstract">
-  <p class="label">Summary</p>
-  <p>{{ abstract }}</p>
-</div>
-<div class="frontmatter">{{ summary_table }}</div>
-
 {% for s in sections %}<section class="panel" id="panel-{{ loop.index0 }}">
-<h2><span class="h2-accent">&#9656;</span> {{ s.title }}</h2>
+<h2>{{ s.title }}</h2>
 {{ s.html }}
 </section>
 {% endfor %}
@@ -303,6 +281,27 @@ class HTMLReportBuilder:
     def _tax_sample_cols(self, tax: pd.DataFrame) -> List[str]:
         return [c for c in tax.columns if c not in _TAX_META and c not in _RANKS]
 
+    def _richness(self) -> Optional[pd.Series]:
+        """Per-sample feature richness (count of features with >0 reads), indexed
+        by sample name. Drawn from the taxonomy table, else the full OTU table;
+        ``None`` if neither carries per-sample columns."""
+        tax = self._tax()
+        if tax is not None:
+            cols = self._tax_sample_cols(tax)
+            src = tax
+        else:
+            otu = self._otu_full()
+            if otu is None:
+                return None
+            meta = {"OTU", "OTU_ID", "ASV_ID", "total", "length", "chimera", "spread",
+                    "sequence", "Sequence"}
+            cols = [c for c in otu.columns if c not in meta]
+            src = otu
+        if not cols:
+            return None
+        counts = (src[cols].apply(pd.to_numeric, errors="coerce").fillna(0) > 0).sum(axis=0)
+        return counts.astype(int)
+
     def _read_meta(self, path: Optional[Path], kind: str) -> Optional[pd.DataFrame]:
         if path is None:
             return None
@@ -330,7 +329,8 @@ class HTMLReportBuilder:
         for key in ("completed_at", "started_at"):
             v = self.state.get(key) if isinstance(self.state, dict) else None
             if v:
-                return str(v).split("T")[0].split(".")[0]
+                # Date only, whether the timestamp is "T"- or space-separated.
+                return str(v).replace("T", " ").split(" ")[0]
         # No state timestamp -- fall back to build date, said plainly.
         return f"{datetime.now().date().isoformat()} (report build date)"
 
@@ -343,7 +343,7 @@ class HTMLReportBuilder:
         tax = self._tax()
         if tax is not None:
             bits.append(f"{len(tax):,} {'ASVs' if self.is_dada2 else 'OTUs'}")
-        return " · ".join(bits)
+        return ", ".join(bits)
 
     def _abstract(self) -> str:
         n = len(self.df)
@@ -351,18 +351,18 @@ class HTMLReportBuilder:
             return "No samples were found for this run; the read-tracking table is empty."
         nc = self._n_controls()
         method = "DADA2 ASV" if self.is_dada2 else "SWARM OTU"
+        feature = "ASV" if self.is_dada2 else "OTU"
         clauses = [
-            f"This report summarizes a SeeDNAP run of marker <i>{_esc(self.marker)}</i> over "
-            f"{n} sample{'s' if n != 1 else ''}"
+            f"Marker <i>{_esc(self.marker)}</i>, {n} sample{'s' if n != 1 else ''}"
             + (f" ({n - nc} biological, {nc} control{'s' if nc != 1 else ''})" if nc else "")
-            + f", processed through the {method} path."
+            + f", {method} path."
         ]
         raw = pd.to_numeric(self.df.get("raw", pd.Series(dtype=float)), errors="coerce")
         fin = pd.to_numeric(self.df.get(self.final_step, pd.Series(dtype=float)), errors="coerce")
         if raw.notna().any() and fin.notna().any() and raw.sum() > 0:
             pct = fin.sum() / raw.sum() * 100
-            clauses.append(f"Of {int(raw.sum()):,} raw read pairs, {pct:.1f}% survived to the "
-                           f"final {self.final_step} stage.")
+            clauses.append(f"{int(raw.sum()):,} raw read pairs, {pct:.1f}% retained to the "
+                           f"{self.final_step} stage.")
         tax = self._tax()
         if tax is not None and "species" in tax.columns and len(tax):
             sp = int((~tax["species"].astype(str).isin(_UNASSIGNED)).sum())
@@ -370,14 +370,14 @@ class HTMLReportBuilder:
             if "pident" in tax.columns:
                 pid = pd.to_numeric(tax["pident"], errors="coerce").dropna()
                 if not pid.empty:
-                    extra = f" at a median best-hit identity of {pid.median():.1f}%"
-            clauses.append(f"Taxonomic assignment resolved {sp:,} of {len(tax):,} features "
-                           f"({sp / len(tax) * 100:.1f}%) to species{extra}.")
+                    extra = f", median best-hit identity {pid.median():.1f}%"
+            clauses.append(f"{sp:,} of {len(tax):,} {feature}s ({sp / len(tax) * 100:.1f}%) "
+                           f"assigned to species{extra}.")
         nw = len(self.warnings)
-        clauses.append("All steps completed; "
-                       + ("no retention warnings were raised." if nw == 0
+        clauses.append("All steps completed. "
+                       + ("No retention warnings were raised." if nw == 0
                           else f"{nw} read-tracking warning{'s' if nw != 1 else ''} "
-                               f"are listed in the Read tracking section."))
+                               f"(see the Read tracking tab)."))
         return " ".join(clauses)
 
     # ------------------------------------------------------------------ #
@@ -401,7 +401,7 @@ class HTMLReportBuilder:
 
     @staticmethod
     def _fmt(v) -> str:
-        return "—" if v is None or (isinstance(v, float) and pd.isna(v)) else f"{int(v):,}"
+        return "n/a" if v is None or (isinstance(v, float) and pd.isna(v)) else f"{int(v):,}"
 
     # ------------------------------------------------------------------ #
     # Figures (within scoped rc_context; called once)
@@ -457,6 +457,26 @@ class HTMLReportBuilder:
                     ax.axvline(self.warn_pct, color=INK, lw=.8, ls="--")
                     ax.set_xlim(0, 100); ax.set_xlabel("reads retained (%)")
                     figs["retention"] = emit(fig)
+
+            # Per-sample feature richness (OTUs/ASVs detected per sample).
+            rich = self._richness()
+            if rich is not None and not rich.empty and rich.sum() > 0:
+                feat = "ASVs" if self.is_dada2 else "OTUs"
+                if len(rich) <= 50:
+                    order = rich.sort_values()
+                    fig, ax = plt.subplots(figsize=(5.5, max(2.4, .23 * len(order))))
+                    ax.barh(range(len(order)), order.values, color=GREY, height=.7)
+                    ax.set_yticks(range(len(order)))
+                    ax.set_yticklabels([str(s) for s in order.index], fontsize=7)
+                    ax.set_xlabel(f"{feat} detected"); ax.set_title(f"Per-sample richness ({feat} detected)")
+                    for i, v in enumerate(order.values):
+                        ax.text(v, i, f" {int(v):,}", va="center", fontsize=6.5, color=INK)
+                else:
+                    fig, ax = plt.subplots(figsize=(5.5, 2.7))
+                    ax.hist(rich.values, bins=30, color=GREY, edgecolor="white")
+                    ax.set_xlabel(f"{feat} detected"); ax.set_ylabel("samples")
+                    ax.set_title(f"Richness distribution (n={len(rich)})")
+                figs["richness"] = emit(fig)
 
             tax = self._tax()
             if tax is not None:
@@ -539,7 +559,7 @@ class HTMLReportBuilder:
             if not lat.empty and not lon.empty:
                 add("Location (lat, lon)",
                     f"{lat.mean():.4f}, {lon.mean():.4f} centroid "
-                    f"(lat {lat.min():.3f}–{lat.max():.3f}, lon {lon.min():.3f}–{lon.max():.3f})")
+                    f"(lat {lat.min():.3f} to {lat.max():.3f}, lon {lon.min():.3f} to {lon.max():.3f})")
                 n_sites = len({(round(a, 4), round(o, 4)) for a, o in zip(lat, lon)})
                 add("Distinct sites", f"{n_sites}")
             for col, label in (("site_names", "Site names"), ("area_basin", "Area / basin"),
@@ -553,10 +573,10 @@ class HTMLReportBuilder:
             dates = sorted({v for v in bio.get("eventDate", pd.Series(dtype=str)).astype(str)
                             if v not in ("", "NA", "nan")})
             if dates:
-                add("Sampling dates", f"{dates[0]} – {dates[-1]}" if len(dates) > 1 else dates[0])
+                add("Sampling dates", f"{dates[0]} to {dates[-1]}" if len(dates) > 1 else dates[0])
             depth = pd.to_numeric(bio.get("depth", pd.Series(dtype=str)), errors="coerce").dropna()
             if not depth.empty:
-                add("Depth (m)", f"{depth.min():g}–{depth.max():g}" if depth.min() != depth.max() else f"{depth.min():g}")
+                add("Depth (m)", f"{depth.min():g} to {depth.max():g}" if depth.min() != depth.max() else f"{depth.min():g}")
             for col, label in (("institution", "Institution"), ("laboratory", "Laboratory")):
                 if col in field.columns:
                     vals = sorted({v for v in field[col].astype(str) if v not in ("", "NA", "nan")})
@@ -630,9 +650,9 @@ class HTMLReportBuilder:
             parts.append(
                 f"<p>The run raised {nw} read-tracking "
                 f"warning{'s' if nw != 1 else ''}. Each line below names a sample (or a "
-                f"single step) whose read retention crossed a configured threshold &mdash; a "
+                f"single step) whose read retention crossed a configured threshold (a "
                 f"sample retaining less than {self.warn_pct:.0f}% of its raw reads overall, or "
-                f"one step dropping more than {step_loss:.0f}% of a sample's reads. These mark "
+                f"one step dropping more than {step_loss:.0f}% of a sample's reads). These mark "
                 f"where reads were lost; they are not necessarily errors (negative controls are "
                 f"<i>expected</i> to retain almost nothing).</p>")
             items = "".join(f"<div>{_esc(w)}</div>" for w in self.warnings)
@@ -641,6 +661,42 @@ class HTMLReportBuilder:
         else:
             parts.append('<p class="warn-none">No read-tracking warnings were raised: every '
                          'sample retained reads above the configured thresholds.</p>')
+        return "\n".join(p for p in parts if p)
+
+    def _section_per_sample(self, figs) -> str:
+        """Per-sample yield: reads retained, feature richness, and % retained."""
+        feat = "ASVs" if self.is_dada2 else "OTUs"
+        rich = self._richness()
+        parts = [f"<p>Sequencing yield per sample: reads retained to the {self.final_step} stage, "
+                 f"the number of {feat} detected (features with at least one read), and overall "
+                 f"retention. Controls (<code>Blank*</code>) are expected to yield little.</p>"]
+        rcap = (f"{feat} detected per sample." if rich is not None
+                else f"{feat} richness was unavailable (no per-sample feature table).")
+        if rich is not None:
+            parts.append(self._fig(figs.get("richness"), rcap))
+        else:
+            logger.warning("[WARN] html_report: expected=per-sample richness, got=no feature "
+                           "table, fallback=reads/retention only")
+            parts.append(f"<p>{rcap}</p>")
+        rows = []
+        for _, r in self.df.iterrows():
+            sample = str(r["sample"])
+            is_ctrl = sample.lower().startswith("blank")
+            name = f'<span class="flag-low">{_esc(sample)}</span>' if is_ctrl else _esc(sample)
+            reads = r.get(self.final_step)
+            reads_c = '<span class="na">NA</span>' if pd.isna(reads) else f"{int(reads):,}"
+            if rich is not None:
+                rv = rich.get(sample)
+                rich_c = '<span class="na">NA</span>' if rv is None else f"{int(rv):,}"
+            else:
+                rich_c = '<span class="na">NA</span>'
+            pr = r.get("pct_retained")
+            pr_c = "NA" if pd.isna(pr) else f"{pr:.1f}%"
+            rows.append([name, reads_c, rich_c, pr_c])
+        parts.append(self._table(
+            f"Per-sample reads, {feat} detected, and retention. Controls are flagged with an asterisk.",
+            ["sample", f"{self.final_step} reads", f"{feat} detected", "% retained"],
+            rows, scroll=True))
         return "\n".join(p for p in parts if p)
 
     def _section_taxonomy(self, figs) -> Optional[str]:
@@ -654,30 +710,45 @@ class HTMLReportBuilder:
         bio = [c for c in sample_cols if c not in ctrl] or sample_cols
         parts = [f"<p>Of {total:,} features, {sp:,} ({sp / total * 100:.1f}%) were assigned to species. "
                  f"Counts at each rank are shown in Figure {self._fig_n + 1}; the best-hit identity "
-                 f"distribution (assigned features only) in the following figure. "
-                 f"&lsquo;Unassigned&rsquo; is reported separately, never as a taxon.</p>"]
+                 f"distribution (assigned features only) in the following figure. Features with no "
+                 f"assignment are reported as <code>Unassigned</code>, never as a taxon.</p>"]
         parts.append(self._fig(figs.get("rank"),
                      f"Number of features with a non-empty assignment at each taxonomic rank, out of "
                      f"{total:,} total."))
         parts.append(self._fig(figs.get("pident"),
                      "Distribution of best-hit BLAST percent identity over assigned features; "
                      "dashed line marks the median."))
-        # top species by reads
+        # full rank-assignment table (exact counts behind the figure)
+        rank_rows = []
+        for rk in _RANKS:
+            if rk in tax.columns:
+                a = int((~tax[rk].astype(str).isin(_UNASSIGNED)).sum())
+                rank_rows.append([rk, f"{a:,}", f"{a / total * 100:.1f}%"])
+        if rank_rows:
+            parts.append(self._table("Features assigned at each taxonomic rank.",
+                                     ["rank", "features assigned", "% of total"], rank_rows))
+        # detected species: reads + occupancy (number of biological samples)
         if "species" in tax.columns and bio:
-            reads = tax[bio].apply(pd.to_numeric, errors="coerce").sum(axis=1)
-            by_sp = reads.groupby(tax["species"].astype(str)).sum().sort_values(ascending=False)
+            bio_num = tax[bio].apply(pd.to_numeric, errors="coerce").fillna(0)
+            grp = bio_num.groupby(tax["species"].astype(str)).sum()
+            sp_reads = grp.sum(axis=1).sort_values(ascending=False)
+            occ = (grp > 0).sum(axis=1)
             rows = []
-            for name, val in by_sp.items():
+            for name, val in sp_reads.items():
                 if name in _UNASSIGNED:
                     continue
-                rows.append([_esc(name.replace("_", " ")), f"{int(val):,}"])
-                if len(rows) >= 10:
+                rows.append([_esc(name.replace("_", " ")), f"{int(val):,}",
+                             f"{int(occ.get(name, 0)):,}"])
+                if len(rows) >= 20:
                     break
             if rows:
-                parts.append(self._table("Top species by total read count (biological samples).",
-                                         ["species", "reads"], rows))
+                n_sp = sum(1 for k in sp_reads.index if k not in _UNASSIGNED)
+                cap = (f"Top species by total read count across biological samples, with occupancy "
+                       f"(number of the {len(bio)} biological samples each was detected in). "
+                       f"{n_sp:,} species detected in total.")
+                parts.append(self._table(cap, ["species", "reads", "samples"], rows, scroll=True))
         if "genus" in tax.columns:
-            gc = tax.loc[~tax["genus"].astype(str).isin(_UNASSIGNED), "genus"].value_counts().head(10)
+            gc = tax.loc[~tax["genus"].astype(str).isin(_UNASSIGNED), "genus"].value_counts().head(15)
             if not gc.empty:
                 parts.append(self._table("Genera with the most assigned features.",
                                          ["genus", "features"],
@@ -722,7 +793,7 @@ class HTMLReportBuilder:
                           if c in tax.columns and str(r[c]) not in _UNASSIGNED), "Unassigned")
             cells = [_esc(taxon.replace("_", " "))]
             cells += [f"{int(pd.to_numeric(r[c], errors='coerce') or 0):,}" for c in ctrl]
-            cells.append(f"{int(pd.to_numeric(r[bio], errors='coerce').fillna(0).sum()):,}" if bio else "—")
+            cells.append(f"{int(pd.to_numeric(r[bio], errors='coerce').fillna(0).sum()):,}" if bio else "n/a")
             rows.append(cells)
         intro = (f"<p>{int(in_blank.sum())} feature(s) carried reads in a control. Controls are "
                  f"identified by the <code>Blank*</code> name prefix and contamination is computed "
@@ -740,7 +811,7 @@ class HTMLReportBuilder:
                 continue
             dur = s.get("duration_seconds")
             rows.append([_esc(name), _esc(str(s.get("status", "")).lower()),
-                         "—" if dur is None else f"{float(dur):.1f} s"])
+                         "n/a" if dur is None else f"{float(dur):.1f} s"])
         if not rows:
             return None
         note = ("<p>Per-step wall-clock timing from the run state. Report and export steps run after "
@@ -909,7 +980,7 @@ class HTMLReportBuilder:
             intro += "</p>"
 
         # Render the transcript inside a real terminal window (chrome + dark body).
-        meta = f'<p class="runlog-meta">{" &middot; ".join(summary_bits)}</p>'
+        meta = f'<p class="runlog-meta">{", ".join(summary_bits)}</p>'
         terminal = (
             '<div class="terminal">'
             '<div class="term-bar">'
@@ -958,15 +1029,15 @@ class HTMLReportBuilder:
         parts = [
             "<p>Controls are identified by the <code>Blank*</code> sample-name prefix; "
             "contamination is computed from blank read counts, not a precomputed flag. "
-            "&lsquo;Unassigned&rsquo; features are reported separately and never counted as a taxon; "
-            "median percent identity is computed over assigned features only.</p>",
+            "Features with no assignment are reported as <code>Unassigned</code> and never counted "
+            "as a taxon; median percent identity is computed over assigned features only.</p>",
             f"<p>Retention thresholds: a sample is flagged below "
             f"{self.warn_pct:.0f}% overall retention; a step is flagged when it drops more than "
-            f"{float(s.get('warn_step_loss_pct', 70.0)):.0f}% of a sample&rsquo;s reads.</p>",
+            f"{float(s.get('warn_step_loss_pct', 70.0)):.0f}% of a sample's reads.</p>",
         ]
         if s.get("footer"):
             parts.append(f"<p>{_esc(s['footer'])}</p>")
-        parts.append("<p>Generated by SeeDNAP &middot; self-contained report (no external assets).</p>")
+        parts.append("<p>Generated by SeeDNAP. Self-contained report (no external assets).</p>")
         return "".join(parts)
 
     # ------------------------------------------------------------------ #
@@ -976,11 +1047,15 @@ class HTMLReportBuilder:
         self._fig_n = 0
         self._tbl_n = 0
         figs = self._make_figures()
-        summary_table = self._summary_table_html()   # Table 1
+
+        # The summary table is Table 1 and leads the Summary tab.
+        summary_table = self._summary_table_html()
 
         sections: List[Dict[str, str]] = []
+        sections.append({"title": "Summary", "html": self._section_summary(summary_table)})
         sections.append({"title": "Dataset", "html": self._section_dataset()})
         sections.append({"title": "Read tracking", "html": self._section_read_tracking(figs)})
+        sections.append({"title": "Per-sample detail", "html": self._section_per_sample(figs)})
         tax_html = self._section_taxonomy(figs)
         if tax_html:
             sections.append({"title": "Taxonomic assignment", "html": tax_html})
@@ -998,12 +1073,14 @@ class HTMLReportBuilder:
 
         return _TEMPLATE.render(
             marker=_esc(self.marker),
-            run_date=_esc(self._run_date()),
-            descriptor=self._descriptor(),
-            abstract=self._abstract(),
-            summary_table=summary_table,
             sections=sections,
         )
+
+    def _section_summary(self, summary_table: str) -> str:
+        """Lead tab: a one-line descriptor, the run abstract, and Table 1."""
+        return (f'<p class="descriptor">{self._descriptor()}. {_esc(self._run_date())}.</p>'
+                f'<p class="summary-lead">{self._abstract()}</p>'
+                f'{summary_table}')
 
     def write(self, output_path: Union[str, Path]) -> Path:
         path = Path(output_path)
