@@ -225,6 +225,86 @@ def test_dataset_section_no_metadata_is_explicit(tmp_path):
     assert "were not provided" in html
 
 
+def _write_run_log(path, lines):
+    """Write a file-logger-format run log (TIME | LEVEL | name:lineno | msg)."""
+    rows = [f"2026-06-04 12:00:{i:02d} | {lvl:8s} | seednap.x:{i} | {msg}"
+            for i, (lvl, msg) in enumerate(lines)]
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+
+def test_run_log_section_colorized(tmp_path):
+    """The run-log section embeds the transcript with rich's exact level colors."""
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    run_log = tmp_path / "m_pipeline_run.log"
+    _write_run_log(run_log, [
+        ("INFO", "Starting seednap pipeline for marker: m"),
+        ("WARNING", "Sample DAR-1: merged file is empty, skipping <x>"),
+        ("ERROR", "Step 'taxonomy' failed"),
+        ("INFO", "Pipeline complete"),
+    ])
+    b = ReadTrackingBuilder("m", logs_dir=logs)
+    html = HTMLReportBuilder("m", b.build(), steps=b.steps, log_file=run_log).render()
+    assert ">Run log</h2>" in html
+    assert '<pre class="runlog">' in html
+    # rich's standard ANSI palette: info navy, warning olive, error maroon
+    assert "#000080" in html and "#808000" in html and "#800000" in html
+    assert "http://" not in html and "https://" not in html  # still self-contained
+    assert "&lt;x&gt;" in html  # message HTML is escaped, never injected raw
+
+
+def test_run_log_missing_is_explicit(tmp_path):
+    """A missing or unprovided run log is stated, never silently omitted (section 4)."""
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    b = ReadTrackingBuilder("m", logs_dir=logs)
+    df = b.build()
+    # no log_file passed
+    html_none = HTMLReportBuilder("m", df, steps=b.steps).render()
+    assert ">Run log</h2>" in html_none and "not embedded here" in html_none
+    # log_file pointing at a nonexistent file
+    html_missing = HTMLReportBuilder("m", df, steps=b.steps,
+                                     log_file=tmp_path / "nope.log").render()
+    assert "was not found" in html_missing
+
+
+def test_run_log_truncation_keeps_all_events(tmp_path):
+    """A long log is truncated but keeps every warning/error and marks omissions."""
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    lines = [("INFO", f"routine line {i}") for i in range(500)]
+    lines[100] = ("WARNING", "important warning A")
+    lines[300] = ("ERROR", "important error B")
+    run_log = tmp_path / "m_pipeline_run.log"
+    _write_run_log(run_log, lines)
+    b = ReadTrackingBuilder("m", logs_dir=logs)
+    builder = HTMLReportBuilder("m", b.build(), steps=b.steps, log_file=run_log, max_log_lines=120)
+    items, truncated, total = builder._select_log_lines(run_log.read_text().splitlines())
+    assert truncated and total == 500
+    kept = "\n".join(t for _, t in items)
+    assert "important warning A" in kept and "important error B" in kept
+    assert any(i == -1 and "omitted" in t for i, t in items)  # explicit markers
+
+
+def test_read_tracking_warnings_have_header(tmp_path):
+    """Warnings in the report carry a header + explanation, not a bare dump."""
+    from seednap.steps.report import HTMLReportBuilder
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "Blank-PCR-1", raw=10000, trimmed=50)  # heavy loss -> warns
+    b = ReadTrackingBuilder("m", logs_dir=logs)
+    df = b.build()
+    warns = b.warnings(df, log=False)
+    assert warns  # sanity: this sample triggers warnings
+    html = HTMLReportBuilder("m", df, steps=b.steps, warnings=warns,
+                             summary={"warn_below_retention_pct": 30.0,
+                                      "warn_step_loss_pct": 70.0}).render()
+    assert 'class="warn-head"' in html and "Read-tracking warnings" in html
+    assert "not necessarily errors" in html  # the explanatory context
+
+
 def test_report_config_defaults_and_strictness():
     c = ReportConfig()
     assert c.read_tracking is True and c.html_report is False

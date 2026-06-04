@@ -8,10 +8,13 @@ monochrome publication figures with a single SeeDNAP-green accent.
 Charts are matplotlib PNGs embedded as base64, so there are no external
 assets, no CDN, and no JavaScript. It is dataset-agnostic: every number and
 label is derived from the data passed in (read-tracking df, optional taxonomy
-CSV, optional ``otu_table_full``, optional state JSON). Optional sources are
-``[WARN]``-guarded -- a missing one yields an explanatory sentence rather than
-vanishing silently (CLAUDE.md section 4) -- and matplotlib is imported lazily
-so the report still renders (text + tables) if it is absent.
+CSV, optional ``otu_table_full``, optional state JSON, optional run-log file).
+The optional run-log section embeds the pipeline's console transcript,
+colorized by level via rich's own HTML export so the palette matches the live
+console exactly. Optional sources are ``[WARN]``-guarded -- a missing one
+yields an explanatory sentence rather than vanishing silently (CLAUDE.md
+section 4) -- and matplotlib is imported lazily so the report still renders
+(text + tables) if it is absent.
 """
 
 import base64
@@ -33,6 +36,12 @@ _DEFAULT_STEPS = DADA2_STEPS
 _RANKS = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
 _TAX_META = {"ASV_ID", "OTU_ID", "pident", "is_contaminant_candidate", "Sequence", "sequence"}
 _UNASSIGNED = {"Unassigned", "unassigned", "", "NA", "nan", "None"}
+
+# Log levels recognised in the run-log transcript. The file logger writes
+# "TIME | LEVEL | name:lineno | message"; EVENT levels are the ones a scientist
+# must always see, so they survive truncation of long logs (see _select_log_lines).
+_LOG_LEVELS = {"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"}
+_EVENT_LEVELS = {"WARNING", "ERROR", "CRITICAL"}
 
 # --- publication figure palette (mostly ink/grey, one sea-green accent) -------
 INK = "#222222"
@@ -112,11 +121,24 @@ _TEMPLATE = Template(
   .scroll{max-height:30rem; overflow:auto;}
   .flag-low{font-weight:700;} .flag-low::after{content:" *";}
   .na{color:var(--muted); font-style:italic;}
+  .warn-head{font-variant-caps:small-caps; letter-spacing:.06em; font-weight:700; font-size:.8rem;
+             color:var(--accent); margin:.9rem 0 .25rem;}
   .warn-list{font-family:var(--mono); font-size:.8rem; line-height:1.5; border-left:2px solid var(--accent);
-             padding:.3rem 0 .3rem 1rem; margin:.8rem 0; max-height:22rem; overflow:auto;}
+             padding:.3rem 0 .3rem 1rem; margin:.25rem 0 .8rem; max-height:22rem; overflow:auto;}
   .warn-list div{margin:.12rem 0;}
   .warn-none{font-style:italic; color:var(--muted);}
   code{font-family:var(--mono); font-size:.85em;}
+  /* Run-log transcript: a light, framed monospace listing. Level colours match
+     the rich console palette exactly (info navy, warning olive, error maroon),
+     which is the standard ANSI palette tuned for a light background. */
+  .runlog-wrap{margin:1.1rem 0;}
+  .runlog-wrap summary{cursor:pointer; font-family:var(--mono); font-size:.82rem; color:var(--muted);
+             padding:.35rem 0; user-select:none;}
+  .runlog-wrap summary:hover{color:var(--ink);}
+  .runlog{font-family:var(--mono); font-size:.74rem; line-height:1.5; color:#333;
+          background:#f6f6f1; border:1px solid var(--hair); border-radius:3px;
+          padding:.7rem .9rem; margin:.55rem 0 0; max-height:34rem; overflow:auto; white-space:pre; tab-size:2;}
+  .lvl-info{color:#000080;} .lvl-warning{color:#808000; font-weight:600;} .lvl-error{color:#800000; font-weight:700;}
   .methods{font-size:.84rem; margin-top:2.4rem; border-top:1px solid var(--hair); padding-top:1rem; color:var(--ink);}
   .methods h2{font-size:1.02rem;}
   @media print{ body{max-width:100%; font-size:10.5pt; line-height:1.4; color:#000; background:#fff; padding:0;}
@@ -166,6 +188,8 @@ class HTMLReportBuilder:
         otu_table_full: Optional[Union[str, Path]] = None,
         field_metadata_csv: Optional[Union[str, Path]] = None,
         project_metadata_csv: Optional[Union[str, Path]] = None,
+        log_file: Optional[Union[str, Path]] = None,
+        max_log_lines: int = 1500,
     ) -> None:
         self.marker = marker
         self.df = tracking_df if tracking_df is not None else pd.DataFrame()
@@ -176,6 +200,8 @@ class HTMLReportBuilder:
         self.otu_table_full = Path(otu_table_full) if otu_table_full else None
         self.field_metadata_csv = Path(field_metadata_csv) if field_metadata_csv else None
         self.project_metadata_csv = Path(project_metadata_csv) if project_metadata_csv else None
+        self.log_file = Path(log_file) if log_file else None
+        self.max_log_lines = max_log_lines
         if steps:
             self.steps = steps
         else:
@@ -546,10 +572,22 @@ class HTMLReportBuilder:
                                  "an asterisk fall below the retention threshold.",
                                  ["sample", *self.steps, "% retained"], rows, scroll=True))
         if self.warnings:
+            step_loss = float(self.summary.get("warn_step_loss_pct", 70.0))
+            nw = len(self.warnings)
+            parts.append(
+                f"<p>The run raised {nw} read-tracking "
+                f"warning{'s' if nw != 1 else ''}. Each line below names a sample (or a "
+                f"single step) whose read retention crossed a configured threshold &mdash; a "
+                f"sample retaining less than {self.warn_pct:.0f}% of its raw reads overall, or "
+                f"one step dropping more than {step_loss:.0f}% of a sample's reads. These mark "
+                f"where reads were lost; they are not necessarily errors (negative controls are "
+                f"<i>expected</i> to retain almost nothing).</p>")
             items = "".join(f"<div>{_esc(w)}</div>" for w in self.warnings)
-            parts.append(f'<div class="warn-list">{items}</div>')
+            parts.append('<p class="warn-head">Read-tracking warnings</p>'
+                         f'<div class="warn-list">{items}</div>')
         else:
-            parts.append('<p class="warn-none">No read-tracking warnings were raised.</p>')
+            parts.append('<p class="warn-none">No read-tracking warnings were raised: every '
+                         'sample retained reads above the configured thresholds.</p>')
         return "\n".join(p for p in parts if p)
 
     def _section_taxonomy(self, figs) -> Optional[str]:
@@ -656,6 +694,157 @@ class HTMLReportBuilder:
                 "the recorded completion and are not timed here.</p>")
         return note + self._table("Pipeline step status and duration.", ["step", "status", "duration"], rows)
 
+    # ------------------------------------------------------------------ #
+    # Run log (colorized console transcript)
+    # ------------------------------------------------------------------ #
+    @staticmethod
+    def _line_level(line: str) -> Optional[str]:
+        """Classify a log line by level from the ``| LEVEL |`` field, with a
+        text-heuristic fallback for continuation lines (tracebacks, tool output)."""
+        parts = line.split(" | ", 3)
+        if len(parts) >= 2:
+            lvl = parts[1].strip().upper()
+            if lvl in _LOG_LEVELS:
+                return lvl
+        upper = line.upper()
+        if "[ERROR]" in upper or "[FAIL]" in upper or "TRACEBACK" in upper or "EXCEPTION" in upper:
+            return "ERROR"
+        if "[WARN]" in upper or "WARNING" in upper:
+            return "WARNING"
+        return None
+
+    def _select_log_lines(self, lines: List[str]) -> Tuple[List[Tuple[int, str]], bool, int]:
+        """Pick which log lines to embed.
+
+        Short logs are shown whole. Long logs keep run start/end context and
+        *every* warning/error line; intervening routine lines are collapsed into
+        explicit ``… N omitted …`` markers (never silently dropped, CLAUDE.md
+        section 4). Returns ``(items, truncated, total_lines)`` where ``items`` is
+        a list of ``(index, text)`` and a marker has index ``-1``.
+        """
+        n = len(lines)
+        if n <= self.max_log_lines:
+            return [(i, ln) for i, ln in enumerate(lines)], False, n
+
+        head_n = tail_n = 45
+        head = set(range(min(head_n, n)))
+        tail = set(range(max(0, n - tail_n), n))
+        events = [i for i, ln in enumerate(lines) if self._line_level(ln) in _EVENT_LEVELS]
+        budget = max(0, self.max_log_lines - len(head) - len(tail))
+        kept_events = set(events[:budget])
+        if len(events) > budget:
+            logger.warning(
+                f"[WARN] html_report: expected=embed all run-log events, "
+                f"got={len(events)} events > budget {budget}, "
+                f"fallback=keep earliest {budget}; full log on disk",
+            )
+        logger.warning(
+            f"[WARN] html_report: expected=embed full run log, got={n} lines "
+            f"> max {self.max_log_lines}, fallback=head/tail + {len(kept_events)} "
+            f"event line(s); full log on disk",
+        )
+
+        keep = sorted(head | tail | kept_events)
+        items: List[Tuple[int, str]] = []
+        prev: Optional[int] = None
+        for i in keep:
+            if prev is not None and i > prev + 1:
+                gap = i - prev - 1
+                items.append((-1, f"      … {gap:,} routine line(s) omitted …"))
+            items.append((i, lines[i]))
+            prev = i
+        return items, True, n
+
+    def _render_log_html(self, items: List[Tuple[int, str]]) -> Optional[str]:
+        """Render selected log lines to a self-contained, level-colored ``<pre>``
+        using rich's own HTML export, so the palette matches the live console
+        exactly. Returns ``None`` if rich is unavailable (caller falls back)."""
+        try:
+            import io as _io
+
+            from rich.console import Console
+            from rich.text import Text
+        except ImportError as exc:  # pragma: no cover -- rich is a hard dependency
+            logger.warning(f"[WARN] html_report: expected=rich for colorized log, got=missing "
+                           f"({exc}), fallback=plain monospace log")
+            return None
+
+        con = Console(record=True, width=400, file=_io.StringIO(),
+                      force_terminal=True, highlight=False)
+        for idx, text in items:
+            if idx == -1:  # omission marker
+                con.print(Text(text, style="dim italic"), soft_wrap=True, highlight=False)
+                continue
+            parts = text.split(" | ", 3)
+            line = Text(no_wrap=True)
+            if len(parts) == 4 and parts[1].strip().upper() in _LOG_LEVELS:
+                line.append(parts[0] + " | ", style="log.time")
+                line.append(parts[1] + " | ", style=f"logging.level.{parts[1].strip().lower()}")
+                line.append(parts[2] + " | ", style="dim")
+                line.append(parts[3])
+            else:
+                lvl = self._line_level(text)
+                line.append(text, style=f"logging.level.{lvl.lower()}" if lvl else "")
+            con.print(line, soft_wrap=True, highlight=False)
+        return con.export_html(inline_styles=True, code_format='<pre class="runlog">{code}</pre>')
+
+    def _section_run_log(self) -> Optional[str]:
+        """Embed the full pipeline run log, colorized by level like the console.
+
+        A missing/disabled/unreadable log yields an explanatory sentence rather
+        than vanishing silently (CLAUDE.md section 4)."""
+        if self.log_file is None:
+            return ("<p>No run-log file was passed to the report (logging to file may have been "
+                    "disabled), so the console transcript is not embedded here.</p>")
+        path = self.log_file
+        if not path.exists():
+            logger.warning(f"[WARN] html_report: expected=run log, got=missing "
+                           f"({path}), fallback=note absence in report")
+            return (f"<p>The run-log file <code>{_esc(path.name)}</code> was not found, so the "
+                    f"console transcript could not be embedded.</p>")
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        except OSError as exc:
+            logger.warning(f"[WARN] html_report: expected=readable run log, got=unreadable "
+                           f"({path}: {exc}), fallback=omit log section")
+            return (f"<p>The run-log file <code>{_esc(path.name)}</code> could not be read "
+                    f"({_esc(str(exc))}).</p>")
+        if not lines:
+            return f"<p>The run-log file <code>{_esc(path.name)}</code> is empty.</p>"
+
+        items, truncated, total = self._select_log_lines(lines)
+        pre = self._render_log_html(items)
+        if pre is None:  # rich unavailable -- plain escaped fallback, still self-contained
+            body = _esc("\n".join(t for _, t in items))
+            pre = f'<pre class="runlog">{body}</pre>'
+
+        counts: Dict[str, int] = {}
+        for ln in lines:
+            lvl = self._line_level(ln)
+            if lvl:
+                counts[lvl] = counts.get(lvl, 0) + 1
+        summary_bits = [f"{total:,} lines"]
+        for lvl in ("WARNING", "ERROR", "CRITICAL"):
+            if counts.get(lvl):
+                summary_bits.append(f"{counts[lvl]:,} {lvl.lower()}")
+
+        intro = ("<p>Complete console transcript of the run "
+                 f"(<code>{_esc(path.name)}</code>), colorized by log level exactly as the live "
+                 "SeeDNAP console renders it: <span class=\"lvl-info\">info</span>, "
+                 "<span class=\"lvl-warning\">warning</span>, <span class=\"lvl-error\">error</span>. ")
+        if truncated:
+            intro += (f"The log is long ({total:,} lines), so every warning and error is kept "
+                      "alongside the run's start and end, and intervening routine lines are "
+                      "collapsed (markers state how many). The complete log is on disk at "
+                      f"<code>{_esc(str(path))}</code>.</p>")
+        else:
+            intro += "</p>"
+
+        is_open = " open" if len(items) <= 120 else ""
+        details = (f'<details class="runlog-wrap"{is_open}>'
+                   f'<summary>Run log &mdash; {" &middot; ".join(summary_bits)}</summary>{pre}</details>')
+        return intro + details
+
     def _summary_table_html(self) -> str:
         df = self.df
         n = len(df)
@@ -726,6 +915,9 @@ class HTMLReportBuilder:
         tl = self._section_timeline()
         if tl:
             sections.append({"title": "Run provenance", "html": tl})
+        runlog = self._section_run_log()
+        if runlog:
+            sections.append({"title": "Run log", "html": runlog})
 
         return _TEMPLATE.render(
             marker=_esc(self.marker),

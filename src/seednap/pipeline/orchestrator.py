@@ -109,6 +109,9 @@ class PipelineOrchestrator:
                 / f"{self.config.marker.name}_pipeline_{timestamp}.log"
             )
 
+        # Remember the run-log path so the HTML report can embed the transcript.
+        self._log_file = log_file
+
         # Setup logging using utility function
         setup_logging(
             level=log_config.level,
@@ -564,6 +567,7 @@ class PipelineOrchestrator:
                 otu_table_full=otu_full,
                 field_metadata_csv=self.config.report.sample_metadata,
                 project_metadata_csv=self.config.report.project_metadata,
+                log_file=getattr(self, "_log_file", None),
                 summary={
                     "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
                     "subtitle": f"{len(df)} samples · marker {marker}",

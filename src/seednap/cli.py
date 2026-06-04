@@ -1188,10 +1188,13 @@ def run_pipeline(
               help="Per-sample (field) metadata CSV for the Dataset/provenance section (location, dates, sites)")
 @click.option("--project-metadata", type=click.Path(exists=True, path_type=Path),
               help="Project metadata CSV for the Dataset section (recorder, sequencing, reference DB)")
+@click.option("--log-file", type=click.Path(exists=True, path_type=Path),
+              help="Pipeline run log to embed in the HTML report (auto-located from logs/ if omitted)")
 def report(
     marker: str, output_dir: Path, html_report: bool,
     warn_retention: float, warn_step_loss: float,
     field_metadata: Optional[Path], project_metadata: Optional[Path],
+    log_file: Optional[Path],
 ) -> None:
     """
     Build the read/sequence tracking report from existing run outputs.
@@ -1297,11 +1300,29 @@ def report(
             else:
                 print_warning("No dataset metadata found; the Dataset section will note it is absent. "
                               "Pass --field-metadata / --project-metadata to include provenance.")
+            # Locate the pipeline run log to embed (the colorized transcript section).
+            if log_file is None:
+                for cand_dir in (Path("logs"), out / "logs", out.parent / "logs"):
+                    exact = cand_dir / f"{marker}_pipeline_run.log"
+                    if exact.exists():
+                        log_file = exact
+                        break
+                    globbed = sorted(cand_dir.glob(f"{marker}_pipeline_*.log"),
+                                     key=lambda p: p.stat().st_mtime, reverse=True)
+                    if globbed:
+                        log_file = globbed[0]
+                        break
+            if log_file:
+                console.print(f"  run log: {log_file}")
+            else:
+                print_warning("No run log found under logs/; the HTML report's Run-log section "
+                              "will note it is absent. Pass --log-file to embed a specific log.")
             html_path = HTMLReportBuilder(
                 marker, df, warnings=warns, steps=builder.steps,
                 state=state, taxonomy_csv=taxo,
                 otu_table_full=otu_full if (otu_full and otu_full.exists()) else None,
                 field_metadata_csv=field_metadata, project_metadata_csv=project_metadata,
+                log_file=log_file,
                 summary={
                     "warn_below_retention_pct": warn_retention,
                     "subtitle": f"{len(df)} samples · marker {marker}",
