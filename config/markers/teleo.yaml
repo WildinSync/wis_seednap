@@ -117,6 +117,7 @@ taxonomy:
       # MEGAN-LR style LCA: include hits within this percent of the best bitscore for
       # LCA collapse. 0 = exact ties only. Default 10.0 follows MEGAN's `topPercent`.
       top_bitscore_pct: 10.0
+      lca_pident_delta: 1.0      # in-band hits must be within this %id of the best (eDNAFlow "diff 1"); stops a near-identity off-target collapsing the LCA
 
     # Ecotag (OBITools) taxonomic assignment
     ecotag:

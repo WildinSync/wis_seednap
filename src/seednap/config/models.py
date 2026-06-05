@@ -243,6 +243,14 @@ class BlastDatabaseConfig(StrictModel):
         default=10.0, ge=0, le=100,
         description="LCA bitscore band as percent of best hit (MEGAN-LR topPercent default: 10.0)"
     )
+    # An in-band hit must also be within this many percent-identity points of the best
+    # in-band hit to count toward the LCA. Guards against a single near-identity off-target
+    # hit (e.g. a 98.6% worm beside 100% Bos hits on a short marker) collapsing the LCA to a
+    # high rank. Default 1.0 (eDNAFlow "diff 1"); 0 disables (bitscore band only).
+    lca_pident_delta: float = Field(
+        default=1.0, ge=0, le=100,
+        description="LCA pident floor: in-band hits must be within this many %id points of the best"
+    )
 
     @field_validator("fasta")
     @classmethod

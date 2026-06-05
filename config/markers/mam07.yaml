@@ -82,6 +82,7 @@ taxonomy:
       threshold_order: 80.0
       threshold_class: 70.0
       top_bitscore_pct: 10.0
+      lca_pident_delta: 1.0      # in-band hits must be within this %id of the best (eDNAFlow "diff 1"); stops a near-identity off-target collapsing the LCA
 
 export:
   formats:

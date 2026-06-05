@@ -448,7 +448,7 @@ class BlastLCAResolver:
 
     TAXONOMIC_RANKS = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
 
-    def __init__(self, top_bitscore_pct: float = 10.0):
+    def __init__(self, top_bitscore_pct: float = 10.0, lca_pident_delta: float = 1.0):
         """
         Initialize LCA resolver.
 
@@ -456,12 +456,24 @@ class BlastLCAResolver:
             top_bitscore_pct: Hits with bitscore within this percent of the best
                 are included in LCA resolution. 0 = exact ties only. Default 10.0
                 follows MEGAN-LR's `topPercent` default.
+            lca_pident_delta: An in-band hit is additionally required to be within
+                this many percent-identity points of the best in-band hit. Default
+                1.0 (the eDNAFlow "diff 1" convention). On a short marker a single
+                mismatch can leave a phylogenetically distant hit (e.g. a 98.6%
+                worm next to 100% Bos hits) inside the bitscore band; without this
+                floor that one hit collapses the LCA all the way to kingdom. 0
+                disables the floor (bitscore band only).
         """
         if top_bitscore_pct < 0 or top_bitscore_pct > 100:
             raise ValueError(
                 f"top_bitscore_pct must be in [0, 100]; got {top_bitscore_pct}"
             )
+        if lca_pident_delta < 0 or lca_pident_delta > 100:
+            raise ValueError(
+                f"lca_pident_delta must be in [0, 100]; got {lca_pident_delta}"
+            )
         self.top_bitscore_pct = float(top_bitscore_pct)
+        self.lca_pident_delta = float(lca_pident_delta)
 
     def resolve_ambiguous_hits(self, group: pd.DataFrame) -> pd.DataFrame:
         """
@@ -491,7 +503,16 @@ class BlastLCAResolver:
             group["keep_for_analysis"] = False
             return group
         threshold = best_bitscore * (1.0 - self.top_bitscore_pct / 100.0)
-        in_band_mask = bitscores >= threshold
+        in_bitscore = bitscores >= threshold
+        # pident floor: exclude in-bitscore hits whose identity is more than
+        # lca_pident_delta below the best in-band identity, so one near-identity
+        # off-target hit cannot collapse the LCA of an otherwise-agreeing cohort.
+        pidents = pd.to_numeric(group["pident"], errors="coerce")
+        best_pident = pidents[in_bitscore].max()
+        if pd.isna(best_pident) or self.lca_pident_delta <= 0:
+            in_band_mask = in_bitscore
+        else:
+            in_band_mask = in_bitscore & (pidents >= best_pident - self.lca_pident_delta)
         ambiguous_hits = group[in_band_mask]
 
         # Helper: keep exactly one row by label
@@ -564,6 +585,7 @@ class BlastTaxonomicAssigner:
         threshold_order: float = 80.0,
         threshold_class: float = 70.0,
         top_bitscore_pct: float = 10.0,
+        lca_pident_delta: float = 1.0,
         contaminants: Optional[List[str]] = None,
     ):
         """
@@ -589,7 +611,9 @@ class BlastTaxonomicAssigner:
             threshold_order=threshold_order,
             threshold_class=threshold_class,
         )
-        self.lca_resolver = BlastLCAResolver(top_bitscore_pct=top_bitscore_pct)
+        self.lca_resolver = BlastLCAResolver(
+            top_bitscore_pct=top_bitscore_pct, lca_pident_delta=lca_pident_delta
+        )
         self.contaminants = list(contaminants) if contaminants else []
 
     def assign_taxonomy(
@@ -647,6 +671,23 @@ class BlastTaxonomicAssigner:
                 .rename(columns={"qseqid": "ASV_ID"})
                 .reset_index(drop=True)
             )
+            # D1 guard: an OTU whose best hit is well above the genus identity threshold
+            # but which still collapsed below genus (an LCA across disagreeing in-band
+            # hits) is surfaced loudly, so a confident call is never silently lost to an
+            # over-broad band (CLAUDE.md sec.4).
+            genus_thr = getattr(self.filter, "threshold_genus", 96.0)
+            res_pident = pd.to_numeric(result["pident"], errors="coerce")
+            collapsed = result[(res_pident >= genus_thr) & (result["genus"].isna())]
+            if len(collapsed) > 0:
+                ids = list(collapsed["ASV_ID"].astype(str))
+                shown = ids[:15]
+                more = "" if len(ids) <= 15 else f", +{len(ids) - 15} more"
+                logger.warning(
+                    f"[WARN] blast_taxonomy: {len(collapsed)} OTU(s) with best pident >= the genus "
+                    f"threshold ({genus_thr}) collapsed below genus via LCA -- their in-band hits "
+                    f"span taxa (likely short-fragment cross-taxa matches in the reference DB). "
+                    f"Reported, not silently assigned: {shown}{more}"
+                )
 
         # 4. Load ASV count table (sequences as rows, samples as columns)
         asv_count = pd.read_csv(asv_count_csv, sep=",", index_col=0)

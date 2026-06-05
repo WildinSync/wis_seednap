@@ -125,19 +125,20 @@ def test_unassigned_otus_survive_merge(fixture_dir: Path) -> None:
 
 
 def test_top_bitscore_band_collapses_near_best_disagreement(fixture_dir: Path) -> None:
-    """I-2: When a near-best hit disagrees on family, LCA collapses below class.
+    """I-2: When equally-good (same-identity) hits disagree on family, LCA collapses below class.
 
-    OTU_1 has best hit Perca_fluviatilis (bitscore 119) and a near-best hit
-    Cyprinus_carpio (bitscore 113, within MEGAN's 10% band). They agree on
-    class (Actinopteri) but disagree on order/family/genus/species. The
-    combined LCA row should keep class but null order onwards.
+    OTU_1 has two 100%-identity hits, Perca_fluviatilis (bitscore 119) and
+    Cyprinus_carpio (bitscore 113, within MEGAN's 10% band). They agree on class
+    (Actinopteri) but disagree on order/family/genus/species. Both are at the top
+    identity, so the lca_pident_delta floor keeps both and the combined LCA row keeps
+    class but nulls order onwards.
     """
     blast_tsv = fixture_dir / "blast.tsv"
     _write_blast_tsv(
         blast_tsv,
         [
             ("OTU_1", "REF1", 100.0, 64, 0, 0, 1, 64, 1, 64, 1e-30, 119),
-            ("OTU_1", "REF4", 98.4, 64, 1, 0, 1, 64, 1, 64, 1e-28, 113),
+            ("OTU_1", "REF4", 100.0, 64, 0, 0, 1, 64, 1, 64, 1e-28, 113),
         ],
     )
     ass = BlastTaxonomicAssigner(
@@ -162,6 +163,48 @@ def test_top_bitscore_band_collapses_near_best_disagreement(fixture_dir: Path) -
     assert otu1["family"] == "Unassigned"
     assert otu1["genus"] == "Unassigned"
     assert otu1["species"] == "Unassigned"
+
+
+def test_lca_pident_floor_excludes_lower_identity_offtarget(fixture_dir: Path) -> None:
+    """D1 regression: a hit inside the bitscore band but >lca_pident_delta below the best
+    identity must NOT collapse the LCA. Mirrors the real greina case where a 98.6% peanut
+    worm sat in the bitscore band of seven 100% Bos hits and nulled them to kingdom.
+
+    Best hit Perca_fluviatilis at 100% (bitscore 119); a disagreeing Cyprinus_carpio at
+    98.4% (bitscore 113, inside the 10% band). With the default delta=1.0 the 98.4% hit is
+    excluded, so the confident 100% Perca call survives. With delta=0 (floor disabled) the
+    old over-collapse to class returns.
+    """
+    blast_tsv = fixture_dir / "blast.tsv"
+    _write_blast_tsv(
+        blast_tsv,
+        [
+            ("OTU_1", "REF1", 100.0, 64, 0, 0, 1, 64, 1, 64, 1e-30, 119),
+            ("OTU_1", "REF4", 98.4, 64, 1, 0, 1, 64, 1, 64, 1e-28, 113),
+        ],
+    )
+    kw = dict(
+        reference_fasta=fixture_dir / "ref.fasta",
+        threshold_species=0.0, threshold_genus=0.0, threshold_family=0.0,
+        threshold_order=0.0, threshold_class=0.0, top_bitscore_pct=10.0,
+    )
+    # Default floor (1.0): the 98.4% off-target is excluded -> Perca survives.
+    kept = BlastTaxonomicAssigner(lca_pident_delta=1.0, **kw).assign_taxonomy(
+        blast_tsv=blast_tsv, asv_count_csv=fixture_dir / "abundance.csv",
+        asv_fasta=fixture_dir / "query.fasta",
+    )
+    row = kept[kept["ASV_ID"] == "OTU_1"].iloc[0]
+    assert row["genus"] == "Perca"
+    assert row["species"] == "Perca_fluviatilis"
+
+    # Floor disabled (0.0): the 98.4% hit re-enters the band and collapses to class.
+    collapsed = BlastTaxonomicAssigner(lca_pident_delta=0.0, **kw).assign_taxonomy(
+        blast_tsv=blast_tsv, asv_count_csv=fixture_dir / "abundance.csv",
+        asv_fasta=fixture_dir / "query.fasta",
+    )
+    crow = collapsed[collapsed["ASV_ID"] == "OTU_1"].iloc[0]
+    assert crow["class"] == "Actinopteri"
+    assert crow["genus"] == "Unassigned"
 
 
 def test_top_bitscore_band_excludes_far_hit(fixture_dir: Path) -> None:

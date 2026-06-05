@@ -56,6 +56,7 @@ class StandardTrimmer:
         forward_primer: str,
         reverse_primer: str,
         keep_untrimmed: bool = False,
+        discard_untrimmed: bool = True,
     ) -> tuple:
         """
         Perform two-pass primer trimming on a single sample.
@@ -67,7 +68,15 @@ class StandardTrimmer:
             sample_name: Sample name (for output file naming)
             forward_primer: Forward primer sequence
             reverse_primer: Reverse primer sequence
-            keep_untrimmed: Save untrimmed reads (default: False)
+            keep_untrimmed: Route reads lacking the 5' primer to a side file for
+                inspection (default: False). When True they are written aside and
+                removed from the main output (overrides ``discard_untrimmed``).
+            discard_untrimmed: When True (default), pass-1 cutadapt drops reads in
+                which the 5' primer was not found (``--discard-untrimmed``). When
+                False, such reads are kept in the output. This is the config knob
+                ``trimming.discard_untrimmed``; passing it here is what makes it
+                take effect (it was previously inert -- untrimmed reads flowed
+                through regardless).
 
         Returns:
             Tuple of (r1_output_path, r2_output_path)
@@ -93,7 +102,15 @@ class StandardTrimmer:
         untrimmed_r1 = output_dir / f"untrimmed_{sample_name}.R1.fastq" if keep_untrimmed else None
         untrimmed_r2 = output_dir / f"untrimmed_{sample_name}.R2.fastq" if keep_untrimmed else None
 
-        # Pass 1: Trim 5' primers (-g/-G)
+        # Pass 1: Trim 5' primers (-g/-G). Reads without the 5' primer are routed to a
+        # side file when keep_untrimmed, else discarded when discard_untrimmed, else kept.
+        do_discard = discard_untrimmed and not keep_untrimmed
+        if not keep_untrimmed and not discard_untrimmed:
+            logger.warning(
+                f"[WARN] trimming {sample_name}: expected=primer on every read, "
+                f"got=discard_untrimmed=False, fallback=reads lacking the 5' primer are "
+                f"KEPT in the trimmed output"
+            )
         logger.info(f"Pass 1: Trimming 5' primers for {sample_name}")
         self.cutadapt.trim_primers(
             r1_input=r1_input,
@@ -104,6 +121,7 @@ class StandardTrimmer:
             reverse_primer=reverse_primer,
             untrimmed_r1=untrimmed_r1,
             untrimmed_r2=untrimmed_r2,
+            discard_untrimmed=do_discard,
             log_file=output_dir.parent.parent / "logs" / f"{sample_name}_trim_pass1.txt",
         )
 
@@ -139,6 +157,7 @@ class StandardTrimmer:
         forward_primer: str,
         reverse_primer: str,
         keep_untrimmed: bool = False,
+        discard_untrimmed: bool = True,
     ) -> List[tuple]:
         """
         Trim all samples in a directory.
@@ -186,7 +205,7 @@ class StandardTrimmer:
             r2_file = r2_files[0]
 
             # Trim sample
-            result = self.trim_sample(
+            result = self.trim_sample(  # discard_untrimmed threaded below
                 r1_input=r1_file,
                 r2_input=r2_file,
                 output_dir=output_dir,
@@ -194,6 +213,7 @@ class StandardTrimmer:
                 forward_primer=forward_primer,
                 reverse_primer=reverse_primer,
                 keep_untrimmed=keep_untrimmed,
+                discard_untrimmed=discard_untrimmed,
             )
             results.append(result)
 

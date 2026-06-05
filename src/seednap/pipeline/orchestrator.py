@@ -328,7 +328,8 @@ class PipelineOrchestrator:
                     sample_name=sample_name,
                     forward_primer=self.config.marker.primers.forward,
                     reverse_primer=self.config.marker.primers.reverse,
-                    keep_untrimmed=not self.config.trimming.discard_untrimmed
+                    keep_untrimmed=False,
+                    discard_untrimmed=self.config.trimming.discard_untrimmed,
                 )
 
                 trimmed_outputs[sample_name] = outputs
@@ -663,6 +664,7 @@ class PipelineOrchestrator:
                     "threshold_order": db_config.threshold_order,
                     "threshold_class": db_config.threshold_class,
                     "top_bitscore_pct": db_config.top_bitscore_pct,
+                    "lca_pident_delta": db_config.lca_pident_delta,
                     "contaminants": self.config.taxonomy.contaminants,
                     "perc_identity": db_config.perc_identity,
                     "qcov_hsp_perc": db_config.qcov_hsp_perc,
