@@ -1345,5 +1345,123 @@ def version() -> None:
     console.print("Repository: https://github.com/WildinSync/wis_seednap\n")
 
 
+@main.command()
+@click.argument("field_metadata", type=click.Path(exists=True, path_type=Path))
+@click.option("--project-metadata", type=click.Path(exists=True, path_type=Path),
+              help="Project metadata CSV (supplies the marker -> target_gene/assay_name)")
+@click.option("--lab-metadata", type=click.Path(exists=True, path_type=Path),
+              help="Legacy demux metadata CSV (supplies seq_run_id/library and tag barcodes)")
+@click.option("--seq-run-id", type=str, default=None,
+              help="Sequencing-run id for the whole dataset (overrides lab/derived value)")
+@click.option("--target-gene", type=str, default=None,
+              help="Marker / target_gene (overrides the project metadata)")
+@click.option("--date-order", type=click.Choice(["ymd", "dmy", "mdy"], case_sensitive=False),
+              default=None,
+              help="Force the eventDate field order for genuinely-ambiguous dotted dates "
+                   "(every date has day and month <=12); without it such files raise rather "
+                   "than be guessed")
+@click.option("-o", "--output", type=click.Path(path_type=Path), default=None,
+              help="Write the canonical manifest CSV here")
+@click.option("--abundance", type=click.Path(exists=True, path_type=Path), default=None,
+              help="Validate the manifest's eventIDs against this abundance/OTU table")
+@click.option("--strict", is_flag=True, default=False,
+              help="Raise if the abundance table has sample columns absent from the manifest "
+                   "(default: warn)")
+@click.pass_context
+def manifest(
+    ctx: click.Context,
+    field_metadata: Path,
+    project_metadata: Optional[Path],
+    lab_metadata: Optional[Path],
+    seq_run_id: Optional[str],
+    target_gene: Optional[str],
+    date_order: Optional[str],
+    output: Optional[Path],
+    abundance: Optional[Path],
+    strict: bool,
+) -> None:
+    """
+    Build (and optionally validate) a canonical FAIRe sample manifest.
+
+    Derives a single canonical, strictly-validated per-sample-library manifest from the
+    lab's existing CSVs and, with --abundance, cross-checks its eventIDs against an
+    abundance/OTU table (the up-front silent-ID-mismatch guard). Standalone: it reads
+    on-disk inputs and never runs or alters the pipeline.
+
+    \b
+    FIELD_METADATA: per-sample field metadata CSV (metadata_field_*.csv), or a legacy
+                    demux lab CSV (metadata_lab_*.csv) carrying library/tag columns.
+
+    Every assumption (a synthesised seq_run_id, an ambiguous control, a dropped column,
+    an orphan eventID) is logged as a [WARN]; ambiguous dates and a missing sample key
+    raise. Pass -o to write the manifest CSV.
+    """
+    from seednap.config.manifest import validate_against_abundance
+    from seednap.config.manifest_migrate import migrate_to_manifest
+
+    console.print("\n[bold]Building sample manifest[/bold]")
+    console.print(f"  Field metadata:   {field_metadata}")
+    if project_metadata:
+        console.print(f"  Project metadata: {project_metadata}")
+    if lab_metadata:
+        console.print(f"  Lab metadata:     {lab_metadata}")
+    console.print()
+
+    try:
+        m = migrate_to_manifest(
+            field_csv=field_metadata,
+            project_csv=project_metadata,
+            lab_csv=lab_metadata,
+            seq_run_id=seq_run_id,
+            target_gene=target_gene,
+            date_order=date_order,
+        )
+    except FileNotFoundError as e:
+        print_error(str(e))
+        sys.exit(1)
+    except ValueError as e:
+        print_error(f"Manifest build failed: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"Failed to build manifest: {e}")
+        if ctx.obj.get("verbose"):
+            import traceback
+
+            console.print(traceback.format_exc())
+        sys.exit(1)
+
+    n_ctrl = len(m.controls())
+    console.print(
+        f"  {len(m)} rows: {len(m.biological_samples())} sample(s), {n_ctrl} control(s), "
+        f"{len(m.seq_run_ids())} sequencing run(s)"
+    )
+
+    if output is not None:
+        m.to_csv(output)
+        print_success(f"Manifest written to {output}")
+
+    if abundance is not None:
+        try:
+            result = validate_against_abundance(m, abundance, raise_on_orphan=strict)
+        except ValueError as e:
+            print_error(str(e))
+            sys.exit(1)
+        if result.ok:
+            print_success(
+                f"Cross-check OK: all {len(result.abundance_samples)} abundance sample(s) "
+                f"have a manifest row"
+            )
+        else:
+            print_warning(
+                f"{len(result.orphan_abundance_columns)} abundance sample column(s) have no "
+                f"manifest row: {result.orphan_abundance_columns}"
+            )
+        if result.manifest_extra_rows:
+            console.print(
+                f"  {len(result.manifest_extra_rows)} manifest eventID(s) absent from the "
+                f"abundance table (likely dropped by the pipeline)"
+            )
+
+
 if __name__ == "__main__":
     main()
