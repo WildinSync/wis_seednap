@@ -1463,5 +1463,80 @@ def manifest(
             )
 
 
+@main.command()
+@click.argument("marker")
+@click.option("-o", "--output-dir", type=click.Path(path_type=Path), default=Path("outputs"),
+              help="Base output directory of the run (default: outputs)")
+@click.option("--state-file", type=click.Path(path_type=Path), default=None,
+              help="Run state JSON (default: <output-dir>/.<marker>_state.json)")
+@click.pass_context
+def monitor(ctx: click.Context, marker: str, output_dir: Path, state_file: Optional[Path]) -> None:
+    """
+    Summarise a finished or in-progress run from its state JSON.
+
+    Reads <output-dir>/.<marker>_state.json (written after every step) and prints a
+    per-step status/duration table plus the read-tracking headline (raw -> final reads,
+    mean retention, warnings). When per-sample counts are present it also writes a
+    monitoring_summary.csv. Standalone and read-only -- regenerable any time, no re-run.
+
+    MARKER: marker name (e.g. teleo, mam07).
+    """
+    from seednap.pipeline.state import PipelineState
+
+    sf = Path(state_file) if state_file else (output_dir / f".{marker}_state.json")
+    if not sf.exists():
+        print_error(f"State file not found: {sf}")
+        sys.exit(1)
+    try:
+        state = PipelineState.load(sf)
+    except Exception as e:
+        print_error(f"Could not load state file {sf}: {e}")
+        sys.exit(1)
+
+    console.print(f"\n[bold]Run monitor:[/bold] [cyan]{state.marker}[/cyan]")
+    console.print(f"  started:   {state.started_at}")
+    console.print(f"  completed: {state.completed_at if state.completed_at else '(not finished)'}")
+
+    table = Table(title="Pipeline steps")
+    for col in ("step", "status", "duration", "read tracking"):
+        table.add_column(col)
+    per_sample_step = None
+    for name, step in state.steps.items():
+        status = getattr(step.status, "value", str(step.status))
+        dur = f"{step.duration_seconds:.1f}s" if step.duration_seconds is not None else "-"
+        rt = step.metadata.get("read_tracking") if isinstance(step.metadata, dict) else None
+        if rt:
+            summary = (
+                f"{rt.get('n_samples', '?')} samples, "
+                f"raw {rt.get('raw_reads_total', '?')} -> {rt.get('final_step', '')} "
+                f"{rt.get('final_reads_total', '?')} "
+                f"({rt.get('mean_retention_pct', '?')}% mean), {rt.get('n_warnings', 0)} warn"
+            )
+        else:
+            summary = "-"
+        table.add_row(name, status, dur, summary)
+        if isinstance(step.metadata, dict) and step.metadata.get("read_tracking_per_sample"):
+            per_sample_step = step
+    console.print(table)
+
+    # Write the per-sample monitoring summary (the E4 artifact) when counts are present.
+    if per_sample_step is not None:
+        import pandas as pd
+
+        ps = per_sample_step.metadata["read_tracking_per_sample"]
+        rows = [{"eventID": ev, **counts} for ev, counts in ps.items()]
+        df = pd.DataFrame(rows)
+        report_dir = output_dir / "04_report" / marker
+        report_dir.mkdir(parents=True, exist_ok=True)
+        out_csv = report_dir / "monitoring_summary.csv"
+        df.to_csv(out_csv, index=False)
+        print_success(f"Per-sample monitoring summary written to {out_csv} ({len(df)} samples)")
+    else:
+        print_warning(
+            "No per-sample read-tracking counts in the state JSON "
+            "(run the pipeline with report.read_tracking enabled to populate them)."
+        )
+
+
 if __name__ == "__main__":
     main()

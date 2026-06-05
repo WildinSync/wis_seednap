@@ -392,6 +392,7 @@ class PipelineOrchestrator:
 
             self.state.complete_step(step_name, outputs)
             self._build_read_tracking_report("dada2")
+            self._validate_manifest_against_abundance("dada2")
             self._save_state()
             log_pipeline_step(step_name, "complete", logger)
             return outputs
@@ -444,6 +445,7 @@ class PipelineOrchestrator:
 
             self.state.complete_step(step_name, outputs)
             self._build_read_tracking_report("swarm")
+            self._validate_manifest_against_abundance("swarm")
             self._save_state()
             log_pipeline_step(step_name, "complete", logger)
             return outputs
@@ -514,11 +516,60 @@ class PipelineOrchestrator:
                         "mean_retention_pct": round(float(pr.mean()), 2) if pr.notna().any() else None,
                         "n_warnings": len(warns),
                     }
+                    # E3: per-sample counts keyed on eventID -- the substrate the FAIRe
+                    # manifest's reads_* columns consume. JSON-safe (NA -> None, numpy -> int),
+                    # serialized into the state JSON so it survives --resume.
+                    per_sample: Dict[str, Dict[str, Optional[int]]] = {}
+                    for _, r in df.iterrows():
+                        rec: Dict[str, Optional[int]] = {}
+                        for s in builder.steps:
+                            v = pd.to_numeric(pd.Series([r[s]]), errors="coerce").iloc[0]
+                            rec[s] = int(v) if pd.notna(v) else None
+                        per_sample[str(r["sample"])] = rec
+                    step.metadata["read_tracking_per_sample"] = per_sample
                 else:
                     step.metadata["read_tracking"] = {"n_samples": 0, "n_warnings": len(warns)}
         except Exception as exc:  # noqa: BLE001 -- reporting must never fail the run
             logger.warning(
                 f"[WARN] read_tracking report: expected=read-tracking table for "
+                f"'{method}', got=error ({exc}), fallback=skipped (pipeline unaffected)",
+            )
+
+    def _validate_manifest_against_abundance(self, method: str) -> None:
+        """Cross-check the FAIRe manifest's eventIDs against the abundance table.
+
+        When per-sample (field) metadata is configured (``report.sample_metadata``), derive
+        a manifest from it and assert its eventID set matches the abundance table's sample
+        columns -- the up-front silent-ID-mismatch guard (CLAUDE.md sec.4), catching e.g. an
+        unlabelled ``Blank-PCR-3`` column. Warn-only and non-fatal: it never alters or fails
+        the run.
+        """
+        field_csv = self.config.report.sample_metadata
+        if field_csv is None:
+            return
+        try:
+            from seednap.config.manifest import validate_against_abundance
+            from seednap.config.manifest_migrate import migrate_to_manifest
+
+            marker = self.config.marker.name
+            out = self.config.paths.output
+            # Sample columns live in the SWARM otu_table (sequences x samples) or the
+            # transposed DADA2 seqtab (seqtab_clean_t.csv = ASVs x samples).
+            if method == "dada2":
+                abundance = out / "02_dada2" / marker / "seqtab_clean_t.csv"
+            else:
+                abundance = out / "02_swarm" / marker / "otu_table.csv"
+            if not Path(field_csv).exists() or not abundance.exists():
+                return
+            manifest = migrate_to_manifest(
+                Path(field_csv),
+                project_csv=self.config.report.project_metadata,
+                target_gene=marker,
+            )
+            validate_against_abundance(manifest, abundance)
+        except Exception as exc:  # noqa: BLE001 -- validation must never fail the run
+            logger.warning(
+                f"[WARN] manifest validation: expected=cross-CSV eventID check for "
                 f"'{method}', got=error ({exc}), fallback=skipped (pipeline unaffected)",
             )
 
