@@ -69,6 +69,7 @@ class Dada2Processor:
         pool: bool = False,
         min_len: Optional[int] = None,
         max_len: Optional[int] = None,
+        library_map: Optional[Union[str, Path]] = None,
         collect_metrics: bool = True,
     ) -> Dict[str, Path]:
         """
@@ -135,6 +136,7 @@ class Dada2Processor:
             pool=pool,
             min_len=min_len,
             max_len=max_len,
+            library_map=library_map,
             log_file=log_file,
         )
 

@@ -33,6 +33,8 @@ max_mismatch <- if (length(args) >= 11) as.integer(args[11]) else 0
 pool <- if (length(args) >= 12) as.logical(args[12]) else FALSE
 min_len <- if (length(args) >= 13) as.integer(args[13]) else 0
 max_len <- if (length(args) >= 14) as.integer(args[14]) else 0
+# Optional sample_name,library CSV for DADA2-by-library. Empty/"NA" -> standard single batch.
+library_map <- if (length(args) >= 15) args[15] else ""
 
 marker_dir <- file.path(output_dir, "02_dada2", marker)
 qc_dir <- file.path(marker_dir, "QC")
@@ -141,40 +143,97 @@ if(!identical(sample.names, sample.namesR)) stop("Forward and reverse files do n
 names(filtFs) <- sample.names
 names(filtRs) <- sample.names
 
-set.seed(100)
-# Learn forward error rates
-errF <- learnErrors(filtFs, nbases=1e8, multithread=multithread)
-# Learn reverse error rates
-errR <- learnErrors(filtRs, nbases=1e8, multithread=multithread)
-# Sample inference and merger of paired-end reads
-if (pool) {
-  # Pooled mode: run dada on all samples together
-  cat("Running DADA2 in pooled mode\n")
-  dadaFs <- dada(filtFs, err=errF, multithread=multithread, pool=TRUE)
-  dadaRs <- dada(filtRs, err=errR, multithread=multithread, pool=TRUE)
-  mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs,
-                        minOverlap=min_overlap, maxMismatch=max_mismatch)
-} else {
-  # Per-sample mode (default)
-  mergers <- vector("list", length(sample.names))
-  names(mergers) <- sample.names
-  # Per-sample forward-denoised read counts for the read-tracking table.
-  denoisedF <- setNames(numeric(length(sample.names)), sample.names)
-  for(sam in sample.names) {
-    cat("Processing:", sam, "\n")
-    derepF <- derepFastq(filtFs[[sam]])
-    ddF <- dada(derepF, err=errF, multithread=multithread)
-    derepR <- derepFastq(filtRs[[sam]])
-    ddR <- dada(derepR, err=errR, multithread=multithread)
-    merger <- mergePairs(ddF, derepF, ddR, derepR,
-                         minOverlap=min_overlap, maxMismatch=max_mismatch)
-    mergers[[sam]] <- merger
-    denoisedF[[sam]] <- getN(ddF)
+# DADA2-by-library: error models are sequencing-run-specific. When a sample->library map
+# groups the samples into >= 2 libraries, learn errors per library, denoise+merge within
+# each, then merge the per-library tables and collapse identical sequences. With 0/1 library
+# the standard single-batch path runs verbatim below (byte-identical to before). Reading the
+# map consumes no RNG, so set.seed(100) in the standard branch is unaffected.
+use_per_library <- FALSE
+libs_for_samples <- NULL
+if (nzchar(library_map) && tolower(library_map) != "na" && file.exists(library_map)) {
+  lm <- read.csv(library_map, stringsAsFactors = FALSE)
+  if (!all(c("sample", "library") %in% colnames(lm))) {
+    stop(paste("library_map must have 'sample,library' columns:", library_map))
   }
-  rm(derepF); rm(derepR)
+  sample_lib <- setNames(as.character(lm$library), as.character(lm$sample))
+  libs_for_samples <- sample_lib[sample.names]
+  missing <- sample.names[is.na(libs_for_samples) | libs_for_samples == ""]
+  if (length(missing) > 0) {
+    stop(paste("DADA2-by-library: samples absent from the library map (no silent zero-fill):",
+               paste(missing, collapse = ", ")))
+  }
+  n_lib <- length(unique(libs_for_samples))
+  if (n_lib >= 2) {
+    use_per_library <- TRUE
+    cat("[INFO] DADA2-by-library:", n_lib, "libraries across",
+        length(sample.names), "samples\n")
+  } else {
+    cat("[WARN] dada2: per_library set but only", n_lib,
+        "library among the samples; standard single-batch path used\n")
+  }
 }
-# Construct sequence table and remove chimeras
-seqtab <- makeSequenceTable(mergers)
+
+if (use_per_library) {
+  mergers <- list()
+  denoisedF <- numeric(0)
+  seqtabs <- list()
+  for (lib in unique(libs_for_samples)) {
+    lib_samples <- sample.names[libs_for_samples == lib]
+    cat("  library", lib, "->", length(lib_samples), "samples\n")
+    set.seed(100)  # per library, so a single-library run matches the standard path
+    lf <- filtFs[lib_samples]; lr <- filtRs[lib_samples]
+    eF <- learnErrors(lf, nbases = 1e8, multithread = multithread)
+    eR <- learnErrors(lr, nbases = 1e8, multithread = multithread)
+    lib_mergers <- vector("list", length(lib_samples)); names(lib_mergers) <- lib_samples
+    for (sam in lib_samples) {
+      derepF <- derepFastq(lf[[sam]]); ddF <- dada(derepF, err = eF, multithread = multithread)
+      derepR <- derepFastq(lr[[sam]]); ddR <- dada(derepR, err = eR, multithread = multithread)
+      lib_mergers[[sam]] <- mergePairs(ddF, derepF, ddR, derepR,
+                                       minOverlap = min_overlap, maxMismatch = max_mismatch)
+      denoisedF[[sam]] <- getN(ddF)
+    }
+    seqtabs[[lib]] <- makeSequenceTable(lib_mergers)
+    mergers <- c(mergers, lib_mergers)
+  }
+  # Merge the per-library tables and collapse sequences identical up to shift/length.
+  merged_tab <- if (length(seqtabs) > 1) mergeSequenceTables(tables = seqtabs) else seqtabs[[1]]
+  seqtab <- collapseNoMismatch(merged_tab)
+} else {
+  set.seed(100)
+  # Learn forward error rates
+  errF <- learnErrors(filtFs, nbases=1e8, multithread=multithread)
+  # Learn reverse error rates
+  errR <- learnErrors(filtRs, nbases=1e8, multithread=multithread)
+  # Sample inference and merger of paired-end reads
+  if (pool) {
+    # Pooled mode: run dada on all samples together
+    cat("Running DADA2 in pooled mode\n")
+    dadaFs <- dada(filtFs, err=errF, multithread=multithread, pool=TRUE)
+    dadaRs <- dada(filtRs, err=errR, multithread=multithread, pool=TRUE)
+    mergers <- mergePairs(dadaFs, filtFs, dadaRs, filtRs,
+                          minOverlap=min_overlap, maxMismatch=max_mismatch)
+  } else {
+    # Per-sample mode (default)
+    mergers <- vector("list", length(sample.names))
+    names(mergers) <- sample.names
+    # Per-sample forward-denoised read counts for the read-tracking table.
+    denoisedF <- setNames(numeric(length(sample.names)), sample.names)
+    for(sam in sample.names) {
+      cat("Processing:", sam, "\n")
+      derepF <- derepFastq(filtFs[[sam]])
+      ddF <- dada(derepF, err=errF, multithread=multithread)
+      derepR <- derepFastq(filtRs[[sam]])
+      ddR <- dada(derepR, err=errR, multithread=multithread)
+      merger <- mergePairs(ddF, derepF, ddR, derepR,
+                           minOverlap=min_overlap, maxMismatch=max_mismatch)
+      mergers[[sam]] <- merger
+      denoisedF[[sam]] <- getN(ddF)
+    }
+    rm(derepF); rm(derepR)
+  }
+  # Construct sequence table
+  seqtab <- makeSequenceTable(mergers)
+}
 saveRDS(seqtab, file.path(marker_dir, "seqtab.rds"))
 
 # Merge multiple runs (if necessary)
@@ -195,7 +254,7 @@ write.csv(t(seqtab), file.path(marker_dir, "seqtab_clean_t.csv"), row.names = TR
 # Read-tracking table: per-sample read counts at each step. Additive only;
 # reads existing objects (out / dadaFs / mergers / seqtab) and writes a new
 # file. Does NOT modify seqtab or any existing output.
-if (pool) {
+if (pool && !use_per_library) {
   dadaFs_list <- if (is.list(dadaFs)) dadaFs else setNames(list(dadaFs), sample.names)
   denoisedF <- sapply(dadaFs_list, getN)
 }

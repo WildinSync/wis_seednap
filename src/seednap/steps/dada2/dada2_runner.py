@@ -57,6 +57,7 @@ class Dada2Runner(RScriptRunner):
         pool: bool = False,
         min_len: Optional[int] = None,
         max_len: Optional[int] = None,
+        library_map: Optional[Union[str, Path]] = None,
         script_path: Optional[Union[str, Path]] = None,
         log_file: Optional[Union[str, Path]] = None,
     ) -> Dict[str, Path]:
@@ -123,6 +124,7 @@ class Dada2Runner(RScriptRunner):
                 str(pool).upper(),
                 str(min_len if min_len is not None else 0),
                 str(max_len if max_len is not None else 0),
+                str(library_map) if library_map is not None else "",
             ],
             log_file=log_file,
         )

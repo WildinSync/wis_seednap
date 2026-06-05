@@ -67,6 +67,7 @@ dada2:
     method: "consensus"  # Options: "consensus", "pooled", "none"
   pool: false
   multithread: true
+  per_library: false      # learn DADA2 errors per library/run then merge (only matters when >=2 libraries are pooled)
 
 # Taxonomic assignment configuration
 taxonomy:

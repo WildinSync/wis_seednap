@@ -392,6 +392,7 @@ class PipelineOrchestrator:
                 pool=self.config.dada2.pool,
                 min_len=self.config.dada2.filter.min_len,
                 max_len=self.config.dada2.filter.max_len,
+                library_map=self._build_library_map(),
                 collect_metrics=self.config.metrics.generate_plots,
             )
 
@@ -460,6 +461,56 @@ class PipelineOrchestrator:
             self._save_state()
             log_pipeline_step(step_name, "error", logger)
             raise
+
+    def _build_library_map(self) -> Optional[Path]:
+        """Write a ``sample,library`` CSV for DADA2-by-library, derived from the manifest's
+        seq_run_id grouping (from report.sample_metadata and/or demultiplex.metadata).
+
+        Returns the CSV path, or None when per_library is off or no grouping source exists
+        (the R script then runs the standard single-batch path). A single-library grouping is
+        a no-op there too, so writing the map is always safe.
+        """
+        if not self.config.dada2.per_library:
+            return None
+        field_csv = self.config.report.sample_metadata
+        lab_csv = self.config.demultiplex.metadata
+        src = field_csv or lab_csv
+        if src is None:
+            logger.warning(
+                "[WARN] dada2 per_library: expected=report.sample_metadata or "
+                "demultiplex.metadata for the library grouping, got=none, "
+                "fallback=standard single-batch DADA2"
+            )
+            return None
+        try:
+            import pandas as pd
+
+            from seednap.config.manifest_migrate import migrate_to_manifest
+
+            extra_lab = Path(lab_csv) if (lab_csv and str(lab_csv) != str(src)) else None
+            manifest = migrate_to_manifest(
+                Path(src),
+                lab_csv=extra_lab,
+                project_csv=self.config.report.project_metadata,
+                target_gene=self.config.marker.name,
+            )
+            df = pd.DataFrame(
+                [{"sample": r.eventID, "library": r.seq_run_id} for r in manifest.rows]
+            )
+            out = self.config.paths.output / "02_dada2" / self.config.marker.name / "library_map.csv"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(out, index=False)
+            logger.info(
+                f"DADA2-by-library: wrote library map ({len(df)} samples, "
+                f"{df['library'].nunique()} libraries) to {out}"
+            )
+            return out
+        except Exception as exc:  # noqa: BLE001 -- never fail the run building a helper file
+            logger.warning(
+                f"[WARN] dada2 per_library: could not build the library map ({exc}), "
+                f"fallback=standard single-batch DADA2"
+            )
+            return None
 
     def _report_dir(self) -> Path:
         """Per-marker directory for report artifacts.
