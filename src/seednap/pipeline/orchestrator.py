@@ -773,6 +773,8 @@ class PipelineOrchestrator:
                     "top_bitscore_pct": db_config.top_bitscore_pct,
                     "lca_pident_delta": db_config.lca_pident_delta,
                     "lca_algorithm": db_config.lca_algorithm,
+                    "lca_pid": db_config.lca_pid,
+                    "lca_diff": db_config.lca_diff,
                     "contaminants": self.config.taxonomy.contaminants,
                     "perc_identity": db_config.perc_identity,
                     "qcov_hsp_perc": db_config.qcov_hsp_perc,

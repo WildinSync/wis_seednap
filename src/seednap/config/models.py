@@ -266,6 +266,12 @@ class BlastDatabaseConfig(StrictModel):
     lca_algorithm: Literal["cascade", "collapsed_taxonomy", "fishbase_tiered"] = Field(
         default="cascade", description="BLAST LCA algorithm (default: cascade = current behavior)"
     )
+    # Parameters for lca_algorithm="collapsed_taxonomy" (eDNAFlow/OceanOmics). lca_pid is the
+    # hard %identity floor; lca_diff is the top-identity window width within which disagreeing
+    # hits are collapsed to their LCA. eDNAFlow defaults: lca_pid=90, lca_diff=1. (Query
+    # coverage is enforced separately at the blastn step via qcov_hsp_perc.)
+    lca_pid: float = Field(default=90.0, ge=0, le=100, description="collapsed_taxonomy %identity floor")
+    lca_diff: float = Field(default=1.0, ge=0, le=100, description="collapsed_taxonomy identity-window width")
 
     @field_validator("fasta")
     @classmethod

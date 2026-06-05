@@ -119,7 +119,9 @@ taxonomy:
       # LCA collapse. 0 = exact ties only. Default 10.0 follows MEGAN's `topPercent`.
       top_bitscore_pct: 10.0
       lca_pident_delta: 1.0      # in-band hits must be within this %id of the best (eDNAFlow "diff 1"); stops a near-identity off-target collapsing the LCA
-      lca_algorithm: cascade   # cascade (current) | collapsed_taxonomy/fishbase_tiered (taxid-based, need a taxid-mapped DB + taxdump)
+      lca_algorithm: cascade   # cascade (per-rank thresholds, current default) | collapsed_taxonomy (eDNAFlow/OceanOmics %id-window LCA on the FASTA-header lineage; header-based, no taxids/taxdump, runs offline)
+      lca_pid: 90.0            # collapsed_taxonomy only: hard %identity floor; hits below this are dropped before the LCA (query coverage is enforced upstream at the blastn step via qcov_hsp_perc)
+      lca_diff: 1.0            # collapsed_taxonomy only: identity window; hits within this %id of the best survivor are collapsed to their lowest common ancestor
 
     # Ecotag (OBITools) taxonomic assignment
     ecotag:

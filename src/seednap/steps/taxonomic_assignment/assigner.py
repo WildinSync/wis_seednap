@@ -122,6 +122,8 @@ class TaxonomicAssigner:
         top_bitscore_pct: float = 10.0,
         lca_pident_delta: float = 1.0,
         lca_algorithm: str = "cascade",
+        lca_pid: float = 90.0,
+        lca_diff: float = 1.0,
         contaminants: Optional[list] = None,
         perc_identity: float = 80.0,
         qcov_hsp_perc: float = 80.0,
@@ -189,6 +191,8 @@ class TaxonomicAssigner:
             top_bitscore_pct=top_bitscore_pct,
             lca_pident_delta=lca_pident_delta,
             lca_algorithm=lca_algorithm,
+            lca_pid=lca_pid,
+            lca_diff=lca_diff,
             contaminants=contaminants,
         )
 

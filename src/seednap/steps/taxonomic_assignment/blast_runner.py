@@ -565,6 +565,94 @@ class BlastLCAResolver:
             return pd.concat([group, combined_row], ignore_index=True)
 
 
+class CollapsedTaxonomyLCAResolver:
+    """eDNAFlow / OceanOmics "collapsed taxonomy" LCA, reimplemented on header lineages.
+
+    Per OTU: keep hits with ``pident >= lca_pid`` (the hard identity floor; query coverage is
+    already enforced at the blastn step via ``-qcov_hsp_perc``). Among those, keep the
+    top-identity window ``[best_pident - lca_diff, best_pident]``. Collapse the window's
+    lineages to their lowest common ancestor: walk kingdom->species and keep a rank while all
+    windowed hits share a single non-empty value; at the first rank where they disagree, null
+    that rank and every finer rank.
+
+    This is the algorithm from OceanOmics-amplicon-nf's ``LCA`` process (eDNAFlow, Mahsa
+    Mousavi-Derazmahalleh), adapted to SeeDNAP: the lineage comes from the reference FASTA
+    headers (SeeDNAP DBs are CRABS-formatted), so it needs **no NCBI taxids and no taxdump**
+    and runs fully offline. Upstream defects are fixed: the identity-difference comparison is
+    numeric (upstream compares formatted strings), taxa absent from the reference raise at the
+    formatter (upstream silently drops taxids missing from the dump), and no hit is dropped
+    without the count being reported.
+    """
+
+    TAXONOMIC_RANKS = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
+
+    # Missing-rank placeholders in the reference FASTA-header lineage. CRABS writes the literal
+    # string "NA" where a rank is unknown (verified in the 2025 DBs: e.g. ;Actinopteri;NA;
+    # Centropomidae; on Lates records). These are NOT taxa: treating them as real values would
+    # (a) over-collapse a confident call when one windowed hit carries "NA" at a rank where the
+    # others agree, and (b) emit a taxon literally named "NA" into the GBIF export. So they are
+    # excluded from the agreement test exactly like "" / "nan". Matched case-insensitively after
+    # strip(); no real taxon is named "na"/"nan".
+    MISSING_RANK_SENTINELS = ("", "na", "nan")
+
+    def __init__(self, lca_pid: float = 90.0, lca_diff: float = 1.0):
+        if not (0 <= lca_pid <= 100):
+            raise ValueError(f"lca_pid must be in [0, 100]; got {lca_pid}")
+        if not (0 <= lca_diff <= 100):
+            raise ValueError(f"lca_diff must be in [0, 100]; got {lca_diff}")
+        self.lca_pid = float(lca_pid)
+        self.lca_diff = float(lca_diff)
+
+    @classmethod
+    def _distinct(cls, series: pd.Series) -> List[str]:
+        """Distinct real-taxon values of a lineage column (drops the missing-rank sentinels)."""
+        return [
+            v
+            for v in series.dropna().unique()
+            if str(v).strip().lower() not in cls.MISSING_RANK_SENTINELS
+        ]
+
+    def resolve_ambiguous_hits(self, group: pd.DataFrame) -> pd.DataFrame:
+        """Collapse one OTU's hits to their LCA over the top-identity window. Returns the
+        group plus a synthetic combined row with ``keep_for_analysis=True`` (the LCA)."""
+        group = group.reset_index(drop=True).copy()
+        if len(group) == 0:
+            group["keep_for_analysis"] = False
+            return group
+
+        pident = pd.to_numeric(group["pident"], errors="coerce")
+        passed = pident >= self.lca_pid
+        combined = group.iloc[[0]].copy()
+
+        if not passed.any():
+            # Nothing clears the identity floor -> Unassigned (null every rank).
+            for rank in self.TAXONOMIC_RANKS:
+                combined[rank] = None
+            combined["pident"] = float(pident.max()) if pident.notna().any() else None
+        else:
+            best = float(pident[passed].max())
+            window = group[passed & (pident >= best - self.lca_diff)]
+            combined = window.iloc[[0]].copy()
+            disagreed = False
+            for i, rank in enumerate(self.TAXONOMIC_RANKS):
+                if disagreed:
+                    combined[rank] = None
+                    continue
+                vals = self._distinct(window[rank])
+                if len(vals) > 1:
+                    disagreed = True
+                    combined[rank] = None
+                else:
+                    combined[rank] = vals[0] if vals else None
+            combined["pident"] = best
+
+        group["keep_for_analysis"] = False
+        combined["keep_for_analysis"] = True
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=FutureWarning)
+            return pd.concat([group, combined], ignore_index=True)
+
+
 # ---------------------------------------------------------------------------
 # End-to-end taxonomic assigner
 # ---------------------------------------------------------------------------
@@ -587,6 +675,8 @@ class BlastTaxonomicAssigner:
         top_bitscore_pct: float = 10.0,
         lca_pident_delta: float = 1.0,
         lca_algorithm: str = "cascade",
+        lca_pid: float = 90.0,
+        lca_diff: float = 1.0,
         contaminants: Optional[List[str]] = None,
     ):
         """
@@ -612,27 +702,38 @@ class BlastTaxonomicAssigner:
             threshold_order=threshold_order,
             threshold_class=threshold_class,
         )
+        self.lca_algorithm = lca_algorithm
+        self.lca_pid = lca_pid
         self.lca_resolver = self._make_lca_resolver(
-            lca_algorithm, top_bitscore_pct=top_bitscore_pct, lca_pident_delta=lca_pident_delta
+            lca_algorithm,
+            top_bitscore_pct=top_bitscore_pct, lca_pident_delta=lca_pident_delta,
+            lca_pid=lca_pid, lca_diff=lca_diff,
         )
         self.contaminants = list(contaminants) if contaminants else []
 
     @staticmethod
     def _make_lca_resolver(
-        algorithm: str, *, top_bitscore_pct: float, lca_pident_delta: float
-    ) -> "BlastLCAResolver":
-        """Resolver factory. Only 'cascade' is implemented today; the taxid-based methods
-        require a taxid-mapped reference DB + a staged NCBI taxdump and raise until then,
-        so the config switch is a one-line change once that data is provisioned."""
+        algorithm: str, *, top_bitscore_pct: float, lca_pident_delta: float,
+        lca_pid: float = 90.0, lca_diff: float = 1.0,
+    ) -> Union["BlastLCAResolver", "CollapsedTaxonomyLCAResolver"]:
+        """Resolver factory keyed on lca_algorithm.
+
+        'cascade' (default) = the header-derived per-rank/MEGAN-LR resolver. 'collapsed_taxonomy'
+        = the eDNAFlow/OceanOmics identity-window collapse-to-LCA (also header-based, offline).
+        'fishbase_tiered' (Fishbase->WoRMS->NCBI) is not implemented (fish-specific, needs the
+        bundled WoRMS file + staged Fishbase parquet) and raises until provisioned.
+        """
         if algorithm == "cascade":
             return BlastLCAResolver(
                 top_bitscore_pct=top_bitscore_pct, lca_pident_delta=lca_pident_delta
             )
-        if algorithm in ("collapsed_taxonomy", "fishbase_tiered"):
+        if algorithm == "collapsed_taxonomy":
+            return CollapsedTaxonomyLCAResolver(lca_pid=lca_pid, lca_diff=lca_diff)
+        if algorithm == "fishbase_tiered":
             raise NotImplementedError(
-                f"lca_algorithm={algorithm!r} is not implemented yet: it needs a taxid-mapped "
-                f"reference DB (current DBs are header-based) and a staged NCBI taxdump. "
-                f"Use 'cascade' until that data is provisioned."
+                "lca_algorithm='fishbase_tiered' is not implemented yet: it needs the bundled "
+                "WoRMS file + a staged Fishbase parquet and is fish-specific. Use 'cascade' or "
+                "'collapsed_taxonomy'."
             )
         raise ValueError(f"unknown lca_algorithm {algorithm!r}")
 
@@ -677,7 +778,12 @@ class BlastTaxonomicAssigner:
         if len(formatted) == 0:
             result = pd.DataFrame(columns=["ASV_ID", "pident"] + phylo_cols)
         else:
-            filtered = self.filter.filter(formatted)
+            # cascade applies per-rank identity thresholds before the LCA; collapsed_taxonomy
+            # does its own identity-floor + window inside the resolver, so it skips the cascade.
+            if self.lca_algorithm == "collapsed_taxonomy":
+                filtered = formatted.copy()
+            else:
+                filtered = self.filter.filter(formatted)
             filtered["keep_for_analysis"] = filtered["blast_rank"] == 1
             filtered = (
                 filtered.groupby("qseqid", group_keys=True)
@@ -708,6 +814,25 @@ class BlastTaxonomicAssigner:
                     f"span taxa (likely short-fragment cross-taxa matches in the reference DB). "
                     f"Reported, not silently assigned: {shown}{more}"
                 )
+
+            # collapsed_taxonomy floor guard: an OTU that HAD BLAST hits but none cleared
+            # lca_pid is marked Unassigned (all ranks null) yet retains its best below-floor
+            # pident -- it would otherwise be indistinguishable from a genuine no-hit OTU,
+            # which IS warned below (n_unassigned). Surface the dropped-by-floor count so the
+            # two cases are distinguishable and no hit is discarded silently (CLAUDE.md sec.4).
+            if self.lca_algorithm == "collapsed_taxonomy":
+                all_null = result[phylo_cols].isna().all(axis=1)
+                below_floor = result[all_null & res_pident.notna()]
+                if len(below_floor) > 0:
+                    lo, hi = float(res_pident[below_floor.index].min()), float(
+                        res_pident[below_floor.index].max()
+                    )
+                    logger.warning(
+                        f"[WARN] collapsed_taxonomy LCA: {len(below_floor)} OTU(s) had BLAST "
+                        f"hit(s) but none cleared lca_pid={self.lca_pid} "
+                        f"(best pident {lo:.1f}-{hi:.1f}); marked Unassigned. "
+                        f"expected=>= floor, got=all hits below floor, fallback=Unassigned"
+                    )
 
         # 4. Load ASV count table (sequences as rows, samples as columns)
         asv_count = pd.read_csv(asv_count_csv, sep=",", index_col=0)

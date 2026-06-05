@@ -359,6 +359,25 @@ def create_gbif(
     type=float,
     help="Minimum percent identity for family-level assignment (default: 86.5)",
 )
+@click.option(
+    "--lca-algorithm",
+    default="cascade",
+    type=click.Choice(["cascade", "collapsed_taxonomy"]),
+    help="LCA algorithm: cascade (per-rank thresholds, default) or collapsed_taxonomy "
+    "(eDNAFlow/OceanOmics %identity-window collapse-to-LCA)",
+)
+@click.option(
+    "--lca-pid",
+    default=90.0,
+    type=float,
+    help="collapsed_taxonomy only: hard %identity floor for hits (default: 90.0)",
+)
+@click.option(
+    "--lca-diff",
+    default=1.0,
+    type=float,
+    help="collapsed_taxonomy only: identity-window width collapsed to the LCA (default: 1.0)",
+)
 @click.pass_context
 def blast(
     ctx: click.Context,
@@ -372,6 +391,9 @@ def blast(
     threshold_species: float,
     threshold_genus: float,
     threshold_family: float,
+    lca_algorithm: str,
+    lca_pid: float,
+    lca_diff: float,
 ) -> None:
     """
     Run BLAST taxonomic assignment with LCA resolution.
@@ -425,6 +447,9 @@ def blast(
             threshold_species=threshold_species,
             threshold_genus=threshold_genus,
             threshold_family=threshold_family,
+            lca_algorithm=lca_algorithm,
+            lca_pid=lca_pid,
+            lca_diff=lca_diff,
         )
 
         result = assigner.assign_taxonomy(
