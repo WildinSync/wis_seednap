@@ -1464,6 +1464,87 @@ def manifest(
 
 
 @main.command()
+@click.argument("abundance_csv", type=click.Path(exists=True, path_type=Path))
+@click.argument("field_metadata", type=click.Path(exists=True, path_type=Path))
+@click.argument("output", type=click.Path(path_type=Path))
+@click.option("--mode", type=click.Choice(["flag", "subtract"], case_sensitive=False),
+              default="flag", help="flag (annotate, default) or subtract (remove control reads)")
+@click.option("--project-metadata", type=click.Path(exists=True, path_type=Path), default=None,
+              help="Project metadata CSV (marker -> target_gene)")
+@click.option("--id-col", type=str, default=None,
+              help="OTU/ASV identifier column in the abundance table (default: first column)")
+@click.option("--report", "report_path", type=click.Path(path_type=Path), default=None,
+              help="Per-sample cleaning report CSV (default: <output stem>_report.csv)")
+@click.pass_context
+def clean(
+    ctx: click.Context,
+    abundance_csv: Path,
+    field_metadata: Path,
+    output: Path,
+    mode: str,
+    project_metadata: Optional[Path],
+    id_col: Optional[str],
+    report_path: Optional[Path],
+) -> None:
+    """
+    Decontaminate an abundance table against its negative controls.
+
+    Derives control identity (extraction vs PCR blanks, extraction batches) from a FAIRe
+    manifest migrated from FIELD_METADATA, then flags (default) or subtracts control reads:
+    extraction blanks clean their own extraction_ID batch, PCR blanks clean the whole
+    dataset. Standalone and read-only on its inputs; every assumption is logged as a [WARN].
+
+    \b
+    ABUNDANCE_CSV:  OTU/ASV x sample table (e.g. 02_swarm/<marker>/otu_table.csv).
+    FIELD_METADATA: per-sample field metadata CSV (metadata_field_*.csv).
+    OUTPUT:         path for the cleaned abundance CSV.
+    """
+    import pandas as pd
+
+    from seednap.config.manifest_migrate import migrate_to_manifest
+    from seednap.steps.cleaning import CleaningProcessor
+
+    console.print("\n[bold]Cleaning abundance table[/bold]")
+    console.print(f"  Abundance: {abundance_csv}")
+    console.print(f"  Metadata:  {field_metadata}")
+    console.print(f"  Mode:      {mode}")
+    try:
+        manifest = migrate_to_manifest(field_metadata, project_csv=project_metadata)
+        abundance = pd.read_csv(abundance_csv)
+        col = id_col or str(abundance.columns[0])
+        cleaned, report, result = CleaningProcessor(mode=mode.lower()).clean(
+            abundance, manifest, id_col=col
+        )
+    except FileNotFoundError as e:
+        print_error(str(e))
+        sys.exit(1)
+    except ValueError as e:
+        print_error(f"Cleaning failed: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"Failed to clean: {e}")
+        if ctx.obj.get("verbose"):
+            import traceback
+
+            console.print(traceback.format_exc())
+        sys.exit(1)
+
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    cleaned.to_csv(output, index=False)
+    rep_path = Path(report_path) if report_path else output.with_name(f"{output.stem}_report.csv")
+    report.to_csv(rep_path, index=False)
+
+    console.print(
+        f"  {result.n_controls} control(s), {result.n_samples} sample(s), "
+        f"{result.n_otus_flagged} OTU(s) flagged"
+        + (f", {result.total_reads_removed} reads removed" if mode == "subtract" else "")
+    )
+    print_success(f"Cleaned table -> {output}")
+    print_success(f"Per-sample report -> {rep_path}")
+
+
+@main.command()
 @click.argument("marker")
 @click.option("-o", "--output-dir", type=click.Path(path_type=Path), default=Path("outputs"),
               help="Base output directory of the run (default: outputs)")

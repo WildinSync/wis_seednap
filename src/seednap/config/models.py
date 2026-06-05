@@ -406,6 +406,22 @@ class ReportConfig(StrictModel):
         return v.expanduser().resolve() if v is not None else v
 
 
+class CleaningConfig(StrictModel):
+    """Control decontamination (cleaning) of the abundance table.
+
+    Off by default. ``mode='flag'`` annotates OTUs/ASVs found in negative controls without
+    changing counts (high-consequence subtraction stays opt-in); ``mode='subtract'`` removes
+    those reads from the associated samples (extraction blanks clean their extraction batch,
+    PCR blanks clean the whole dataset). Control identity comes from the FAIRe manifest.
+    """
+
+    enabled: bool = Field(default=False, description="Run the cleaning step (default: off)")
+    mode: Literal["flag", "subtract"] = Field(
+        default="flag",
+        description="'flag' annotates control OTUs without changing counts; 'subtract' removes them",
+    )
+
+
 class LoggingConfig(StrictModel):
     """Logging configuration."""
 
@@ -454,6 +470,9 @@ class PipelineConfig(StrictModel):
     )
     report: ReportConfig = Field(
         default_factory=ReportConfig, description="Run reporting configuration"
+    )
+    cleaning: CleaningConfig = Field(
+        default_factory=CleaningConfig, description="Control decontamination configuration"
     )
     logging: LoggingConfig = Field(
         default_factory=LoggingConfig, description="Logging configuration"
