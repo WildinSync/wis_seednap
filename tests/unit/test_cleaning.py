@@ -93,6 +93,27 @@ def test_zero_controls_warns(caplog):
     assert any("at least one negative control" in r.message for r in caplog.records)
 
 
+def test_explicit_sample_cols_excludes_numeric_meta(manifest):
+    """On a taxonomy table, explicit sample_cols must protect numeric NON-sample columns
+    (e.g. pident) from being treated as samples (the D3 case)."""
+    tax = pd.DataFrame({
+        "ASV_ID": ["O1", "O2"],
+        "pident": [100.0, 98.0],          # numeric but NOT a sample
+        "genus": ["Bos", "Cervus"],
+        "S1": [100, 50], "S3": [100, 50],
+        "Bpcr": [10, 0],
+    })
+    sample_cols = ["S1", "S3", "Bpcr"]
+    cleaned, rep, res = CleaningProcessor(mode="subtract").clean(
+        tax, manifest, id_col="ASV_ID", sample_cols=sample_cols
+    )
+    # pident untouched (not treated as a sample); O1 removed from S1/S3 (in PCR blank)
+    assert list(cleaned["pident"]) == [100.0, 98.0]
+    by = cleaned.set_index("ASV_ID")
+    assert by.loc["O1", "S1"] == 0 and by.loc["O2", "S1"] == 50
+    assert set(rep["eventID"]) == {"S1", "S3"}  # Bpcr is a control, not a bio sample
+
+
 def test_extraction_blank_matching_no_sample_warns(caplog):
     m = SampleManifest(rows=[_sample("S1", "EXP1"), _neg("Bext9", "extraction negative", "EXP9")])
     ab = pd.DataFrame({"sequence": ["O1"], "S1": [10], "Bext9": [5]})

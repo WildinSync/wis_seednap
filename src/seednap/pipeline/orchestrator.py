@@ -93,6 +93,11 @@ class PipelineOrchestrator:
                 f"Starting new pipeline run for marker: {self.config.marker.name}"
             )
 
+        # Track the cleaning step when enabled (auto-inserted into the run order in run());
+        # added here so --resume sees it even if it was enabled after the first run.
+        if self.config.cleaning.enabled and self.state.get_step("clean") is None:
+            self.state.add_step("clean")
+
     def _setup_logging(self) -> None:
         """Configure logging using existing logging utilities."""
         log_config = self.config.logging
@@ -753,6 +758,94 @@ class PipelineOrchestrator:
             log_pipeline_step(step_name, "error", logger)
             raise
 
+    def run_clean(self) -> Dict[str, Path]:
+        """Control-decontamination step: clean the taxonomy table against its negative
+        controls, between taxonomy and export. Gated on ``cleaning.enabled`` and on
+        ``report.sample_metadata`` (the control-identity source). Non-fatal: a problem skips
+        cleaning with a ``[WARN]`` rather than failing the run (export falls back to the
+        uncleaned table)."""
+        step_name = "clean"
+        if not self._should_run_step(step_name):
+            step = self.state.get_step(step_name)
+            return step.outputs if step else {}
+
+        if not self.config.cleaning.enabled:
+            self.state.skip_step(step_name, reason="Cleaning disabled in config")
+            return {}
+
+        field_csv = self.config.report.sample_metadata
+        if field_csv is None:
+            self.state.skip_step(
+                step_name,
+                reason="Cleaning needs report.sample_metadata (control identity); skipped",
+            )
+            logger.warning(
+                "[WARN] cleaning: expected=report.sample_metadata for control identity, "
+                "got=none, fallback=cleaning skipped (export uses the uncleaned table)"
+            )
+            return {}
+
+        log_pipeline_step(step_name, "start", logger)
+        self.state.start_step(step_name)
+        self._save_state()
+        try:
+            import pandas as pd
+
+            from seednap.config.manifest import classify_control
+            from seednap.config.manifest_migrate import migrate_to_manifest
+            from seednap.steps.cleaning import CleaningProcessor
+
+            taxo_step = self.state.get_step("taxonomy")
+            taxonomy_csv = taxo_step.outputs.get("final_table") if taxo_step else None
+            if taxonomy_csv is None:
+                raise ValueError("Cleaning requires a completed taxonomy step with a final_table")
+            taxonomy_csv = Path(taxonomy_csv)
+
+            manifest = migrate_to_manifest(
+                Path(field_csv),
+                project_csv=self.config.report.project_metadata,
+                target_gene=self.config.marker.name,
+            )
+            df = pd.read_csv(taxonomy_csv)
+            id_col = "ASV_ID" if "ASV_ID" in df.columns else str(df.columns[0])
+            manifest_ids = set(manifest.event_ids())
+            sample_cols = [
+                c for c in df.columns
+                if c != id_col and (c in manifest_ids or classify_control(str(c)).is_control)
+            ]
+
+            cleaned, report, result = CleaningProcessor(mode=self.config.cleaning.mode).clean(
+                df, manifest, id_col=id_col, sample_cols=sample_cols
+            )
+
+            cleaned_path = (
+                self.config.paths.output
+                / f"{self.config.marker.name}_{self.config.taxonomy.method}_cleaned.csv"
+            )
+            cleaned.to_csv(cleaned_path, index=False)
+            report_dir = self._report_dir()
+            report_dir.mkdir(parents=True, exist_ok=True)
+            report_path = report_dir / "cleaning_report.csv"
+            report.to_csv(report_path, index=False)
+
+            outputs = {"cleaned_table": cleaned_path, "cleaning_report": report_path}
+            step = self.state.get_step(step_name)
+            if step is not None:
+                step.metadata["cleaning"] = result.model_dump()
+            self.state.complete_step(step_name, outputs)
+            self._save_state()
+            log_pipeline_step(step_name, "complete", logger)
+            return outputs
+        except Exception as e:
+            # Cleaning is observational/optional; never fail the run over it.
+            self.state.skip_step(step_name, reason=f"Cleaning error: {e}")
+            self._save_state()
+            logger.warning(
+                f"[WARN] cleaning: expected=cleaned table, got=error ({e}), "
+                f"fallback=skipped (export uses the uncleaned table)"
+            )
+            return {}
+
     def run_export(self) -> Dict[str, Path]:
         """
         Run export step (GBIF formatting).
@@ -789,6 +882,14 @@ class PipelineOrchestrator:
             if taxonomy_csv is None:
                 raise ValueError("No taxonomy output file found")
             taxonomy_csv = Path(taxonomy_csv)
+
+            # Prefer the decontaminated table when the cleaning step produced one.
+            clean_step = self.state.get_step("clean")
+            if clean_step is not None and clean_step.outputs.get("cleaned_table"):
+                cleaned = Path(clean_step.outputs["cleaned_table"])
+                if cleaned.exists():
+                    logger.info(f"Export using cleaned taxonomy table: {cleaned}")
+                    taxonomy_csv = cleaned
 
             # Format for GBIF
             formatter = GBIFFormatter()
@@ -836,6 +937,15 @@ class PipelineOrchestrator:
         logger.info("=" * 80)
 
         active_steps = [s for s in self.config.pipeline.steps if s not in self.config.pipeline.skip]
+        # Cleaning is not a user-listed step: auto-insert it after taxonomy (before export)
+        # when enabled, so it runs without a config edit and is --resume-safe.
+        if self.config.cleaning.enabled and "clean" not in active_steps:
+            if "taxonomy" in active_steps:
+                active_steps.insert(active_steps.index("taxonomy") + 1, "clean")
+            elif "export" in active_steps:
+                active_steps.insert(active_steps.index("export"), "clean")
+            else:
+                active_steps.append("clean")
         logger.info(f"Pipeline steps: {' → '.join(active_steps)}")
 
         # Map step names to methods
@@ -845,6 +955,7 @@ class PipelineOrchestrator:
             "dada2": self.run_dada2,
             "swarm": self.run_swarm,
             "taxonomy": self.run_taxonomy,
+            "clean": self.run_clean,
             "export": self.run_export,
         }
 

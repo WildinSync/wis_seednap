@@ -70,14 +70,18 @@ class CleaningProcessor:
         manifest: SampleManifest,
         *,
         id_col: str,
+        sample_cols: Optional[List[str]] = None,
     ) -> Tuple[pd.DataFrame, pd.DataFrame, CleaningResult]:
         """Clean ``abundance`` (one row per OTU, numeric sample columns) using ``manifest``.
 
         Args:
-            abundance: OTU x sample table; ``id_col`` is the OTU identifier column and every
-                other numeric column is treated as a sample.
+            abundance: OTU x sample table; ``id_col`` is the OTU identifier column.
             manifest: provides per-eventID samp_category / neg_cont_type / extraction_ID.
             id_col: name of the OTU identifier column (e.g. "sequence" or "ASV_ID").
+            sample_cols: explicit sample columns. Required for a taxonomy table, which has
+                numeric *non-sample* columns (e.g. ``pident``); when omitted, every numeric
+                column other than ``id_col`` is treated as a sample (correct for a pure
+                OTU/ASV count matrix).
 
         Returns:
             (cleaned_df, report_df, result). ``cleaned_df`` is a copy with a
@@ -90,11 +94,14 @@ class CleaningProcessor:
         df = abundance.copy()
         by_event = {r.eventID: r for r in manifest.rows}
 
-        # Sample columns = the numeric columns (counts); taxonomy/meta columns are strings.
-        sample_cols = [
-            c for c in df.columns
-            if c != id_col and pd.api.types.is_numeric_dtype(df[c])
-        ]
+        if sample_cols is None:
+            # No explicit list: numeric columns are counts; taxonomy/meta columns are strings.
+            sample_cols = [
+                c for c in df.columns
+                if c != id_col and pd.api.types.is_numeric_dtype(df[c])
+            ]
+        else:
+            sample_cols = [c for c in sample_cols if c in df.columns and c != id_col]
 
         control_cols: Dict[str, Dict[str, Optional[str]]] = {}
         bio_cols: List[str] = []
