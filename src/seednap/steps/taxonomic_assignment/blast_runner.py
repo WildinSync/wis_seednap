@@ -586,6 +586,7 @@ class BlastTaxonomicAssigner:
         threshold_class: float = 70.0,
         top_bitscore_pct: float = 10.0,
         lca_pident_delta: float = 1.0,
+        lca_algorithm: str = "cascade",
         contaminants: Optional[List[str]] = None,
     ):
         """
@@ -611,10 +612,29 @@ class BlastTaxonomicAssigner:
             threshold_order=threshold_order,
             threshold_class=threshold_class,
         )
-        self.lca_resolver = BlastLCAResolver(
-            top_bitscore_pct=top_bitscore_pct, lca_pident_delta=lca_pident_delta
+        self.lca_resolver = self._make_lca_resolver(
+            lca_algorithm, top_bitscore_pct=top_bitscore_pct, lca_pident_delta=lca_pident_delta
         )
         self.contaminants = list(contaminants) if contaminants else []
+
+    @staticmethod
+    def _make_lca_resolver(
+        algorithm: str, *, top_bitscore_pct: float, lca_pident_delta: float
+    ) -> "BlastLCAResolver":
+        """Resolver factory. Only 'cascade' is implemented today; the taxid-based methods
+        require a taxid-mapped reference DB + a staged NCBI taxdump and raise until then,
+        so the config switch is a one-line change once that data is provisioned."""
+        if algorithm == "cascade":
+            return BlastLCAResolver(
+                top_bitscore_pct=top_bitscore_pct, lca_pident_delta=lca_pident_delta
+            )
+        if algorithm in ("collapsed_taxonomy", "fishbase_tiered"):
+            raise NotImplementedError(
+                f"lca_algorithm={algorithm!r} is not implemented yet: it needs a taxid-mapped "
+                f"reference DB (current DBs are header-based) and a staged NCBI taxdump. "
+                f"Use 'cascade' until that data is provisioned."
+            )
+        raise ValueError(f"unknown lca_algorithm {algorithm!r}")
 
     def assign_taxonomy(
         self,

@@ -251,6 +251,13 @@ class BlastDatabaseConfig(StrictModel):
         default=1.0, ge=0, le=100,
         description="LCA pident floor: in-band hits must be within this many %id points of the best"
     )
+    # LCA algorithm. 'cascade' (default) is the current header-derived per-rank/MEGAN-LR
+    # resolver. 'collapsed_taxonomy'/'fishbase_tiered' are taxid-based methods that require a
+    # taxid-mapped reference DB + a staged NCBI taxdump; selecting them raises until that
+    # data is provisioned (the seam exists so the switch is a one-line change later).
+    lca_algorithm: Literal["cascade", "collapsed_taxonomy", "fishbase_tiered"] = Field(
+        default="cascade", description="BLAST LCA algorithm (default: cascade = current behavior)"
+    )
 
     @field_validator("fasta")
     @classmethod

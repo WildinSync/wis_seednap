@@ -207,6 +207,29 @@ def test_lca_pident_floor_excludes_lower_identity_offtarget(fixture_dir: Path) -
     assert crow["genus"] == "Unassigned"
 
 
+def test_lca_algorithm_factory():
+    """B1 seam: 'cascade' yields the current resolver; taxid methods raise loudly until a
+    taxid-mapped DB is provisioned; an unknown value errors."""
+    from seednap.steps.taxonomic_assignment.blast_runner import (
+        BlastLCAResolver,
+        BlastTaxonomicAssigner,
+    )
+
+    r = BlastTaxonomicAssigner._make_lca_resolver(
+        "cascade", top_bitscore_pct=10.0, lca_pident_delta=1.0
+    )
+    assert isinstance(r, BlastLCAResolver)
+    for algo in ("collapsed_taxonomy", "fishbase_tiered"):
+        with pytest.raises(NotImplementedError, match="taxid"):
+            BlastTaxonomicAssigner._make_lca_resolver(
+                algo, top_bitscore_pct=10.0, lca_pident_delta=1.0
+            )
+    with pytest.raises(ValueError, match="unknown"):
+        BlastTaxonomicAssigner._make_lca_resolver(
+            "bogus", top_bitscore_pct=10.0, lca_pident_delta=1.0
+        )
+
+
 def test_top_bitscore_band_excludes_far_hit(fixture_dir: Path) -> None:
     """I-2 (negative): Hits outside the band don't trigger LCA collapse.
 
