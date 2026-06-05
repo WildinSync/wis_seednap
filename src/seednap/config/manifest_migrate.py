@@ -31,6 +31,7 @@ drop is on the record, never silent.
 from __future__ import annotations
 
 import logging
+import math
 import re
 from collections import Counter
 from pathlib import Path
@@ -65,6 +66,13 @@ def _canon_header(raw: str) -> str:
     h = _UNIT_SUFFIX.sub("", h)
     h = re.sub(r"\s+", " ", h)
     return h.lower()
+
+
+def _cell(value: object) -> Optional[str]:
+    """Strip a raw cell and map missing-value tokens (``NA``, empty, INSDC tokens) to None,
+    so the migrator's bookkeeping never treats ``NA`` as a real value."""
+    s = str(value).strip()
+    return None if s.lower() in MISSING_VALUE_TOKENS else s
 
 
 # Lowercased match-key -> canonical manifest field. Field metadata columns only.
@@ -125,25 +133,34 @@ _KNOWN_UNMAPPED = frozenset(
 )
 
 
-def _build_header_map(columns: List[str]) -> Tuple[Dict[str, str], List[str], List[str]]:
+def _build_header_map(
+    columns: List[str],
+) -> Tuple[Dict[str, str], List[str], List[str], List[Tuple[str, str, str]]]:
     """Map raw field-metadata headers to canonical fields.
 
-    Returns ``(canonical_field -> raw_column, dropped_known, dropped_unexpected)``.
+    Returns ``(canonical_field -> raw_column, dropped_known, dropped_unexpected, collisions)``.
     A ``pcr_code_*`` column is recognised (carried in ``dropped_known``) regardless of its
-    marker token. The first raw column wins if two map to the same canonical field.
+    marker token. If two raw columns canonicalise to the same field the first wins and the
+    second is recorded in ``collisions`` (as ``(dropped_raw, kept_raw, canonical)``) so the
+    caller can ``[WARN]`` -- never a silent discard (CLAUDE.md sec.4).
     """
     field_to_raw: Dict[str, str] = {}
     dropped_known: List[str] = []
     dropped_unexpected: List[str] = []
+    collisions: List[Tuple[str, str, str]] = []
     for raw in columns:
         key = _canon_header(raw)
         if key in _FIELD_ALIASES:
-            field_to_raw.setdefault(_FIELD_ALIASES[key], raw)
+            canonical = _FIELD_ALIASES[key]
+            if canonical in field_to_raw:
+                collisions.append((raw, field_to_raw[canonical], canonical))
+            else:
+                field_to_raw[canonical] = raw
         elif key in _KNOWN_UNMAPPED or key.startswith("pcr_code_") or key.startswith("pcr_primer_"):
             dropped_known.append(raw)
         else:
             dropped_unexpected.append(raw)
-    return field_to_raw, dropped_known, dropped_unexpected
+    return field_to_raw, dropped_known, dropped_unexpected, collisions
 
 
 # --------------------------------------------------------------------------- #
@@ -342,6 +359,12 @@ def _clean_numeric(field: str, value: str, event_id: str) -> Optional[str]:
             f"[WARN] manifest_migrate: {field} for {event_id!r}: stripped non-numeric text "
             f"from {v!r}, using {cleaned}"
         )
+    if not math.isfinite(f):
+        logger.warning(
+            f"[WARN] manifest_migrate: expected=a finite {field} for {event_id!r}, "
+            f"got={v!r} (inf/nan), fallback=null"
+        )
+        return None
     if (lo is not None and f < lo) or (hi is not None and f > hi):
         logger.warning(
             f"[WARN] manifest_migrate: expected={field} in [{lo}, {hi}] for {event_id!r}, "
@@ -354,14 +377,21 @@ def _clean_numeric(field: str, value: str, event_id: str) -> Optional[str]:
 # --------------------------------------------------------------------------- #
 # Legacy demux lab metadata (tag / library recovery)
 # --------------------------------------------------------------------------- #
-_TAG_FORWARD = ("tag_demultiplex", "tag_demultiplex_f", "tag_demultiplex_i7", "mid_forward")
-_TAG_REVERSE = ("tag_demultiplex_r", "tag_demultiplex_i5", "mid_reverse")
+_TAG_FORWARD = ("tag_demultiplex", "tag_demultiplex_f", "tag_demultiplex_forward",
+                "tag_demultiplex_i7", "mid_forward")
+_TAG_REVERSE = ("tag_demultiplex_r", "tag_demultiplex_reverse", "tag_demultiplex_i5", "mid_reverse")
 _TAG_TYPO = "tag_demltiplex"  # documented legacy misspelling
+# A column that *looks* like a demux barcode column (so an unrecognised variant warns
+# rather than being silently ignored).
+_TAG_LIKE = re.compile(r"(tag|mid|barcode|demult|demlt|index|i7|i5)", re.I)
 
 
 def _resolve_lab_columns(columns: List[str]) -> Dict[str, Optional[str]]:
-    """Locate the eventID, library, and forward/reverse tag columns in a demux lab CSV."""
-    by_key = { _canon_header(c): c for c in columns }
+    """Locate the eventID, library, and forward/reverse tag columns in a demux lab CSV.
+
+    Unrecognised tag-looking columns emit a ``[WARN]`` rather than being silently dropped.
+    """
+    by_key = {_canon_header(c): c for c in columns}
     fwd = next((by_key[k] for k in _TAG_FORWARD if k in by_key), None)
     if fwd is None and _TAG_TYPO in by_key:
         fwd = by_key[_TAG_TYPO]
@@ -370,6 +400,16 @@ def _resolve_lab_columns(columns: List[str]) -> Dict[str, Optional[str]]:
             f"got=the legacy typo {_TAG_TYPO!r}, fallback=using it as mid_forward"
         )
     rev = next((by_key[k] for k in _TAG_REVERSE if k in by_key), None)
+    resolved = {by_key.get("eventid"), by_key.get("library"), fwd, rev}
+    for key, col in by_key.items():
+        if col in resolved:
+            continue
+        if _TAG_LIKE.search(key) and not key.startswith("pcr_primer"):
+            logger.warning(
+                f"[WARN] manifest_migrate: expected=a recognised demux barcode column, "
+                f"got=unresolved tag-like column {col!r}, fallback=ignored (no mid_forward/"
+                f"mid_reverse from it). Add it to the tag-column aliases if it is a barcode."
+            )
     return {
         "eventID": by_key.get("eventid"),
         "library": by_key.get("library"),
@@ -392,13 +432,13 @@ def _load_lab_metadata(lab_csv: Path) -> Dict[str, Dict[str, Optional[str]]]:
         )
     out: Dict[str, Dict[str, Optional[str]]] = {}
     for rec in df.to_dict(orient="records"):
-        ev = str(rec[cols["eventID"]]).strip()
+        ev = _cell(rec[cols["eventID"]])
         if not ev:
             continue
         out[ev] = {
-            "seq_run_id": str(rec[cols["library"]]).strip() or None,
-            "mid_forward": str(rec[cols["mid_forward"]]).strip() if cols["mid_forward"] else None,
-            "mid_reverse": str(rec[cols["mid_reverse"]]).strip() if cols["mid_reverse"] else None,
+            "seq_run_id": _cell(rec[cols["library"]]),
+            "mid_forward": _cell(rec[cols["mid_forward"]]) if cols["mid_forward"] else None,
+            "mid_reverse": _cell(rec[cols["mid_reverse"]]) if cols["mid_reverse"] else None,
         }
     return out
 
@@ -472,16 +512,22 @@ def migrate_to_manifest(
     if df.empty:
         raise ValueError(f"Field metadata is empty: {field_csv}")
 
-    field_to_raw, dropped_known, dropped_unexpected = _build_header_map(list(df.columns))
+    field_to_raw, dropped_known, dropped_unexpected, collisions = _build_header_map(list(df.columns))
     if "eventID" not in field_to_raw:
         raise ValueError(
             f"Field metadata {field_csv} has no eventID/samp_name column "
             f"(after BOM/casing normalisation of {list(df.columns)[:5]}...)."
         )
     if dropped_known:
-        logger.info(
-            f"manifest_migrate: {len(dropped_known)} field column(s) carry no FAIRe slot and "
-            f"were not mapped into the manifest (kept in the source CSV): {dropped_known}"
+        logger.warning(
+            f"[WARN] manifest_migrate: {len(dropped_known)} field column(s) carry no FAIRe slot "
+            f"and were not mapped into the manifest (kept in the source CSV): {dropped_known}"
+        )
+    for dropped_raw, kept_raw, canonical in collisions:
+        logger.warning(
+            f"[WARN] manifest_migrate: expected=one source column per manifest field, got=both "
+            f"{kept_raw!r} and {dropped_raw!r} map to {canonical!r}, fallback=using {kept_raw!r} "
+            f"and dropping {dropped_raw!r} (resolve the duplicate in {field_csv.name})"
         )
     for col in dropped_unexpected:
         logger.warning(
@@ -502,6 +548,12 @@ def migrate_to_manifest(
 
     default_run_id = seq_run_id or (f"{dataset}_{marker}" if marker else dataset)
     used_default_run = False
+    # Whether a grouping source exists at all: a library/seq_run_id column in the field CSV,
+    # or a demux lab CSV. If neither, synthesising one run id for the whole dataset is the
+    # legitimate pre-demultiplexed case; if one exists, a row falling back lost ITS grouping.
+    has_run_col = "seq_run_id" in field_to_raw
+    have_lab = bool(lab_index)
+    rows_defaulted_grouping = 0
 
     # eventDate normalisation (per file)
     ev_raw_col = field_to_raw.get("eventDate")
@@ -519,11 +571,14 @@ def migrate_to_manifest(
     extraction_of_blanks: set = set()
 
     for i, rec in enumerate(df.to_dict(orient="records")):
-        raw = {field: str(rec[col]).strip() for field, col in field_to_raw.items()}
-        event_id = raw.get("eventID", "")
-        if not event_id or event_id.lower() in MISSING_VALUE_TOKENS:
+        # Null missing-value tokens here too (not just inside the strict model), so the
+        # migrator's own bookkeeping never treats "NA" as a real value -- e.g. an extraction
+        # blank with extraction_ID="NA" must read as None, not register a fabricated batch.
+        raw = {field: _cell(rec[col]) for field, col in field_to_raw.items()}
+        event_id = raw.get("eventID")
+        if not event_id:
             logger.warning(
-                f"[WARN] manifest_migrate: expected=an eventID, got={event_id!r} on row "
+                f"[WARN] manifest_migrate: expected=an eventID, got=missing on row "
                 f"{i + 2} of {field_csv.name}, fallback=row skipped"
             )
             continue
@@ -566,6 +621,16 @@ def migrate_to_manifest(
         else:
             kwargs["seq_run_id"] = default_run_id
             used_default_run = True
+            if has_run_col or have_lab:
+                # A grouping source exists but THIS row has no value in it -> it is silently
+                # batched with the default unless we say so. Name the offending eventID.
+                rows_defaulted_grouping += 1
+                logger.warning(
+                    f"[WARN] manifest_migrate: expected=a library/seq_run_id grouping for "
+                    f"{event_id!r}, got=none (empty grouping cell or eventID absent from the "
+                    f"lab CSV), fallback=assigned the dataset default seq_run_id="
+                    f"{default_run_id!r} -- this row joins a different DADA2 batch; verify"
+                )
 
         # extraction_ID expectations (the control-association key)
         extraction = raw.get("extraction_ID")
@@ -600,12 +665,20 @@ def migrate_to_manifest(
             + "\n".join(errors)
         )
 
-    if used_default_run:
+    if used_default_run and not has_run_col and not have_lab:
+        # The legitimate pre-demultiplexed case: no grouping source anywhere.
         logger.warning(
             f"[WARN] manifest_migrate: expected=an explicit sequencing-run/library grouping, "
-            f"got=none (modern field metadata carries no 'library' column), "
+            f"got=none (no 'library'/'seq_run_id' column and no demux lab CSV), "
             f"fallback=synthesised seq_run_id={default_run_id!r} for the whole dataset "
             f"(one library per dataset). Set --seq-run-id or provide a demux lab CSV to override."
+        )
+    elif rows_defaulted_grouping:
+        # A grouping source existed but some rows had no value -> already warned per-row above.
+        logger.warning(
+            f"[WARN] manifest_migrate: {rows_defaulted_grouping} row(s) had no library/run "
+            f"grouping value and were assigned the dataset default seq_run_id={default_run_id!r} "
+            f"(see the per-row warnings above)."
         )
 
     # extraction-batch orphan check: a Blank-ext batch with no biological sample, or a

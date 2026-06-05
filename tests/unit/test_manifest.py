@@ -360,6 +360,91 @@ def test_migrator_negative_marine_depth_allowed(tmp_path):
     assert m.rows[0].maximumDepthInMeters == pytest.approx(-840.0)
 
 
+def test_migrator_extraction_blank_na_token_fires_intended_warn(tmp_path, caplog):
+    """Adversarial-audit regression: an extraction blank with extraction_ID='NA' must read
+    as null and fire the 'got=none' WARN, not register a fabricated 'NA' batch."""
+    field = _write_field(tmp_path / "metadata_field_na.csv", [
+        {"eventID": "S1", "eventDate": "2024-01-27", "extraction_ID": "EXP1"},
+        {"eventID": "Blank-ext-1", "eventDate": "2024-01-27", "extraction_ID": "NA"},
+        {"eventID": "Blank-PCR-1", "eventDate": "2024-01-26", "extraction_ID": "NA"},
+    ])
+    with caplog.at_level(logging.WARNING):
+        m = migrate_to_manifest(field, target_gene="mam07", seq_run_id="R1")
+    rows = {r.eventID: r for r in m.rows}
+    assert rows["Blank-ext-1"].extraction_ID is None
+    msgs = " ".join(r.message for r in caplog.records)
+    assert "extraction blank 'Blank-ext-1'" in msgs and "got=none" in msgs
+    assert "orphan blank batch" not in msgs  # the misleading warn must NOT fire
+
+
+def test_migrator_per_row_seq_run_fallback_warns(tmp_path, caplog):
+    """Adversarial-audit regression: when a library column exists but a row's cell is empty,
+    that row's fallback to the default batch must emit a per-row WARN naming the eventID."""
+    field = _write_field(tmp_path / "metadata_field_partlib.csv", [
+        {"eventID": "S1", "eventDate": "2024-01-01", "library": "LIB_A"},
+        {"eventID": "S2", "eventDate": "2024-01-02", "library": ""},
+    ])
+    with caplog.at_level(logging.WARNING):
+        m = migrate_to_manifest(field, target_gene="teleo")
+    rows = {r.eventID: r for r in m.rows}
+    assert rows["S1"].seq_run_id == "LIB_A"
+    assert any("library/seq_run_id grouping for 'S2'" in r.message for r in caplog.records)
+
+
+def test_migrator_header_alias_collision_warns(tmp_path, caplog):
+    """Adversarial-audit regression: two columns mapping to the same field must WARN, not
+    silently drop the second."""
+    # volume and samp_size both -> samp_size
+    path = tmp_path / "metadata_field_collide.csv"
+    pd.DataFrame([{"eventID": "S1", "eventDate": "2024-01-01", "volume": "15", "samp_size": "20"}]).to_csv(path, index=False)
+    with caplog.at_level(logging.WARNING):
+        migrate_to_manifest(path, target_gene="teleo")
+    assert any("map to 'samp_size'" in r.message for r in caplog.records)
+
+
+def test_migrator_inf_nan_depth_nulled(tmp_path, caplog):
+    """Adversarial-audit regression: a non-finite depth must be nulled with a WARN."""
+    field = _write_field(tmp_path / "metadata_field_inf.csv", [
+        {"eventID": "S1", "eventDate": "2024-01-01", "depth": "inf"},
+    ])
+    with caplog.at_level(logging.WARNING):
+        m = migrate_to_manifest(field, target_gene="teleo")
+    assert m.rows[0].maximumDepthInMeters is None
+    assert any("inf/nan" in r.message for r in caplog.records)
+
+
+def test_model_rejects_non_finite_float():
+    """The strict model rejects inf/nan directly (allow_inf_nan=False)."""
+    with pytest.raises(Exception):
+        SampleManifestRow(eventID="x", seq_run_id="r", samp_category="sample",
+                          eventDate="2024", maximumDepthInMeters="inf")
+
+
+def test_positive_control_requires_pos_cont_type():
+    """FAIRe Mandatory-if symmetry: a positive control needs pos_cont_type."""
+    with pytest.raises(Exception):
+        SampleManifestRow(eventID="POS1", seq_run_id="r", samp_category="positive control")
+    ok = SampleManifestRow(eventID="POS1", seq_run_id="r", samp_category="positive control",
+                           pos_cont_type="mock community")
+    assert ok.pos_cont_type == "mock community"
+
+
+def test_validator_keeps_sample_named_like_meta_token(tmp_path, caplog):
+    """Adversarial-audit regression: a real sample named 'total' (an OTU-table meta token)
+    must not be silently dropped from the cross-check."""
+    field = _write_field(tmp_path / "metadata_field_meta.csv", [
+        {"eventID": "total", "eventDate": "2024-01-01"},
+        {"eventID": "S1", "eventDate": "2024-01-02"},
+    ])
+    m = migrate_to_manifest(field, target_gene="teleo")
+    path = tmp_path / "otu_meta.csv"
+    pd.DataFrame([["ACGT", "total", "S1"]], columns=["sequence", "total", "S1"]).to_csv(path, index=False)
+    with caplog.at_level(logging.WARNING):
+        res = validate_against_abundance(m, path)
+    assert "total" in res.abundance_samples  # kept, not silently dropped
+    assert res.ok
+
+
 def test_migrator_legacy_lab_library_and_tags(tmp_path):
     """A demux lab CSV: library -> seq_run_id, tag_demultiplex -> mid_forward."""
     lab = tmp_path / "metadata_lab_demo.csv"

@@ -210,13 +210,13 @@ class SampleManifestRow(BaseModel):
     eventID: str = Field(..., min_length=1, description="Canonical sample key (DwC eventID; FAIRe samp_name alias)")
     parentEventID: Optional[str] = Field(default=None, description="DwC parentEventID (site/event grouping)")
     eventDate: Optional[str] = Field(default=None, description="DwC eventDate, ISO-8601 (YYYY[-MM[-DD]])")
-    decimalLatitude: Optional[float] = Field(default=None, ge=-90, le=90, description="DwC decimalLatitude (WGS84)")
-    decimalLongitude: Optional[float] = Field(default=None, ge=-180, le=180, description="DwC decimalLongitude (WGS84)")
+    decimalLatitude: Optional[float] = Field(default=None, ge=-90, le=90, allow_inf_nan=False, description="DwC decimalLatitude (WGS84)")
+    decimalLongitude: Optional[float] = Field(default=None, ge=-180, le=180, allow_inf_nan=False, description="DwC decimalLongitude (WGS84)")
     geodeticDatum: Optional[str] = Field(default=None, description="DwC geodeticDatum (e.g. EPSG:4326)")
     # No ge=0: marine datasets encode depth as a negative elevation below the surface
-    # (e.g. -840 m), so depth may legitimately be negative or positive.
-    minimumDepthInMeters: Optional[float] = Field(default=None, description="DwC minimumDepthInMeters")
-    maximumDepthInMeters: Optional[float] = Field(default=None, description="DwC maximumDepthInMeters")
+    # (e.g. -840 m), so depth may legitimately be negative or positive. inf/nan rejected.
+    minimumDepthInMeters: Optional[float] = Field(default=None, allow_inf_nan=False, description="DwC minimumDepthInMeters")
+    maximumDepthInMeters: Optional[float] = Field(default=None, allow_inf_nan=False, description="DwC maximumDepthInMeters")
     materialSampleID: Optional[str] = Field(default=None, description="DwC materialSampleID")
     samplingProtocol: Optional[str] = Field(default=None, description="DwC samplingProtocol")
 
@@ -230,10 +230,10 @@ class SampleManifestRow(BaseModel):
         description="MIxS samp_collect_method (canonical spelling; GBIF extension uses "
         "'samp_collec_method' -- translate at export)",
     )
-    samp_size: Optional[float] = Field(default=None, ge=0, description="MIxS samp_size (amount collected; from 'volume')")
+    samp_size: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False, description="MIxS samp_size (amount collected; from 'volume')")
     samp_size_unit: Optional[str] = Field(default=None, description="FAIRe samp_size_unit (mL|L|...)")
-    size_frac: Optional[float] = Field(default=None, ge=0, description="MIxS size_frac (filter pore size, um)")
-    samp_vol_we_dna_ext: Optional[float] = Field(default=None, ge=0, description="MIxS samp_vol_we_dna_ext")
+    size_frac: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False, description="MIxS size_frac (filter pore size, um)")
+    samp_vol_we_dna_ext: Optional[float] = Field(default=None, ge=0, allow_inf_nan=False, description="MIxS samp_vol_we_dna_ext")
     sop: Optional[str] = Field(default=None, description="MIxS sop (protocol URL/DOI)")
 
     # --- assay / library / run (FAIRe) ---
@@ -339,6 +339,11 @@ class SampleManifestRow(BaseModel):
         if self.samp_category == "negative control" and not self.neg_cont_type:
             raise ValueError(
                 f"negative control {self.eventID!r} is missing neg_cont_type "
+                f"(FAIRe Mandatory-if)"
+            )
+        if self.samp_category == "positive control" and not self.pos_cont_type:
+            raise ValueError(
+                f"positive control {self.eventID!r} is missing pos_cont_type "
                 f"(FAIRe Mandatory-if)"
             )
         return self
@@ -508,12 +513,20 @@ _ABUNDANCE_META_COLUMNS = frozenset(
 )
 
 
-def _abundance_sample_columns(abundance_csv: Path, id_column: Optional[str] = None) -> List[str]:
+def _abundance_sample_columns(
+    abundance_csv: Path,
+    id_column: Optional[str] = None,
+    known_event_ids: Optional[set] = None,
+) -> List[str]:
     """Return the per-sample columns of an abundance/OTU table.
 
-    SeeDNAP OTU tables are sequences x samples; the sample columns are every column that
-    is not OTU metadata. Reads only the header (``nrows=0``) with ``utf-8-sig``.
+    SeeDNAP OTU tables are sequences x samples; the sample columns are every column that is
+    not OTU metadata. A column whose name matches a manifest ``eventID`` is ALWAYS kept (a
+    real sample literally named ``total``/``order`` must not be silently dropped by the
+    metadata denylist, and if such a name is also a meta token we ``[WARN]``). Reads only
+    the header (``nrows=0``) with ``utf-8-sig``.
     """
+    known = known_event_ids or set()
     header = pd.read_csv(abundance_csv, nrows=0, encoding="utf-8-sig")
     cols = [str(c).strip() for c in header.columns]
     samples = []
@@ -521,7 +534,13 @@ def _abundance_sample_columns(abundance_csv: Path, id_column: Optional[str] = No
         if id_column is not None and c == id_column:
             continue
         if c.lower() in _ABUNDANCE_META_COLUMNS:
-            continue
+            if c in known:
+                logger.warning(
+                    f"[WARN] manifest_vs_abundance: abundance column {c!r} matches a manifest "
+                    f"eventID but also an OTU-table metadata token; kept as a sample column"
+                )
+            else:
+                continue
         samples.append(c)
     return samples
 
@@ -548,8 +567,8 @@ def validate_against_abundance(
     if not abundance_csv.exists():
         raise FileNotFoundError(f"Abundance table not found: {abundance_csv}")
 
-    samples = _abundance_sample_columns(abundance_csv, id_column=id_column)
     manifest_ids = set(manifest.event_ids())
+    samples = _abundance_sample_columns(abundance_csv, id_column=id_column, known_event_ids=manifest_ids)
     sample_set = set(samples)
 
     orphans = sorted(sample_set - manifest_ids)
