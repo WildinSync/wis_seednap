@@ -35,7 +35,7 @@ import math
 import re
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -282,7 +282,7 @@ def normalise_event_dates(
     year_pos = next(iter(year_positions))
 
     # The two non-year fields, in positional order (a, b).
-    def _nonyear(f0, f1, f2):
+    def _nonyear(f0: int, f1: int, f2: int) -> Tuple[int, int]:
         return (f1, f2) if year_pos == 0 else (f0, f1)
 
     day_first_evidence = any(_nonyear(f0, f1, f2)[0] > 12 for _, f0, f1, f2 in three)   # a is day
@@ -587,14 +587,16 @@ def migrate_to_manifest(
         if cls.warn_reason:
             logger.warning(f"[WARN] manifest_migrate: control classification: {cls.warn_reason}")
 
-        kwargs: Dict[str, object] = dict(raw)
+        kwargs: Dict[str, Any] = dict(raw)
         # eventDate -> ISO
-        if raw.get("eventDate"):
-            kwargs["eventDate"] = date_map.get(raw["eventDate"], raw["eventDate"])
+        ev_date = raw.get("eventDate")
+        if ev_date:
+            kwargs["eventDate"] = date_map.get(ev_date, ev_date)
         # numeric fields: strip units, range-check, null-with-WARN on failure (never crash)
         for nfield in _NUMERIC_RANGES:
-            if raw.get(nfield):
-                kwargs[nfield] = _clean_numeric(nfield, raw[nfield], event_id)
+            nval = raw.get(nfield)
+            if nval:
+                kwargs[nfield] = _clean_numeric(nfield, nval, event_id)
 
         # control identity (two-field FAIRe model)
         kwargs["samp_category"] = cls.samp_category
