@@ -146,7 +146,7 @@ Full configuration reference: [docs/configuration.md](docs/configuration.md)
 ## Reporting
 
 > [!TIP]
-> Every run reports on itself, no extra flags. `run-pipeline` writes both artifacts to `outputs/04_report/<marker>/`, on by default.
+> Every run reports on itself, no extra flags. `run-pipeline` writes these artifacts to `outputs/04_report/<marker>/`, on by default.
 
 ```
 read_tracking.csv / .txt    reads & sequences surviving each step, per sample
@@ -161,6 +161,16 @@ column. Two thresholds raise data-loss warnings: `warn_below_retention_pct` (30)
 
 > [!IMPORTANT]
 > A count that cannot be measured is written as `NA` with a `[WARN]`, never a misleading `0`, so "missing" and "genuinely zero" stay distinct.
+
+**Step summary** (`step_summary.csv`) is the run-level table you would drop into a methods section: one row per step, with the total reads and the number of features after each step. For example (SWARM):
+
+| step | total_reads | n_features |
+|---|---|---|
+| raw | 4289230 | |
+| trimmed | 3286124 | |
+| clustered | 3001342 | 2645 |
+
+`total_reads` is the run total at that step; `n_features` is the ASV count (DADA2 path, filled at `merged` and `nonchim`) or the OTU count (SWARM, at `clustered`), and is left blank at the read-level steps where no feature table exists yet. The same table is shown in the HTML report's Read-tracking tab.
 
 **The HTML report** is one self-contained file: no JavaScript, no CDN, no external assets (charts
 are inline base64 PNGs), styled like a scientific paper. It opens anywhere and prints to a clean
