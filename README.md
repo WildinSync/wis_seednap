@@ -47,8 +47,18 @@ flowchart LR
 
 ## Quick Start
 
+> [!IMPORTANT]
+> **On the ETH eDNA server, SeeDNAP is already installed.** A shared conda env lives at
+> `/home/shared/edna/envs/seednap` and every user can use it, so you do **not** need to create
+> an environment or `pip install` anything. Just activate it and go:
+> ```bash
+> conda activate /home/shared/edna/envs/seednap
+> seednap run-pipeline config/markers/my_marker.yaml
+> ```
+> The install steps below are only for a fresh setup elsewhere (e.g. local development).
+
 ```bash
-# Install
+# Install (fresh setup only; not needed on the eDNA server, see above)
 git clone https://github.com/WildinSync/wis_seednap.git
 cd wis_seednap
 conda env create -f environment.yml

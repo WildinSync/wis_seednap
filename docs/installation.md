@@ -1,5 +1,15 @@
 # Installation
 
+> [!IMPORTANT]
+> **On the ETH eDNA server you do not need to install anything.** SeeDNAP is already installed
+> in a shared conda env at `/home/shared/edna/envs/seednap`, available to every user. Activate it
+> and you are ready:
+> ```bash
+> conda activate /home/shared/edna/envs/seednap
+> seednap --version
+> ```
+> The rest of this page is only for a fresh setup elsewhere (local development or a new machine).
+
 ## Conda Environment (Recommended)
 
 The simplest way to install SeeDNAP with all dependencies:
