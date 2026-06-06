@@ -22,6 +22,15 @@ from seednap.utils.subprocess import run_subprocess
 
 logger = logging.getLogger(__name__)
 
+# CRABS reference FASTA headers write the literal string "NA" where a taxonomic rank is unknown
+# (verified in the 2025 DBs: e.g. ;Actinopteri;NA;Centropomidae; on Lates records -- teleo 941
+# headers, mamm07 3056). These placeholders are NOT taxa. They are normalized to None when the
+# header lineage is parsed (BlastOutputFormatter), so neither LCA resolver treats "NA" as a real
+# value -- which would (a) over-collapse a call when one in-band hit carries "NA" at a rank where
+# the others agree, and (b) leak a taxon literally named "NA" into the GBIF export. Matched
+# case-insensitively after strip(); no real taxon is named "na"/"nan".
+MISSING_RANK_SENTINELS = ("", "na", "nan")
+
 
 class BlastError(Exception):
     """Exception raised for BLAST errors."""
@@ -333,10 +342,18 @@ class BlastOutputFormatter:
                     f"ranks (;-separated), got {len(phylo_values)}: {phylo_string[:80]}"
                 )
 
-            # Assign to columns
+            # Assign to columns. The CRABS missing-rank sentinel ("NA") is normalized to None
+            # here, at the single point where the DB-format lineage is parsed, so every
+            # downstream consumer (both LCA resolvers, the threshold cascade, the export) sees a
+            # genuine missing rank rather than a taxon literally named "NA" (CLAUDE.md sec.4).
             phylo = dict(zip(self.TAXONOMIC_RANKS, phylo_values))
             for rank in self.TAXONOMIC_RANKS:
-                df.at[i, rank] = phylo[rank]
+                value = phylo[rank]
+                df.at[i, rank] = (
+                    None
+                    if str(value).strip().lower() in MISSING_RANK_SENTINELS
+                    else value
+                )
 
         # Add blast rank (1 = best hit, 2 = second best, etc.)
         df["blast_rank"] = df.groupby("qseqid").cumcount() + 1
@@ -586,15 +603,6 @@ class CollapsedTaxonomyLCAResolver:
 
     TAXONOMIC_RANKS = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
 
-    # Missing-rank placeholders in the reference FASTA-header lineage. CRABS writes the literal
-    # string "NA" where a rank is unknown (verified in the 2025 DBs: e.g. ;Actinopteri;NA;
-    # Centropomidae; on Lates records). These are NOT taxa: treating them as real values would
-    # (a) over-collapse a confident call when one windowed hit carries "NA" at a rank where the
-    # others agree, and (b) emit a taxon literally named "NA" into the GBIF export. So they are
-    # excluded from the agreement test exactly like "" / "nan". Matched case-insensitively after
-    # strip(); no real taxon is named "na"/"nan".
-    MISSING_RANK_SENTINELS = ("", "na", "nan")
-
     def __init__(self, lca_pid: float = 90.0, lca_diff: float = 1.0):
         if not (0 <= lca_pid <= 100):
             raise ValueError(f"lca_pid must be in [0, 100]; got {lca_pid}")
@@ -603,13 +611,15 @@ class CollapsedTaxonomyLCAResolver:
         self.lca_pid = float(lca_pid)
         self.lca_diff = float(lca_diff)
 
-    @classmethod
-    def _distinct(cls, series: pd.Series) -> List[str]:
-        """Distinct real-taxon values of a lineage column (drops the missing-rank sentinels)."""
+    @staticmethod
+    def _distinct(series: pd.Series) -> List[str]:
+        """Distinct real-taxon values of a lineage column. The formatter already normalizes the
+        CRABS "NA" sentinel to None; this also drops it defensively (frames built directly in
+        tests bypass the formatter), using the module-level MISSING_RANK_SENTINELS."""
         return [
             v
             for v in series.dropna().unique()
-            if str(v).strip().lower() not in cls.MISSING_RANK_SENTINELS
+            if str(v).strip().lower() not in MISSING_RANK_SENTINELS
         ]
 
     def resolve_ambiguous_hits(self, group: pd.DataFrame) -> pd.DataFrame:

@@ -36,6 +36,8 @@ ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
 ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
 >REF4\tMetazoa;Chordata;Actinopteri;Cypriniformes;Cyprinidae;Cyprinus;Cyprinus_carpio
 ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
+>REF5\tMetazoa;Chordata;Actinopteri;NA;Percidae;Perca;Perca_fluviatilis
+ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT
 """
 
 # OTU sequences (each unique to avoid asv_sequences/abundance merge fan-out).
@@ -298,6 +300,42 @@ def test_collapsed_taxonomy_na_sentinel_is_not_a_taxon() -> None:
     keep1 = row1[row1["keep_for_analysis"]].iloc[0]
     assert keep1["order"] is None
     assert keep1["species"] == "Lates_calcarifer"
+
+
+def test_formatter_normalizes_na_for_cascade(fixture_dir: Path) -> None:
+    """Option A: the formatter maps the CRABS 'NA' sentinel to missing, so the CASCADE path
+    (the shipping default) neither leaks a literal 'NA' on a lone hit nor over-collapses when
+    one in-band hit carries 'NA' at a rank where the others agree. REF5 is Perca_fluviatilis
+    with order='NA'."""
+    blast_tsv = fixture_dir / "blast.tsv"
+    _write_blast_tsv(
+        blast_tsv,
+        [
+            # OTU_1: lone hit with order='NA' -> order must become Unassigned, never literal 'NA'.
+            ("OTU_1", "REF5", 100.0, 64, 0, 0, 1, 64, 1, 64, 1e-30, 119),
+            # OTU_2: REF1 (order=Perciformes) + REF5 (order='NA'), same species, both best ->
+            # 'NA' must not count as a disagreeing order; cascade keeps the full Perciformes call.
+            ("OTU_2", "REF1", 100.0, 64, 0, 0, 1, 64, 1, 64, 1e-30, 119),
+            ("OTU_2", "REF5", 100.0, 64, 0, 0, 1, 64, 1, 64, 1e-30, 119),
+        ],
+    )
+    ass = BlastTaxonomicAssigner(
+        reference_fasta=fixture_dir / "ref.fasta",
+        threshold_species=99, threshold_genus=96, threshold_family=90,
+        threshold_order=80, threshold_class=70,
+    )
+    df = ass.assign_taxonomy(
+        blast_tsv=blast_tsv, asv_count_csv=fixture_dir / "abundance.csv",
+        asv_fasta=fixture_dir / "query.fasta",
+    )
+    ranks = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
+    assert int((df[ranks].astype(str) == "NA").sum().sum()) == 0  # no literal 'NA' anywhere
+    o1 = df[df["ASV_ID"] == "OTU_1"].iloc[0]
+    assert o1["order"] == "Unassigned"  # the 'NA' sentinel became missing, not a taxon
+    assert o1["genus"] == "Perca" and o1["species"] == "Perca_fluviatilis"
+    o2 = df[df["ASV_ID"] == "OTU_2"].iloc[0]
+    assert o2["order"] == "Perciformes"  # not over-collapsed by the 'NA'-bearing hit
+    assert o2["species"] == "Perca_fluviatilis"
 
 
 def test_collapsed_taxonomy_below_floor_is_unassigned(fixture_dir: Path) -> None:
