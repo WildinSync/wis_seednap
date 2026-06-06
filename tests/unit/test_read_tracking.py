@@ -103,6 +103,76 @@ def test_swarm_chain(tmp_path):
     assert df.loc["S2", "pct_retained"] == pytest.approx(50.0)  # 1000/2000
 
 
+def test_step_summary_swarm(tmp_path):
+    """SWARM step summary: total reads per step + the OTU count at 'clustered'."""
+    logs = tmp_path / "logs"; logs.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    _write_trim_logs(logs, "S2", raw=2000, trimmed=1800)
+    otu = tmp_path / "otu_table.csv"
+    pd.DataFrame({"sequence": ["AAA", "CCC", "GGG"],
+                  "S1": [300, 100, 50], "S2": [800, 200, 100]}).to_csv(otu, index=False)
+    ss = ReadTrackingBuilder("m", logs_dir=logs, swarm_otu_table=otu).step_summary().set_index("step")
+    assert int(ss.loc["raw", "total_reads"]) == 3000
+    assert int(ss.loc["trimmed", "total_reads"]) == 2700
+    assert int(ss.loc["clustered", "total_reads"]) == 1550   # 450 + 1100
+    assert int(ss.loc["clustered", "n_features"]) == 3       # 3 OTUs (rows)
+    assert pd.isna(ss.loc["raw", "n_features"])              # no features at read-level steps
+    assert pd.isna(ss.loc["trimmed", "n_features"])
+
+
+def test_step_summary_dada2(tmp_path):
+    """DADA2 step summary: ASV counts at merged/nonchim from feature_counts.csv, NA at the
+    read-level steps, total reads = the per-sample column sums."""
+    logs = tmp_path / "logs"; logs.mkdir()
+    d2 = tmp_path / "02_dada2"; d2.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    _write_trim_logs(logs, "S2", raw=1000, trimmed=800)
+    _write_track(d2, [
+        {"sample": "S1", "input": 900, "filtered": 800, "denoised": 780, "merged": 700, "nonchim": 690},
+        {"sample": "S2", "input": 800, "filtered": 700, "denoised": 690, "merged": 600, "nonchim": 590},
+    ])
+    pd.DataFrame({"step": ["merged", "nonchim"], "n_features": [120, 110]}).to_csv(
+        d2 / "feature_counts.csv", index=False)
+    ss = ReadTrackingBuilder("m", logs_dir=logs, dada2_dir=d2).step_summary().set_index("step")
+    assert int(ss.loc["filtered", "total_reads"]) == 1500    # 800 + 700
+    assert int(ss.loc["nonchim", "total_reads"]) == 1280     # 690 + 590
+    assert int(ss.loc["merged", "n_features"]) == 120
+    assert int(ss.loc["nonchim", "n_features"]) == 110
+    for step in ("raw", "trimmed", "filtered", "denoised"):
+        assert pd.isna(ss.loc[step, "n_features"])           # ASVs only exist from the merge stage
+
+
+def test_step_summary_missing_feature_counts_is_na_not_guessed(tmp_path):
+    """A DADA2 run without feature_counts.csv yields NA ASV counts (never a guessed value),
+    while reads are still tracked. The absence is logged as a [WARN] (verified at runtime)."""
+    logs = tmp_path / "logs"; logs.mkdir()
+    d2 = tmp_path / "02_dada2"; d2.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    _write_track(d2, [{"sample": "S1", "input": 900, "filtered": 800,
+                       "denoised": 780, "merged": 700, "nonchim": 690}])
+    ss = ReadTrackingBuilder("m", logs_dir=logs, dada2_dir=d2).step_summary().set_index("step")
+    assert pd.isna(ss.loc["merged", "n_features"]) and pd.isna(ss.loc["nonchim", "n_features"])
+    assert int(ss.loc["nonchim", "total_reads"]) == 690      # reads are still reported
+
+
+def test_step_summary_partial_na_sums_measured_samples(tmp_path):
+    """A step measured for some samples but NA for others sums the measured ones (it is not
+    blanked to NA, which would discard a usable run total over one dropped sample). The
+    incompleteness is logged as a [WARN] (verified at runtime)."""
+    logs = tmp_path / "logs"; logs.mkdir()
+    d2 = tmp_path / "02_dada2"; d2.mkdir()
+    _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
+    _write_trim_logs(logs, "S2", raw=1000, trimmed=800)   # in the logs ...
+    # ... but only S1 reaches the DADA2 track, so S2 is NA from 'filtered' on.
+    _write_track(d2, [{"sample": "S1", "input": 900, "filtered": 800,
+                       "denoised": 780, "merged": 700, "nonchim": 690}])
+    ss = ReadTrackingBuilder("m", logs_dir=logs, dada2_dir=d2).step_summary().set_index("step")
+    assert int(ss.loc["raw", "total_reads"]) == 2000        # both samples measured
+    assert int(ss.loc["trimmed", "total_reads"]) == 1700    # both measured
+    assert int(ss.loc["nonchim", "total_reads"]) == 690     # only S1 measured -> summed, not NA
+    assert pd.isna(ss.loc["nonchim", "n_features"])         # no feature_counts.csv here
+
+
 def test_html_report_is_self_contained(tmp_path):
     from seednap.steps.report import HTMLReportBuilder
     logs = tmp_path / "logs"; logs.mkdir()

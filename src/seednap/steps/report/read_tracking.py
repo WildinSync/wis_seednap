@@ -283,3 +283,100 @@ class ReadTrackingBuilder:
             lambda v: "NA" if pd.isna(v) else f"{v:.1f}%"
         )
         return f"Read tracking -- {self.marker}\n" + str(display.to_string(index=False)) + "\n"
+
+    # ------------------------------------------------------------------
+    # Step summary: run-level reads + feature (ASV/OTU) counts per step
+    # ------------------------------------------------------------------
+    def _feature_counts(self) -> Dict[str, Optional[int]]:
+        """Per-step feature counts (number of ASVs/OTUs), only where a feature table exists.
+
+        DADA2: read the run-level ``feature_counts.csv`` written by ``dada2_process.R``
+        (the merged and non-chimeric ASV counts). SWARM: the number of OTUs (rows of the OTU
+        table) at the ``clustered`` step. Read-level steps (raw/trimmed/filtered/denoised) have
+        no feature table and are simply absent from the returned dict (reported as NA upstream).
+        A missing or unreadable source raises a ``[WARN]`` rather than guessing (section 4).
+        """
+        counts: Dict[str, Optional[int]] = {}
+        if self.dada2_dir is not None:
+            fc = self.dada2_dir / "feature_counts.csv"
+            if not fc.exists():
+                logger.warning(
+                    f"[WARN] step_summary: expected=DADA2 feature_counts.csv, "
+                    f"got=missing ({fc}), fallback=no per-step ASV counts",
+                )
+                return counts
+            try:
+                df = pd.read_csv(fc)
+                for _, r in df.iterrows():
+                    counts[str(r["step"])] = int(r["n_features"])
+            except (pd.errors.EmptyDataError, OSError, KeyError, ValueError) as exc:
+                logger.warning(
+                    f"[WARN] step_summary: expected=readable feature_counts.csv, "
+                    f"got=unreadable ({fc}: {exc}), fallback=no per-step ASV counts",
+                )
+        elif self.swarm_otu_table is not None:
+            if not self.swarm_otu_table.exists():
+                logger.warning(
+                    f"[WARN] step_summary: expected=OTU table for the OTU count, "
+                    f"got=missing ({self.swarm_otu_table}), fallback=no OTU count",
+                )
+            else:
+                try:
+                    counts["clustered"] = int(len(pd.read_csv(self.swarm_otu_table)))
+                except (pd.errors.EmptyDataError, OSError) as exc:
+                    logger.warning(
+                        f"[WARN] step_summary: expected=readable OTU table, "
+                        f"got=unreadable ({self.swarm_otu_table}: {exc}), fallback=no OTU count",
+                    )
+        return counts
+
+    def step_summary(self, tracking_df: Optional[pd.DataFrame] = None) -> pd.DataFrame:
+        """Run-level summary: total reads and feature count after each pipeline step.
+
+        Columns: ``step``; ``total_reads`` (sum of the per-sample read-tracking counts, NA if
+        no sample had a measurable count at that step); ``n_features`` (number of ASVs for the
+        DADA2 path / OTUs for SWARM, populated only at the stages where a feature table exists
+        -- merged and nonchim for DADA2, clustered for SWARM -- and NA at the read-level steps).
+
+        If a step is measured for some samples but NA (unmeasured) for others, the total is the
+        sum over the measured samples and a ``[WARN]`` names the step and the unmeasured samples,
+        so an incomplete run total is never reported silently (CLAUDE.md section 4).
+        """
+        if tracking_df is None:
+            tracking_df = self.build()
+        features = self._feature_counts()
+        rows: List[Dict[str, object]] = []
+        for step in self.steps:
+            if step in tracking_df.columns:
+                vals = pd.to_numeric(tracking_df[step], errors="coerce")
+                if not vals.notna().any():
+                    total: object = pd.NA
+                else:
+                    total = int(vals.sum())  # skipna: sum over the measured samples
+                    if vals.isna().any():
+                        missing = tracking_df.loc[vals.isna(), "sample"].astype(str).tolist()
+                        logger.warning(
+                            f"[WARN] step_summary: step '{step}' total_reads={total:,} is summed "
+                            f"over {int(vals.notna().sum())}/{len(vals)} samples; "
+                            f"{len(missing)} unmeasured (NA): {missing[:10]}"
+                            f"{' ...' if len(missing) > 10 else ''} -- run total may be incomplete",
+                        )
+            else:
+                total = pd.NA
+            rows.append(
+                {"step": step, "total_reads": total, "n_features": features.get(step, pd.NA)}
+            )
+        return pd.DataFrame(rows, columns=["step", "total_reads", "n_features"])
+
+    def write_step_summary(
+        self, output_dir: Union[str, Path], summary_df: Optional[pd.DataFrame] = None
+    ) -> Path:
+        """Write ``step_summary.csv`` (run-level reads + feature counts after each step)."""
+        if summary_df is None:
+            summary_df = self.step_summary()
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        csv_path = out_dir / "step_summary.csv"
+        summary_df.to_csv(csv_path, index=False)
+        logger.info(f"Wrote step summary: {csv_path}")
+        return csv_path

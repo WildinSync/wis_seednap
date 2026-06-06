@@ -1388,6 +1388,8 @@ def report(
 
         report_dir = out / "04_report" / marker
         paths = builder.write(report_dir, df=df)
+        step_summary_df = builder.step_summary(df)
+        builder.write_step_summary(report_dir, summary_df=step_summary_df)
         warns = builder.warnings(df, log=False)  # keep the console clean; shown below + in HTML
 
         table = Table(show_header=True, header_style="bold cyan")
@@ -1404,7 +1406,23 @@ def report(
             table.add_row(*cells)
         console.print(table)
 
+        # Run-level step summary: total reads + ASV/OTU count after each step.
+        feat_label = "ASVs" if "nonchim" in builder.steps else "OTUs"
+        ss_table = Table(title="Step summary (run totals)", show_header=True, header_style="bold cyan")
+        ss_table.add_column("step")
+        ss_table.add_column("total reads", justify="right")
+        ss_table.add_column(feat_label, justify="right")
+        for _, srow in step_summary_df.iterrows():
+            tr, nf = srow["total_reads"], srow["n_features"]
+            ss_table.add_row(
+                str(srow["step"]),
+                "NA" if pd.isna(tr) else f"{int(tr):,}",
+                "-" if pd.isna(nf) else f"{int(nf):,}",
+            )
+        console.print(ss_table)
+
         print_success(f"Wrote {paths['read_tracking_csv']}")
+        print_success(f"Wrote {report_dir / 'step_summary.csv'}")
         if warns:
             print_warning(f"{len(warns)} data-loss/measurement warning(s) — see the run log.")
 
@@ -1468,6 +1486,7 @@ def report(
                 otu_table_full=otu_full if (otu_full and otu_full.exists()) else None,
                 field_metadata_csv=field_metadata, project_metadata_csv=project_metadata,
                 log_file=log_file,
+                step_summary_df=step_summary_df,
                 summary={
                     "warn_below_retention_pct": warn_retention,
                     "subtitle": f"{len(df)} samples · marker {marker}",

@@ -280,6 +280,17 @@ for (col in c("denoised", "merged", "nonchim")) track[[col]][is.na(track[[col]])
 write.csv(track, file.path(marker_dir, "track_reads.csv"), row.names = FALSE)
 cat("[INFO] Wrote read-tracking table:", file.path(marker_dir, "track_reads.csv"), "\n")
 
+# Run-level ASV counts at the sequence-table stages, for the step-summary report.
+# ASVs first exist as a table at the merge step: st1 is the merged table (pre-chimera,
+# ncol = merged ASVs) and seqtab is the final non-chimeric table (ncol = nonchim ASVs).
+feature_counts <- data.frame(
+  step       = c("merged", "nonchim"),
+  n_features = c(ncol(st1), ncol(seqtab)),
+  stringsAsFactors = FALSE
+)
+write.csv(feature_counts, file.path(marker_dir, "feature_counts.csv"), row.names = FALSE)
+cat("[INFO] Wrote feature counts:", file.path(marker_dir, "feature_counts.csv"), "\n")
+
 # Output a fasta for ecotag and blast
 df_seq <- data.frame(sequence = colnames(seqtab))
 df_seq <- df_seq %>%

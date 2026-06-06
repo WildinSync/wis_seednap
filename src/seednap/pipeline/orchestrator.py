@@ -560,6 +560,8 @@ class PipelineOrchestrator:
             builder = ReadTrackingBuilder(**kwargs)
             df = builder.build()
             builder.write(report_dir, df=df)
+            # Run-level step summary: total reads + ASV/OTU count after each step.
+            builder.write_step_summary(report_dir, summary_df=builder.step_summary(df))
             warns = builder.warnings(df)
 
             # Persist a compact summary into the step state (resume-safe).
@@ -664,6 +666,7 @@ class PipelineOrchestrator:
             builder = ReadTrackingBuilder(**kwargs)
             df = builder.build()
             warns = builder.warnings(df, log=False)
+            step_summary_df = builder.step_summary(df)
 
             taxo_csv = None
             tstep = self.state.get_step("taxonomy")
@@ -694,6 +697,7 @@ class PipelineOrchestrator:
                 field_metadata_csv=self.config.report.sample_metadata,
                 project_metadata_csv=self.config.report.project_metadata,
                 log_file=getattr(self, "_log_file", None),
+                step_summary_df=step_summary_df,
                 summary={
                     "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
                     "subtitle": f"{len(df)} samples · marker {marker}",

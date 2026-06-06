@@ -150,6 +150,7 @@ Full configuration reference: [docs/configuration.md](docs/configuration.md)
 
 ```
 read_tracking.csv / .txt    reads & sequences surviving each step, per sample
+step_summary.csv            run totals: reads + ASVs/OTUs after each step
 report.html                 self-contained visual report, open it in any browser
 ```
 

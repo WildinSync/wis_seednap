@@ -237,6 +237,7 @@ class HTMLReportBuilder:
         project_metadata_csv: Optional[Union[str, Path]] = None,
         log_file: Optional[Union[str, Path]] = None,
         max_log_lines: int = 1500,
+        step_summary_df: Optional[pd.DataFrame] = None,
     ) -> None:
         """Collect the inputs for one run report.
 
@@ -247,6 +248,8 @@ class HTMLReportBuilder:
             summary: Run-summary facts (retention thresholds, provenance, footer).
             steps: Pipeline step column names in order; inferred from the
                 tracking table when omitted.
+            step_summary_df: Optional run-level step summary (step, total_reads,
+                n_features); when given, a "Sequences and reads per step" table is shown.
             state: Pipeline state JSON (used for run date and step timing).
             taxonomy_csv: Optional taxonomy table CSV (enables taxonomy section).
             otu_table_full: Optional full OTU table CSV (enables feature-QC).
@@ -259,6 +262,7 @@ class HTMLReportBuilder:
         self.df = tracking_df if tracking_df is not None else pd.DataFrame()
         self.warnings = warnings or []
         self.summary = summary or {}
+        self.step_summary_df = step_summary_df
         self.state = state or {}
         self.taxonomy_csv = Path(taxonomy_csv) if taxonomy_csv else None
         self.otu_table_full = Path(otu_table_full) if otu_table_full else None
@@ -651,6 +655,22 @@ class HTMLReportBuilder:
         parts.append(f"<p>Reads were tracked per sample across the {len(self.steps)} stages of the "
                      f"{'DADA2 ASV' if self.is_dada2 else 'SWARM OTU'} path "
                      f"({' &rarr; '.join(self.steps)}).</p>")
+        # Run-level step summary (total reads + ASV/OTU count after each step).
+        if self.step_summary_df is not None and not self.step_summary_df.empty:
+            feat = "ASVs" if self.is_dada2 else "OTUs"
+            ss_rows = []
+            for _, r in self.step_summary_df.iterrows():
+                tr, nf = r.get("total_reads"), r.get("n_features")
+                ss_rows.append([
+                    _esc(str(r["step"])),
+                    '<span class="na">NA</span>' if pd.isna(tr) else f"{int(tr):,}",
+                    '<span class="na">&ndash;</span>' if pd.isna(nf) else f"{int(nf):,}",
+                ])
+            parts.append(self._table(
+                f"Total reads and number of {feat} after each pipeline step (run totals). {feat} are "
+                f"counted from the stage where a feature table first exists; the earlier read-level "
+                f"steps carry no feature count.",
+                ["step", "total reads", feat], ss_rows))
         parts.append(self._fig(figs.get("funnel"),
                      f"Total read pairs retained after each step, summed across all {n} samples; "
                      f"labels give absolute counts and the percentage of raw input."))
