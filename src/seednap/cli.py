@@ -343,9 +343,9 @@ def create_gbif(
 )
 @click.option(
     "--threshold-species",
-    default=98.0,
+    default=99.0,
     type=float,
-    help="Minimum percent identity for species-level assignment (default: 98.0)",
+    help="Minimum percent identity for species-level assignment (default: 99.0)",
 )
 @click.option(
     "--threshold-genus",
@@ -355,9 +355,39 @@ def create_gbif(
 )
 @click.option(
     "--threshold-family",
-    default=86.5,
+    default=90.0,
     type=float,
-    help="Minimum percent identity for family-level assignment (default: 86.5)",
+    help="Minimum percent identity for family-level assignment (default: 90.0)",
+)
+@click.option(
+    "--threshold-order",
+    default=80.0,
+    type=float,
+    help="Minimum percent identity for order-level assignment (default: 80.0)",
+)
+@click.option(
+    "--threshold-class",
+    default=70.0,
+    type=float,
+    help="Minimum percent identity for class-level assignment (default: 70.0)",
+)
+@click.option(
+    "--top-bitscore-pct",
+    default=10.0,
+    type=float,
+    help="cascade LCA: include hits within this % of the best bitscore (MEGAN-LR; default: 10.0)",
+)
+@click.option(
+    "--lca-pident-delta",
+    default=1.0,
+    type=float,
+    help="cascade LCA: in-band hits must be within this %id of the best in-band hit (default: 1.0)",
+)
+@click.option(
+    "--task",
+    default="megablast",
+    type=click.Choice(["megablast", "blastn", "dc-megablast", "blastn-short"]),
+    help="blastn task (default: megablast)",
 )
 @click.option(
     "--lca-algorithm",
@@ -391,6 +421,11 @@ def blast(
     threshold_species: float,
     threshold_genus: float,
     threshold_family: float,
+    threshold_order: float,
+    threshold_class: float,
+    top_bitscore_pct: float,
+    lca_pident_delta: float,
+    task: str,
     lca_algorithm: str,
     lca_pid: float,
     lca_diff: float,
@@ -430,7 +465,7 @@ def blast(
         # Run BLAST search
         console.print("[cyan]Step 1/3:[/cyan] Running BLAST search...")
         runner = BlastRunner(
-            perc_identity=perc_identity, qcov_hsp_perc=qcov_hsp_perc, evalue=evalue
+            perc_identity=perc_identity, qcov_hsp_perc=qcov_hsp_perc, evalue=evalue, task=task
         )
 
         blast_tsv = runner.run_blast_pipeline(
@@ -447,6 +482,10 @@ def blast(
             threshold_species=threshold_species,
             threshold_genus=threshold_genus,
             threshold_family=threshold_family,
+            threshold_order=threshold_order,
+            threshold_class=threshold_class,
+            top_bitscore_pct=top_bitscore_pct,
+            lca_pident_delta=lca_pident_delta,
             lca_algorithm=lca_algorithm,
             lca_pid=lca_pid,
             lca_diff=lca_diff,
@@ -927,8 +966,8 @@ def swarm(
 @click.option(
     "--threshold-species",
     type=float,
-    default=98.0,
-    help="Percent identity threshold for species (BLAST, default: 98.0)",
+    default=99.0,
+    help="Percent identity threshold for species (BLAST, default: 99.0)",
 )
 @click.option(
     "--threshold-genus",
@@ -939,8 +978,50 @@ def swarm(
 @click.option(
     "--threshold-family",
     type=float,
-    default=86.5,
-    help="Percent identity threshold for family (BLAST, default: 86.5)",
+    default=90.0,
+    help="Percent identity threshold for family (BLAST, default: 90.0)",
+)
+@click.option(
+    "--threshold-order",
+    type=float,
+    default=80.0,
+    help="Percent identity threshold for order (BLAST, default: 80.0)",
+)
+@click.option(
+    "--threshold-class",
+    type=float,
+    default=70.0,
+    help="Percent identity threshold for class (BLAST, default: 70.0)",
+)
+@click.option(
+    "--top-bitscore-pct",
+    type=float,
+    default=10.0,
+    help="cascade LCA bitscore band as % of best hit (BLAST; default: 10.0)",
+)
+@click.option(
+    "--lca-pident-delta",
+    type=float,
+    default=1.0,
+    help="cascade LCA: in-band hits within this %id of the best in-band hit (BLAST; default: 1.0)",
+)
+@click.option(
+    "--lca-algorithm",
+    type=click.Choice(["cascade", "collapsed_taxonomy"]),
+    default="cascade",
+    help="BLAST LCA algorithm: cascade (default) or collapsed_taxonomy (eDNAFlow/OceanOmics)",
+)
+@click.option(
+    "--lca-pid",
+    type=float,
+    default=90.0,
+    help="collapsed_taxonomy: hard %identity floor (BLAST; default: 90.0)",
+)
+@click.option(
+    "--lca-diff",
+    type=float,
+    default=1.0,
+    help="collapsed_taxonomy: identity-window width collapsed to the LCA (BLAST; default: 1.0)",
 )
 @click.option(
     "--confidence-threshold",
@@ -970,6 +1051,13 @@ def assign_taxonomy(
     threshold_species: float,
     threshold_genus: float,
     threshold_family: float,
+    threshold_order: float,
+    threshold_class: float,
+    top_bitscore_pct: float,
+    lca_pident_delta: float,
+    lca_algorithm: str,
+    lca_pid: float,
+    lca_diff: float,
     confidence_threshold: int,
     processors: int,
 ) -> None:
@@ -1018,6 +1106,13 @@ def assign_taxonomy(
                 "threshold_species": threshold_species,
                 "threshold_genus": threshold_genus,
                 "threshold_family": threshold_family,
+                "threshold_order": threshold_order,
+                "threshold_class": threshold_class,
+                "top_bitscore_pct": top_bitscore_pct,
+                "lca_pident_delta": lca_pident_delta,
+                "lca_algorithm": lca_algorithm,
+                "lca_pid": lca_pid,
+                "lca_diff": lca_diff,
             })
 
         elif method == "dada2":
@@ -1207,8 +1302,8 @@ def run_pipeline(
     help="Base output directory (default: outputs/)",
 )
 @click.option("--html", "html_report", is_flag=True, help="Also generate the self-contained HTML run report")
-@click.option("--warn-retention", type=float, default=30.0, help="Warn below this overall retention %% (default: 30)")
-@click.option("--warn-step-loss", type=float, default=70.0, help="Warn when a step drops more than this %% (default: 70)")
+@click.option("--warn-retention", type=float, default=30.0, help="Warn below this overall retention % (default: 30)")
+@click.option("--warn-step-loss", type=float, default=70.0, help="Warn when a step drops more than this % (default: 70)")
 @click.option("--field-metadata", type=click.Path(exists=True, path_type=Path),
               help="Per-sample (field) metadata CSV for the Dataset/provenance section (location, dates, sites)")
 @click.option("--project-metadata", type=click.Path(exists=True, path_type=Path),

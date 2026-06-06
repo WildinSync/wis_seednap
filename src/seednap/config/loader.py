@@ -284,6 +284,20 @@ metrics:
     - "quality_scores"
     - "length_distribution"
 
+report:
+  read_tracking: true        # per-step read/sequence tracking table + data-loss warnings (default: on)
+  html_report: true          # self-contained HTML run report with charts (default: on; set false to disable)
+  warn_below_retention_pct: 30.0   # warn for samples retaining < this % of raw reads (raw -> final)
+  warn_step_loss_pct: 70.0         # warn when a single step drops more than this % of a sample's reads
+  # output_dir: "/path/to/reports"            # default: "<output>/04_report/<marker>"
+  # sample_metadata: "/path/to/metadata_field_<dataset>.csv"   # dataset/provenance section (optional)
+  # project_metadata: "/path/to/metadata_proj_<dataset>.csv"   # sequencing/reference-DB provenance (optional)
+
+cleaning:
+  enabled: false             # control decontamination of the abundance table (default: off)
+  mode: "flag"               # "flag" annotates control OTUs without changing counts; "subtract"
+                             # removes control reads. Control identity comes from the FAIRe manifest.
+
 logging:
   level: "INFO"
   format: "detailed"

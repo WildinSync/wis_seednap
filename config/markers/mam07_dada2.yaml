@@ -119,6 +119,13 @@ report:
   # sample_metadata: "/path/to/metadata_field_<dataset>.csv"
   # project_metadata: "/path/to/metadata_proj_<dataset>.csv"
 
+cleaning:
+  enabled: false             # control decontamination of the abundance table (default: off)
+  mode: "flag"               # "flag" annotates OTUs/ASVs found in negative controls without
+                             # changing counts; "subtract" removes those control reads (extraction
+                             # blanks clean their extraction batch, PCR blanks the whole dataset).
+                             # Control identity comes from the FAIRe manifest. See docs/configuration.md.
+
 logging:
   level: "INFO"
   format: "detailed"
