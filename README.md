@@ -83,8 +83,9 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 |---|---|---|
 | **Demultiplex** *(optional)* | Built-in | Ligation-tag demultiplexing; `skip: true` for pre-demultiplexed inputs |
 | **Trim** | Cutadapt | Two-pass primer removal (5' then 3') |
-| **Cluster** | SWARM or DADA2 | OTU clustering or ASV denoising |
-| **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Taxonomic assignment with cascade-null per-rank thresholds and MEGAN-LR top-bitscore LCA (BLAST) or RDP bootstrap (DADA2) |
+| **Cluster** | SWARM or DADA2 | OTU clustering or ASV denoising (DADA2 can learn error models per sequencing library, then merge, via `dada2.per_library`) |
+| **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Taxonomic assignment with cascade-null per-rank thresholds and MEGAN-LR top-bitscore LCA (BLAST, default), an optional eDNAFlow/OceanOmics collapsed-taxonomy LCA (`lca_algorithm: collapsed_taxonomy`), or RDP bootstrap (DADA2) |
+| **Decontaminate** *(optional)* | Built-in | Flag or subtract reads found in negative controls, identified from the FAIRe manifest (`cleaning.enabled: true`; off by default) |
 | **Export** | Built-in | GBIF long format and DarwinCore occurrence CSV with deterministic `occurrenceID` and `contamination_flag` |
 | **Report** | Built-in | Generated automatically every run: a per-step read/sequence tracking table + data-loss warnings, and a self-contained HTML run report (dataset provenance, taxonomy headline, QC charts, and the colorized console run log). Configurable via the `report:` block; on by default |
 
@@ -103,7 +104,10 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 | `format-gbif INPUT` | Convert results to GBIF long format |
 | `create-gbif TAXO SAMPLE_META PROJECT_META OUTPUT` | Build DarwinCore GBIF occurrence CSV |
 | `demultiplex READS LIB META` | Demultiplex ligation-based libraries |
+| `manifest FIELD_META` | Build (and optionally validate) a canonical FAIRe sample manifest from lab CSVs |
+| `clean ABUNDANCE FIELD_META OUTPUT` | Decontaminate an abundance table against its negative controls (flag or subtract) |
 | `report MARKER` | Build the read-tracking report (+ `--html` for the visual run report) from existing outputs |
+| `monitor MARKER` | Summarise a finished or in-progress run from its state JSON |
 | `version` | Print the installed SeeDNAP version |
 
 Run `seednap --help` or `seednap <command> --help` for full options.
@@ -128,6 +132,52 @@ pipeline:
 ```
 
 Full configuration reference: [docs/configuration.md](docs/configuration.md)
+
+## Reporting
+
+> [!TIP]
+> Every run reports on itself, no extra flags. `run-pipeline` writes both artifacts to `outputs/04_report/<marker>/`, on by default.
+
+```
+read_tracking.csv / .txt    reads & sequences surviving each step, per sample
+report.html                 self-contained visual report, open it in any browser
+```
+
+**Read tracking** records read pairs and sequences into and out of every step (`raw -> trimmed
+-> ... -> nonchim` for DADA2, `raw -> trimmed -> clustered` for SWARM) plus a `pct_retained`
+column. Two thresholds raise data-loss warnings: `warn_below_retention_pct` (30) and
+`warn_step_loss_pct` (70).
+
+> [!IMPORTANT]
+> A count that cannot be measured is written as `NA` with a `[WARN]`, never a misleading `0`, so "missing" and "genuinely zero" stay distinct.
+
+**The HTML report** is one self-contained file: no JavaScript, no CDN, no external assets (charts
+are inline base64 PNGs), styled like a scientific paper. It opens anywhere and prints to a clean
+PDF (every panel expands). Panels:
+
+| Panel | Contents |
+|---|---|
+| Summary | Run descriptor, auto-written abstract, run-summary table |
+| Dataset | Marker, primers, location/dates/sites, institution, sequencing, reference DB |
+| Read tracking | Read-funnel and retention figures, the per-sample table, data-loss warnings |
+| Per-sample detail | Reads retained, features detected, retention per sample |
+| Taxonomic assignment | Assignment rate per rank, identity distribution, top species and genera |
+| OTU / feature QC | Chimera classification and sequence-length distribution (SWARM) |
+| Controls & contamination | Features detected in the negative controls |
+| Run provenance | Per-step status and wall-clock duration |
+| Run log | The full console transcript, colorized, with a fullscreen toggle |
+| Notes & methods | Definitions and thresholds |
+
+Toggle with `report.html_report: false`, redirect with `report.output_dir`, and add sampling
+provenance via `report.sample_metadata` / `report.project_metadata`. Regenerate any time from an
+existing run (this never re-runs the pipeline):
+
+```bash
+seednap report teleo --html --field-metadata metadata_field_my_dataset.csv
+```
+
+`seednap monitor <marker>` prints a quick text summary from the same run state. Full detail:
+[docs/reporting.md](docs/reporting.md).
 
 ## Documentation
 

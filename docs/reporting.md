@@ -2,10 +2,10 @@
 
 SeeDNAP produces two reporting artifacts for every run:
 
-1. a **read/sequence tracking table** (`read_tracking.csv` + `.txt`) — how many
+1. a **read/sequence tracking table** (`read_tracking.csv` + `.txt`): how many
    reads/sequences survive each pipeline step, per sample, with data-loss
    warnings; and
-2. a self-contained **HTML run report** (`report.html`) — a
+2. a self-contained **HTML run report** (`report.html`): a
    scientific-paper-style document with dataset provenance, a taxonomy
    headline, QC figures, and a contamination check.
 
@@ -14,7 +14,7 @@ built at the end of the run). Set `report.html_report: false` (or
 `report.read_tracking: false`) in the marker YAML to turn either off. By default
 they are written under `<paths.output>/04_report/<marker>/`; set
 `report.output_dir` to store them elsewhere. Reporting only reads artifacts the
-pipeline already produced — it never alters the run, and a reporting failure is
+pipeline already produced, it never alters the run, and a reporting failure is
 logged as a `[WARN]` and never fails the pipeline. The same artifacts can also
 be regenerated from existing outputs at any time with the `report` command (see
 below).
@@ -36,10 +36,10 @@ the clustering path:
 A `pct_retained` column gives the fraction of raw reads surviving to the final
 stage.
 
+> [!IMPORTANT]
 > **No silent zeros.** A count that cannot be measured (a missing log, a sample
-> absent from the DADA2 track) is recorded as `NA` and raises a `[WARN]` — it is
-> never written as a misleading `0`. A genuine `0` (e.g. a control filtered to
-> nothing) is reported as `0`.
+> absent from the DADA2 track) is recorded as `NA` with a `[WARN]`, never a
+> misleading `0`. A genuine `0` (e.g. a control filtered to nothing) is `0`.
 
 ### Data-loss warnings
 
@@ -48,9 +48,9 @@ in the HTML report's Read-tracking section under a **Read-tracking warnings**
 header that explains what each line means; the warnings are rendered in the
 same colorized terminal style as the run log):
 
-- `warn_below_retention_pct` (default **30**) — warn when a sample's final reads
+- `warn_below_retention_pct` (default **30**): warn when a sample's final reads
   fall below this percentage of its raw reads.
-- `warn_step_loss_pct` (default **70**) — warn when a single step drops more
+- `warn_step_loss_pct` (default **70**): warn when a single step drops more
   than this percentage of a sample's reads.
 
 ## HTML run report (`--html`)
@@ -63,25 +63,25 @@ visible at a time on screen, all panels expanded when the page is printed).
 Each section is fully self-contained in its own tab, so nothing is repeated
 across tabs. Sections:
 
-1. **Summary** — the run descriptor, the abstract, and the run-summary table.
-2. **Dataset** — identity and provenance (see below).
-3. **Read tracking** — the read funnel and per-sample retention figures, the
+1. **Summary**: the run descriptor, the abstract, and the run-summary table.
+2. **Dataset**: identity and provenance (see below).
+3. **Read tracking**: the read funnel and per-sample retention figures, the
    full per-sample table, and the data-loss warnings.
-4. **Per-sample detail** — reads retained, features detected (richness), and
+4. **Per-sample detail**: reads retained, features detected (richness), and
    retention per sample, as a figure and a table.
-5. **Taxonomic assignment** — assignment rate per rank (figure plus an exact
+5. **Taxonomic assignment**: assignment rate per rank (figure plus an exact
    per-rank table), best-hit identity distribution, detected species with read
    counts and sample occupancy, and top genera *(when a taxonomy table is
    available)*.
-6. **OTU / feature QC** — chimera classification and sequence-length
+6. **OTU / feature QC**: chimera classification and sequence-length
    distribution *(SWARM path only)*.
-7. **Controls & contamination** — features detected in negative controls,
+7. **Controls & contamination**: features detected in negative controls,
    computed from the blank sample columns *(when a taxonomy table is
    available)*.
-8. **Run provenance** — per-step status and duration from the run state JSON.
-9. **Run log** — the complete console transcript, colorized by level *(when a
+8. **Run provenance**: per-step status and duration from the run state JSON.
+9. **Run log**: the complete console transcript, colorized by level *(when a
    run log is available; see below)*.
-10. **Notes & methods** — definitions and the thresholds used.
+10. **Notes & methods**: definitions and the thresholds used.
 
 Figures use a publication style (Computer Modern serif via matplotlib, a
 restrained grey + single sea-green accent palette). For runs with more than 50

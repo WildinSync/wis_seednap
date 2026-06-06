@@ -92,7 +92,7 @@ CACCGCGGTTATACGAGAGGCCCAAGCTGAC...
 
 Exactly 7 semicolon-separated ranks are required: kingdom, phylum, class, order, family, genus, species. Use `NA` for unknown ranks.
 
-Databases built with [CRABS](https://github.com/gjeunen/reference_database_creator) (Jeunen et al., 2023) are compatible out of the box.
+Databases built with [CRABS](https://github.com/gjeunen/reference_database_creator) (Jeunen et al., 2023) are compatible out of the box. The 2025 CRABS reference DBs write the literal string `NA` where a rank is unknown. SeeDNAP normalizes `NA` (and `""`/`nan`) to a genuine missing rank at the BLAST formatter, in one place, so **neither** LCA resolver treats `NA` as a real taxon -- no over-collapse onto a phantom shared rank, and no literal `NA` leaking into the export. Missing ranks surface as `Unassigned`.
 
 ### Configuration
 
@@ -119,6 +119,62 @@ taxonomy:
       threshold_order: 80.0                  # (default: 80.0)
       threshold_class: 70.0                  # (default: 70.0)
       top_bitscore_pct: 10.0                 # (default: 10.0)
+```
+
+### Optional: collapsed-taxonomy LCA (eDNAFlow/OceanOmics)
+
+The default LCA resolver is `cascade` (steps 4--6 above): the MEGAN-LR
+top-bitscore band (`top_bitscore_pct`, default 10) gated by an in-band
+identity floor (`lca_pident_delta`, default 1), then per-rank identity
+thresholds. An alternative resolver is selectable via
+`lca_algorithm: collapsed_taxonomy`, the %identity-window collapse-to-LCA
+used by eDNAFlow and OceanOmics.
+
+It works as follows:
+
+1. Discard every hit below `lca_pid` (default 90.0), a hard percent-identity
+   floor.
+2. Among the surviving hits, take the best percent identity and keep all hits
+   within `lca_diff` (default 1.0) identity points of it. This is the
+   "identity window".
+3. Collapse the lineages of the windowed hits to their Lowest Common
+   Ancestor: ranks on which the windowed hits disagree are nulled (and, as
+   everywhere in this pipeline, every finer rank cascades to null).
+
+Like `cascade`, it is **header-based**: the lineage comes from the CRABS
+reference FASTA headers (Section *Reference Database Format*). It needs **no**
+NCBI taxids and no `taxdump`, so it runs fully offline.
+
+How it differs from `cascade`:
+
+- **No per-rank thresholds.** `collapsed_taxonomy` ignores
+  `threshold_species`/`threshold_genus`/`threshold_family`/`threshold_order`/
+  `threshold_class`; the only identity controls are the `lca_pid` floor and
+  the `lca_diff` window. `cascade` keeps its per-rank thresholds (species 99 /
+  genus 96 / family 90 / order 80 / class 70).
+- **More permissive at low identity.** A 90--96% hit that `cascade` would
+  null below the species/genus thresholds can still be reported (down to its
+  windowed LCA) once it clears `lca_pid`.
+- **More conservative on disagreement.** Because any disagreement *within the
+  identity window* collapses to the LCA, a tight cluster of near-equal hits
+  spanning two genera resolves only to family, even at high identity, rather
+  than picking a rank by per-rank threshold.
+
+Query coverage is enforced separately at the `blastn` step via
+`qcov_hsp_perc`, the same as for `cascade`.
+
+`fishbase_tiered` is accepted by the schema but **not implemented** and raises
+if selected.
+
+```yaml
+taxonomy:
+  method: "blast"
+  databases:
+    blast:
+      fasta: "/path/to/reference.fasta"
+      lca_algorithm: "collapsed_taxonomy"    # (default: "cascade")
+      lca_pid: 90.0                          # (default: 90.0) hard %identity floor
+      lca_diff: 1.0                          # (default: 1.0) identity-window width
 ```
 
 ---

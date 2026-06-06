@@ -101,6 +101,42 @@ seednap dada2 MARKER TRIMMED_READS_DIR [OPTIONS]
 seednap dada2 teleo /path/to/trimmed -o outputs --max-ee 2.0 --trunc-q 11
 ```
 
+> DADA2 can learn a separate error model per sequencing library (grouped
+> from the FAIRe manifest's `seq_run_id`) and merge the per-library
+> sequence tables, via the `dada2.per_library` config field (default
+> `false` = single pooled error model). See
+> [configuration.md](configuration.md). This is a YAML-only knob; it is
+> not exposed on the `dada2` CLI command.
+
+---
+
+## `clean`
+
+Decontaminate an abundance table against its negative controls. Control
+identity (extraction vs PCR blanks, extraction batches) is derived from a
+FAIRe manifest migrated from the field metadata.
+
+```
+seednap clean ABUNDANCE_CSV FIELD_METADATA OUTPUT [OPTIONS]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--mode {flag\|subtract}` | `flag` | `flag` annotates control-detected OTUs/ASVs without changing counts; `subtract` removes control reads (extraction blanks clean their `extraction_ID` batch, PCR blanks clean the whole dataset) |
+| `--project-metadata PATH` | | Project metadata CSV (marker -> target_gene) |
+| `--id-col TEXT` | first column | OTU/ASV identifier column in the abundance table |
+| `--report PATH` | `<output stem>_report.csv` | Per-sample cleaning report CSV |
+
+```bash
+seednap clean outputs/02_swarm/teleo/otu_table.csv \
+  metadata/metadata_field_my_dataset.csv \
+  outputs/teleo_otu_clean.csv --mode subtract
+```
+
+In a full run this is the `cleaning:` config section
+(`enabled`, default `false`; `mode`). See
+[configuration.md](configuration.md).
+
 ---
 
 ## `blast`
@@ -117,9 +153,26 @@ seednap blast QUERY_FASTA REF_FASTA ASV_COUNT [OPTIONS]
 | `--perc-identity FLOAT` | `80.0` | Minimum percent identity |
 | `--qcov-hsp-perc FLOAT` | `80.0` | Minimum query coverage per HSP |
 | `--evalue FLOAT` | `1e-25` | Maximum e-value |
-| `--threshold-species FLOAT` | `98.0` | Percent identity for species assignment |
+| `--task {megablast\|blastn\|dc-megablast\|blastn-short}` | `megablast` | blastn task |
+| `--threshold-species FLOAT` | `99.0` | Percent identity for species assignment |
 | `--threshold-genus FLOAT` | `96.0` | Percent identity for genus assignment |
-| `--threshold-family FLOAT` | `86.5` | Percent identity for family assignment |
+| `--threshold-family FLOAT` | `90.0` | Percent identity for family assignment |
+| `--threshold-order FLOAT` | `80.0` | Percent identity for order assignment |
+| `--threshold-class FLOAT` | `70.0` | Percent identity for class assignment |
+| `--lca-algorithm {cascade\|collapsed_taxonomy}` | `cascade` | LCA algorithm (see below) |
+| `--top-bitscore-pct FLOAT` | `10.0` | cascade LCA: include hits within this % of the best bitscore (MEGAN-LR band) |
+| `--lca-pident-delta FLOAT` | `1.0` | cascade LCA: in-band hits must be within this %id of the best in-band hit |
+| `--lca-pid FLOAT` | `90.0` | collapsed_taxonomy only: hard %identity floor for hits |
+| `--lca-diff FLOAT` | `1.0` | collapsed_taxonomy only: identity-window width collapsed to the LCA |
+
+**LCA algorithms.** `cascade` (default) applies the per-rank thresholds
+above within a MEGAN-LR bitscore band (`--top-bitscore-pct`) above a
+`--lca-pident-delta` floor. `collapsed_taxonomy` is the
+eDNAFlow/OceanOmics %identity-window collapse-to-LCA: it ignores the
+per-rank thresholds and instead collapses disagreeing hits within
+`--lca-diff` %id of one another to their LCA, above the `--lca-pid` hard
+floor. It is header-based (reads the CRABS lineage from the reference
+FASTA headers), needs no NCBI taxids/taxdump, and runs offline.
 
 ```bash
 seednap blast outputs/02_swarm/teleo/query.fasta \
@@ -129,10 +182,11 @@ seednap blast outputs/02_swarm/teleo/query.fasta \
   --evalue 1e-10 --threshold-species 100
 ```
 
-**Pipeline knobs not exposed on the CLI.** The full pipeline supports a
-few additional BLAST settings via YAML only: `task` (megablast/blastn),
-`threshold_order`, `threshold_class`, and `top_bitscore_pct` (MEGAN-LR
-LCA band). To use them, run via `seednap run-pipeline` with a config.
+Reference headers may carry the literal string `NA` for an unknown rank
+(2025 CRABS DBs); SeeDNAP normalizes `NA`/empty/`nan` to a genuine
+missing rank, which surfaces as `Unassigned` in the export rather than a
+taxon named `NA`.
+
 See [configuration.md](configuration.md#taxonomy) and
 [taxonomy-methods.md](taxonomy-methods.md#blast--lca-recommended).
 
@@ -160,9 +214,16 @@ Additional options:
 | Option | Default | Description |
 |---|---|---|
 | `-o, --output-dir PATH` | `outputs/` | Base output directory |
-| `--threshold-species FLOAT` | `98.0` | Species %ID threshold (BLAST) |
+| `--threshold-species FLOAT` | `99.0` | Species %ID threshold (BLAST) |
 | `--threshold-genus FLOAT` | `96.0` | Genus %ID threshold (BLAST) |
-| `--threshold-family FLOAT` | `86.5` | Family %ID threshold (BLAST) |
+| `--threshold-family FLOAT` | `90.0` | Family %ID threshold (BLAST) |
+| `--threshold-order FLOAT` | `80.0` | Order %ID threshold (BLAST) |
+| `--threshold-class FLOAT` | `70.0` | Class %ID threshold (BLAST) |
+| `--lca-algorithm {cascade\|collapsed_taxonomy}` | `cascade` | BLAST LCA algorithm (see `blast` above) |
+| `--top-bitscore-pct FLOAT` | `10.0` | cascade LCA bitscore band as % of best hit (BLAST) |
+| `--lca-pident-delta FLOAT` | `1.0` | cascade LCA: in-band hits within this %id of the best in-band hit (BLAST) |
+| `--lca-pid FLOAT` | `90.0` | collapsed_taxonomy: hard %identity floor (BLAST) |
+| `--lca-diff FLOAT` | `1.0` | collapsed_taxonomy: identity-window width collapsed to the LCA (BLAST) |
 | `--confidence-threshold INT` | `60` | Confidence threshold (DECIPHER) |
 | `-c, --processors INTEGER` | `8` | CPU cores |
 
@@ -226,6 +287,41 @@ seednap demultiplex RAW_READS_DIR LIBRARY_NAME METADATA_CSV [OPTIONS]
 
 ---
 
+## `manifest`
+
+Build (and optionally validate) a canonical FAIRe sample manifest from the
+lab's existing CSVs. The manifest is the source of truth for sample ->
+library grouping (used by `dada2.per_library`) and control identity (used
+by `clean`). Standalone and read-only on its inputs.
+
+```
+seednap manifest FIELD_METADATA [OPTIONS]
+```
+
+`FIELD_METADATA` is the per-sample field metadata CSV
+(`metadata_field_*.csv`), or a legacy demux lab CSV
+(`metadata_lab_*.csv`) carrying library/tag columns.
+
+| Option | Default | Description |
+|---|---|---|
+| `--project-metadata PATH` | | Project metadata CSV (supplies the marker -> target_gene/assay_name) |
+| `--lab-metadata PATH` | | Legacy demux metadata CSV (supplies seq_run_id/library and tag barcodes) |
+| `--seq-run-id TEXT` | | Sequencing-run id for the whole dataset (overrides lab/derived value) |
+| `--target-gene TEXT` | | Marker / target_gene (overrides the project metadata) |
+| `--date-order {ymd\|dmy\|mdy}` | | Force the eventDate field order for genuinely-ambiguous dotted dates (otherwise such files raise rather than be guessed) |
+| `-o, --output PATH` | | Write the canonical manifest CSV here |
+| `--abundance PATH` | | Validate the manifest's eventIDs against this abundance/OTU table |
+| `--strict` | | Raise if the abundance table has sample columns absent from the manifest (default: warn) |
+
+```bash
+seednap manifest metadata/metadata_field_my_dataset.csv \
+  --project-metadata metadata/metadata_proj_my_dataset.csv \
+  --abundance outputs/02_swarm/teleo/otu_table.csv \
+  -o metadata/manifest_my_dataset.csv
+```
+
+---
+
 ## `init`
 
 Generate an example configuration file.
@@ -281,6 +377,29 @@ seednap report teleo -o outputs --html \
 
 Writes `outputs/04_report/<marker>/read_tracking.{csv,txt}` and, with `--html`,
 `report.html`. See [reporting.md](reporting.md) for details.
+
+---
+
+## `monitor`
+
+Summarise a finished or in-progress run from its state JSON. Prints a
+per-step status/duration table plus the read-tracking headline (raw ->
+final reads, mean retention, warnings), and writes a
+`monitoring_summary.csv` when per-sample counts are present. Standalone
+and read-only; regenerable any time without a re-run.
+
+```
+seednap monitor MARKER [OPTIONS]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `-o, --output-dir PATH` | `outputs` | Base output directory of the run |
+| `--state-file PATH` | `<output-dir>/.<marker>_state.json` | Run state JSON |
+
+```bash
+seednap monitor teleo -o outputs
+```
 
 ---
 

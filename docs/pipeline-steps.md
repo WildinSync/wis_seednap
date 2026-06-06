@@ -3,7 +3,7 @@
 ## Overview
 
 ```
-demultiplex (optional) --> trim --> cluster (DADA2 or SWARM) --> taxonomy --> export --> report
+demultiplex (optional) --> trim --> cluster (DADA2 or SWARM) --> taxonomy --> clean (optional) --> export --> report
 ```
 
 Each step reads outputs from the previous step. The pipeline tracks state in a JSON file, so you can resume from any failed step with `--resume`.
@@ -159,6 +159,18 @@ Parses SWARM cluster membership, per-sample abundances, and chimera status to pr
 5. **Chimera removal:** De novo chimera detection (consensus or pooled)
 6. **ASV table:** Sequence table with per-sample counts
 
+### DADA2-by-library
+
+By default (`dada2.per_library: false`) DADA2 learns a single pooled error
+model across all input samples -- the unchanged legacy behavior. When
+`dada2.per_library: true`, DADA2 instead groups samples by sequencing library
+(the FAIRe manifest's `seq_run_id`), learns a separate error model and denoises
+each library independently, then merges the per-library sequence tables and
+collapses identical ASVs (`mergeSequenceTables` + `collapseNoMismatch`). Use it
+for runs that span multiple sequencing runs, where run-specific error profiles
+would otherwise be averaged together; it is a no-op for single-library
+datasets.
+
 ---
 
 ## 3. Taxonomic Assignment
@@ -176,7 +188,51 @@ The DADA2 RDP and DECIPHER paths take the query FASTA explicitly and
 work on either DADA2 ASVs or SWARM OTUs -- they no longer require a
 `seqtab_clean.rds` produced by the DADA2 step.
 
+**BLAST LCA algorithm.** The BLAST method resolves multi-hit ambiguity with one
+of two header-based, offline LCA resolvers selected by
+`taxonomy.blast.lca_algorithm`. The default `cascade` keeps the MEGAN-LR
+top-bitscore band (`top_bitscore_pct`, default 10) with a percent-identity floor
+(`lca_pident_delta`, default 1) and per-rank identity thresholds
+(species 99 / genus 96 / family 90 / order 80 / class 70). The optional
+`collapsed_taxonomy` resolver is the eDNAFlow/OceanOmics %identity-window
+collapse-to-LCA: hits within `lca_diff` (default 1) percent-identity points of
+the best hit above a hard `lca_pid` floor (default 90) collapse to their LCA. It
+reads the CRABS lineage from the reference FASTA headers, needs no NCBI
+taxids/taxdump, and does not apply cascade's per-rank thresholds.
+
 See [taxonomy-methods.md](taxonomy-methods.md) for detailed method descriptions.
+
+---
+
+## 3b. Decontamination (optional)
+
+**Tool:** Built-in
+**Input:** Taxonomy table from step 3 (`{marker}_{method}.csv`)
+**Output:** Cleaned table `outputs/{marker}_{method}_cleaned.csv` and a
+per-sample `cleaning_report.csv` in the report directory
+
+Off by default. When `cleaning.enabled: true`, this step runs between taxonomy
+and export and decontaminates the table against its negative controls. Control
+identity (extraction blanks vs PCR blanks, and the extraction batch each sample
+belongs to) is derived from the FAIRe manifest, so controls do not need to be
+named by convention.
+
+`cleaning.mode` selects the behavior:
+
+- `flag` (default) -- annotate OTUs/ASVs that appear in negative controls
+  without changing any counts. Subtraction stays opt-in because it is
+  high-consequence.
+- `subtract` -- remove control reads from the associated samples: extraction
+  blanks clean their own extraction batch, PCR blanks clean the whole dataset.
+
+Export prefers the cleaned table when this step produced one. If the manifest /
+control identity is unavailable, the step is skipped with a `[WARN]` and export
+falls back to the uncleaned table. The same logic is available standalone on any
+abundance table:
+
+```bash
+seednap clean {abundance_csv} {field_metadata_csv} {output_csv} [--mode flag|subtract]
+```
 
 ---
 
@@ -202,7 +258,7 @@ See [gbif-export.md](gbif-export.md) for the full DarwinCore publishing workflow
 
 **Tool:** Built-in
 **Input:** Cutadapt logs, the cluster output (SWARM `otu_table` / DADA2
-`track_reads.csv`), and — for the HTML report — the taxonomy table, the SWARM
+`track_reads.csv`), and, for the HTML report, the taxonomy table, the SWARM
 `otu_table_full.csv`, the run state JSON, and (optionally) dataset metadata.
 **Output:** `outputs/04_report/{marker}/read_tracking.{csv,txt}` and
 `report.html` (the report directory is configurable via `report.output_dir`).
@@ -251,6 +307,7 @@ outputs/
     read_tracking.txt            #   Human-readable table
     report.html                  #   Self-contained HTML run report (on by default)
   {marker}_{method}.csv          # Final taxonomy + abundance table (method = blast/ecotag/decipher/dada2RDP)
+  {marker}_{method}_cleaned.csv  # Decontaminated table (if cleaning.enabled)
   .{marker}_state.json           # Pipeline state (for resume)
 ```
 

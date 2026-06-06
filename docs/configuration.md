@@ -128,6 +128,10 @@ dada2:
     method: "consensus"                      # "consensus", "pooled", or "none"
   pool: false                                # Pool samples for denoising
   multithread: true                          # Use multithreading
+  per_library: false                         # Learn a separate error model per sequencing
+                                             #   library (grouped from the manifest seq_run_id),
+                                             #   then merge + collapse. Default false = one
+                                             #   pooled model. Use for multi-run datasets.
 ```
 
 ### `taxonomy`
@@ -172,6 +176,24 @@ taxonomy:
       # best bitscore are considered together for LCA resolution.
       # 0.0 = exact ties only.
       top_bitscore_pct: 10.0                 # (default: 10.0)
+      # An in-band hit must also be within this many percent-identity points of
+      # the best in-band hit to count toward the cascade LCA. 0 disables.
+      lca_pident_delta: 1.0                  # (default: 1.0)
+      # LCA algorithm: "cascade" (default), "collapsed_taxonomy", or
+      # "fishbase_tiered". "cascade" is the default header-derived resolver and
+      # uses top_bitscore_pct + lca_pident_delta plus the per-rank threshold_*
+      # values above. "collapsed_taxonomy" is the eDNAFlow/OceanOmics
+      # %identity-window collapse-to-LCA: header-based (reads the CRABS lineage
+      # from the reference FASTA headers), needs no NCBI taxids/taxdump, runs
+      # offline, and does NOT apply the per-rank threshold_* cascade. It is tuned
+      # by lca_pid / lca_diff below. "fishbase_tiered" is not implemented and
+      # raises if selected.
+      lca_algorithm: "cascade"               # (default: "cascade")
+      # Used only when lca_algorithm: "collapsed_taxonomy".
+      lca_pid: 90.0                          # Hard %identity floor (default: 90.0)
+      lca_diff: 1.0                          # Identity-window width within which
+                                             #   disagreeing hits collapse to their
+                                             #   LCA (default: 1.0)
 
     dada2:
       all: "/path/to/dada2_all.fasta"        # RDP-format database (required)
@@ -193,12 +215,10 @@ taxonomy:
 
 You only need to provide the database section for the method you selected.
 
-**Defaults vs CLI shortcuts.** The pipeline (YAML) defaults above are the
-field-standard cascade thresholds used by the production runs. The
-standalone `seednap blast` and `seednap assign-taxonomy` commands keep
-their historical CLI defaults (`threshold_species=98.0`,
-`threshold_family=86.5`); pass `--threshold-*` explicitly or run via
-`run-pipeline` with a YAML config to use the cascade defaults.
+**CRABS "NA" sentinel.** The 2025 CRABS reference DBs write the literal string
+`"NA"` where a rank is unknown. SeeDNAP normalizes `"NA"`/`""`/`"nan"` to a
+genuine missing rank at the BLAST formatter, so neither LCA resolver treats
+`"NA"` as a taxon; missing ranks surface as `Unassigned` in the output.
 
 ### `export`
 
@@ -247,6 +267,24 @@ By default, artifacts are written to `<paths.output>/04_report/<marker>/`. Set
 it (so `output_dir: /data/reports` for marker `teleo` writes to
 `/data/reports/teleo/`). `~` is expanded and relative paths are resolved. The
 whole section is optional; defaults apply when omitted.
+
+### `cleaning`
+
+Control decontamination of the abundance table. **Off by default.** Control
+identity (which samples are negative controls, and how they associate to
+extraction/PCR batches) comes from the FAIRe manifest.
+
+```yaml
+cleaning:
+  enabled: false                             # Run the cleaning step (default: false)
+  mode: "flag"                               # "flag" or "subtract" (default: "flag")
+```
+
+`mode: "flag"` annotates OTUs/ASVs found in negative controls without changing
+counts. `mode: "subtract"` removes those control reads from the associated
+samples (extraction blanks clean their extraction batch; PCR blanks clean the
+whole dataset). Can also be run standalone with
+`seednap clean ABUNDANCE_CSV FIELD_METADATA OUTPUT --mode flag|subtract`.
 
 ### `logging`
 
