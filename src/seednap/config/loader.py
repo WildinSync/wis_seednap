@@ -180,18 +180,43 @@ def get_default_config_path() -> Optional[Path]:
     return None
 
 
-def create_example_config(output_path: Path, marker: str = "teleo") -> None:
+def create_example_config(
+    output_path: Path, marker: str = "teleo", minimal: bool = False
+) -> None:
     """
     Create an example configuration file.
 
     Args:
         output_path: Where to write the example config
         marker: Marker name for the example (default: 'teleo')
+        minimal: If True, write only the required fields (everything else uses defaults);
+            if False (default), write the fully-annotated reference template.
 
     Raises:
         ConfigError: If file cannot be written
     """
-    example_config = f"""# Seednap Pipeline Configuration for {marker}
+    if minimal:
+        example_config = f"""# Minimal SeeDNAP config for {marker}: only the REQUIRED fields.
+# Everything else uses built-in defaults (config is merged over defaults). See
+# docs/configuration.md for the full reference.
+marker:
+  name: {marker}
+  primers:
+    forward: "ACACCGCCCGTCACTCT"      # 5'->3'  (replace with your primers)
+    reverse: "CTTCCGGTACACTTACCATG"    # 5'->3'
+paths:
+  raw_data: "data/raw"                 # directory of paired-end FASTQ
+taxonomy:
+  method: "blast"                      # blast | dada2 | ecotag | decipher (fill only this method's block)
+  databases:
+    blast:
+      fasta: "references/{marker}/blast_db.fasta"
+# Clustering path (defaults to the DADA2 ASV path); uncomment for the SWARM OTU path:
+# pipeline:
+#   steps: ["trim", "swarm", "taxonomy"]
+"""
+    else:
+        example_config = f"""# Seednap Pipeline Configuration for {marker}
 version: "0.1.0"
 
 marker:
@@ -252,7 +277,7 @@ swarm:
   min_sequence_length: 20
 
 taxonomy:
-  method: "dada2"
+  method: "blast"   # recommended; for another method, set it here and fill that block below
   databases:
     dada2:
       all: "references/{marker}/dada2_all.fasta"
@@ -263,9 +288,9 @@ taxonomy:
       qcov_hsp_perc: 80.0
       evalue: 1.0e-25
       max_target_seqs: 5
-      threshold_species: 98.0
+      threshold_species: 99.0
       threshold_genus: 96.0
-      threshold_family: 86.5
+      threshold_family: 90.0
     ecotag:
       tree: "references/{marker}/taxonomy/"
       fasta: "references/{marker}/ecotag_db.fasta"
@@ -311,7 +336,7 @@ logging:
 pipeline:
   steps:
     - "trim"
-    - "dada2"
+    - "swarm"            # recommended OTU path; use "dada2" instead for the ASV path
     - "taxonomy"
     - "export"
   skip: []

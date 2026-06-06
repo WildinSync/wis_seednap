@@ -102,6 +102,25 @@ def validate(ctx: click.Context, config_file: Path) -> None:
             else:
                 table.add_row("Demultiplexing", "Disabled")
 
+            # Surface the database actually used for the selected method, and flag any referenced
+            # path missing on disk (a config can be valid yet point at a file that is not there).
+            # Read-only checks; nothing is created.
+            def _exists(p: Path) -> str:
+                return "[green]found[/green]" if Path(p).exists() else "[red]MISSING[/red]"
+
+            try:
+                db_cfg = config.taxonomy.get_database_config()
+                for field in type(db_cfg).model_fields:
+                    val = getattr(db_cfg, field)
+                    if isinstance(val, Path):
+                        table.add_row(
+                            f"DB ({config.taxonomy.method}.{field})", f"{val}  [{_exists(val)}]"
+                        )
+            except Exception as exc:  # never crash the summary; load validation already passed
+                table.add_row(f"DB ({config.taxonomy.method})", f"[red]unresolved: {exc}[/red]")
+
+            table.add_row("Raw data", f"{config.paths.raw_data}  [{_exists(config.paths.raw_data)}]")
+
             console.print(table)
             console.print()
 
@@ -130,17 +149,22 @@ def validate(ctx: click.Context, config_file: Path) -> None:
     help="Marker name for the example config",
 )
 @click.option(
+    "--minimal/--full",
+    default=True,
+    help="Emit only the required fields (default) or the fully-annotated reference template",
+)
+@click.option(
     "--force",
     "-f",
     is_flag=True,
     help="Overwrite existing file",
 )
-def init(output: Path, marker: str, force: bool) -> None:
+def init(output: Path, marker: str, minimal: bool, force: bool) -> None:
     """
     Create an example configuration file.
 
-    This generates a template configuration file with sensible defaults
-    that you can customize for your analysis.
+    By default this writes a minimal config containing only the required fields (everything
+    else uses built-in defaults); pass --full for the fully-annotated reference template.
     """
     if output.exists() and not force:
         print_error(f"File already exists: {output}")
@@ -148,7 +172,7 @@ def init(output: Path, marker: str, force: bool) -> None:
         sys.exit(1)
 
     try:
-        create_example_config(output, marker=marker)
+        create_example_config(output, marker=marker, minimal=minimal)
         print_success(f"Created example configuration: {output}")
         console.print(f"\nEdit this file to customize for your analysis.")
         console.print(f"Validate it with: [bold]seednap validate {output}[/bold]")

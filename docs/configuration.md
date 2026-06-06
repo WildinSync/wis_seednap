@@ -5,8 +5,13 @@ SeeDNAP uses a single YAML file per marker to configure the entire pipeline. Exa
 ## Generating a Config
 
 ```bash
-seednap init --marker teleo --output config/markers/teleo.yaml
+seednap init --marker teleo --output config/markers/my_marker.yaml   # minimal (required fields only)
+seednap init --marker teleo --output config/markers/my_marker.yaml --full   # fully-annotated template
 ```
+
+`init` writes a minimal config (just the required fields) by default; pass `--full` for the
+fully-annotated reference template. A standalone minimal example also lives at
+`config/markers/minimal.example.yaml`.
 
 ## Validating a Config
 
@@ -14,7 +19,8 @@ seednap init --marker teleo --output config/markers/teleo.yaml
 seednap validate config/markers/teleo.yaml
 ```
 
-This checks YAML syntax, field types, required values, and reports any errors.
+This checks YAML syntax, field types, required values, reports which `taxonomy.databases.<method>`
+block is actually used, and flags any referenced database or `raw_data` path that is missing on disk.
 
 > [!NOTE]
 > All config models use strict validation (`extra="forbid"`), so a typo in any field name is

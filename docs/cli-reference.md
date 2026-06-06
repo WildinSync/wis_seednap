@@ -334,13 +334,17 @@ seednap init [OPTIONS]
 |---|---|---|
 | `-m, --marker TEXT` | `teleo` | Marker name |
 | `-o, --output PATH` | `config/markers/example.yaml` | Output path |
+| `--minimal / --full` | `--minimal` | Required-fields-only config (default) or the fully-annotated reference template |
 | `-f, --force` | | Overwrite existing file |
 
 ---
 
 ## `validate`
 
-Validate a YAML configuration file. Checks syntax, types, required fields.
+Validate a YAML configuration file. Checks syntax, field types, and required fields (including
+typos inside `taxonomy.databases.<method>`, which are rejected at load). The summary also reports
+which database block is live for the selected method and flags any referenced database or
+`raw_data` path that is missing on disk.
 
 ```
 seednap validate CONFIG
