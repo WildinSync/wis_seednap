@@ -5,6 +5,7 @@ import logging
 import os
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Dict, Optional, Tuple
 
@@ -65,8 +66,11 @@ class TaxonomyEnricher:
         # Lazy import so Biopython is not required at module load time.
         from Bio import Entrez
 
-        Entrez.email = self._email
-        Entrez.api_key = self._api_key
+        # Biopython ships no type stubs; mypy infers these module attributes as
+        # NoneType from their defaults. Assigning the configured email/key is the
+        # documented Entrez usage, so the assignment is correct.
+        Entrez.email = self._email  # type: ignore[assignment]
+        Entrez.api_key = self._api_key  # type: ignore[assignment]
 
         df = df.copy()
         for col in ("class", "phylum", "kingdom"):
@@ -202,7 +206,7 @@ class TaxonomyEnricher:
         """Return (class, phylum, kingdom) from WORMS REST API, or None."""
         url = (
             f"https://www.marinespecies.org/rest/AphiaRecordsByName/"
-            f"{urllib.request.quote(name)}?like=false&marine_only=false"
+            f"{urllib.parse.quote(name)}?like=false&marine_only=false"
         )
         try:
             time.sleep(0.5)  # be polite to WORMS

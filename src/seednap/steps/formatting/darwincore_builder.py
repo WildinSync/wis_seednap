@@ -61,6 +61,17 @@ class DarwinCoreBuilder:
         summarise_pcr_replicates: bool = False,
         skip_enrichment: bool = False,
     ) -> None:
+        """Store input/output paths and build options.
+
+        Args:
+            taxonomy_results_path: CSV of taxonomy results (long format).
+            sample_metadata_path: CSV of per-sample metadata.
+            project_metadata_path: CSV of project-level metadata.
+            output_path: Destination path for the DarwinCore CSV.
+            summarise_pcr_replicates: If True, collapse PCR replicate suffixes
+                and sum their reads before building the output.
+            skip_enrichment: If True, skip NCBI/WORMS kingdom/phylum enrichment.
+        """
         self.taxonomy_results_path = Path(taxonomy_results_path)
         self.sample_metadata_path = Path(sample_metadata_path)
         self.project_metadata_path = Path(project_metadata_path)

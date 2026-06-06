@@ -61,7 +61,8 @@ def _find_obitools_bin() -> Optional[Path]:
     if all(shutil.which(t) for t in _REQUIRED_OBITOOLS):
         # Use the directory containing the first tool as the bin dir.
         first = shutil.which(_REQUIRED_OBITOOLS[0])
-        candidates.insert(0, Path(first).parent)
+        if first is not None:
+            candidates.insert(0, Path(first).parent)
 
     candidates.extend(Path(p) for p in _OBITOOLS_CANDIDATE_BINS)
 
@@ -107,8 +108,8 @@ class EcotagRunner:
                 )
             return d
 
-        d = _find_obitools_bin()
-        if d is None:
+        discovered = _find_obitools_bin()
+        if discovered is None:
             probed = [
                 "$SEEDNAP_OBITOOLS_BIN (env var override)",
                 "PATH",
@@ -128,8 +129,8 @@ class EcotagRunner:
                 "  export SEEDNAP_OBITOOLS_BIN=/opt/anaconda3/envs/obitools/bin\n\n"
                 f"Probed locations:\n  - " + "\n  - ".join(probed)
             )
-        logger.info(f"Discovered OBITools at {d}")
-        return d
+        logger.info(f"Discovered OBITools at {discovered}")
+        return discovered
 
     def _tool(self, name: str) -> str:
         """Return the absolute path to an OBITools binary."""
@@ -250,7 +251,7 @@ class EcotagRunner:
 
         output_fasta.parent.mkdir(parents=True, exist_ok=True)
 
-        # Default tags to delete (from original script)
+        # Default OBITools annotation tags removed before tabulation.
         if tags_to_delete is None:
             tags_to_delete = [
                 "scientific_name_by_db",

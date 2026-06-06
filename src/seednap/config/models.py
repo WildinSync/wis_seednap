@@ -77,7 +77,7 @@ class DemultiplexConfig(StrictModel):
     protocol: Literal["ligation", "standard", "none"] = Field(
         default="none", description="Demultiplexing protocol type"
     )
-    metadata: Optional[Path] = Field(None, description="Path to metadata CSV file")
+    metadata: Optional[Path] = Field(default=None, description="Path to metadata CSV file")
     # When raw inputs are already demultiplexed (one FASTQ per sample),
     # set skip=true so the orchestrator records the step as skipped rather
     # than running the demultiplex protocol against pre-demultiplexed data.
@@ -125,8 +125,8 @@ class Dada2FilterConfig(StrictModel):
     trunc_q: int = Field(default=11, ge=0, description="Truncate reads at first base with quality <= trunc_q")
     max_n: int = Field(default=0, ge=0, description="Maximum number of N bases allowed")
     rm_phix: bool = Field(default=True, description="Remove PhiX reads")
-    min_len: Optional[int] = Field(None, ge=1, description="Minimum read length (optional)")
-    max_len: Optional[int] = Field(None, ge=1, description="Maximum read length (optional)")
+    min_len: Optional[int] = Field(default=None, ge=1, description="Minimum read length (optional)")
+    max_len: Optional[int] = Field(default=None, ge=1, description="Maximum read length (optional)")
 
 
 class Dada2MergeConfig(StrictModel):
@@ -425,6 +425,7 @@ class ReportConfig(StrictModel):
     @field_validator("output_dir", "sample_metadata", "project_metadata")
     @classmethod
     def expand_optional_path(cls, v: Optional[Path]) -> Optional[Path]:
+        """Expand ~ and resolve the path when set; leave None unchanged."""
         return v.expanduser().resolve() if v is not None else v
 
 

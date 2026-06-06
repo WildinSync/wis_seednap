@@ -1,7 +1,7 @@
 """Generate cutadapt tag files from metadata for demultiplexing.
 
-This module provides Python replacements for the R scripts that generate
-cutadapt adapter files from metadata CSV files.
+This module generates cutadapt adapter (tag) FASTA files from metadata CSV
+files for both standard and ligation-based demultiplexing.
 """
 
 import logging
@@ -18,8 +18,8 @@ logger = logging.getLogger(__name__)
 class TagFileGenerator:
     """Generate cutadapt tag files for demultiplexing.
 
-    This class replaces the R scripts (generate_cutadapt.R and generate_cutadapt_ligation.R)
-    that create FASTA files with tag sequences for cutadapt demultiplexing.
+    Creates FASTA files with tag sequences for cutadapt demultiplexing, for
+    both standard (per-run) and ligation-based (per-library) layouts.
     """
 
     def __init__(self, min_overlap: int = 8):
@@ -78,7 +78,7 @@ class TagFileGenerator:
         """
         Generate tag files for standard (non-ligation) demultiplexing.
 
-        This replaces generate_cutadapt.R. Creates one tag file per sequencing run/library.
+        Creates one tag file per sequencing run/library.
 
         Expected metadata columns:
         - sample_name (or specified by sample_col): Sample identifier
@@ -145,7 +145,7 @@ class TagFileGenerator:
         """
         Generate tag files for ligation-based demultiplexing.
 
-        This replaces generate_cutadapt_ligation.R. Creates one tag file per library.
+        Creates one tag file per library.
 
         Expected metadata columns:
         - eventID (or specified by sample_col): Sample/event identifier

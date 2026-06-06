@@ -272,7 +272,7 @@ class SwarmProcessor:
         r1_patterns = ["*.R1.fastq", "*_R1.fastq", "*_R1_001.fastq",
                         "*.R1.fastq.gz", "*_R1.fastq.gz", "*_R1_001.fastq.gz"]
 
-        r1_files = []
+        r1_files: List[Path] = []
         for pattern in r1_patterns:
             r1_files.extend(trimmed_dir.glob(pattern))
 

@@ -3,13 +3,13 @@
 import logging
 import subprocess
 from pathlib import Path
-from typing import Optional, Union
+from typing import List, Optional, Union
 
 logger = logging.getLogger(__name__)
 
 
 def run_subprocess(
-    cmd: list,
+    cmd: List[str],
     *,
     timeout: int = 3600,
     log_file: Optional[Union[str, Path]] = None,

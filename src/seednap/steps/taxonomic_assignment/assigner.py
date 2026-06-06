@@ -7,7 +7,7 @@ multiple methods (BLAST, DADA2, ecotag, DECIPHER) with a consistent API.
 import logging
 from enum import Enum
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from seednap.steps.taxonomic_assignment.blast_runner import BlastRunner, BlastTaxonomicAssigner
 from seednap.steps.taxonomic_assignment.decipher_runner import DecipherRunner
@@ -68,7 +68,7 @@ class TaxonomicAssigner:
         self,
         query_fasta: Union[str, Path],
         asv_count_csv: Union[str, Path],
-        **method_specific_kwargs,
+        **method_specific_kwargs: Any,
     ) -> Dict[str, Path]:
         """
         Assign taxonomy using the specified method.
@@ -124,13 +124,13 @@ class TaxonomicAssigner:
         lca_algorithm: str = "cascade",
         lca_pid: float = 90.0,
         lca_diff: float = 1.0,
-        contaminants: Optional[list] = None,
+        contaminants: Optional[List[str]] = None,
         perc_identity: float = 80.0,
         qcov_hsp_perc: float = 80.0,
         evalue: float = 1e-25,
         max_target_seqs: int = 5,
         task: str = "megablast",
-        **kwargs,
+        **kwargs: Any,
     ) -> Dict[str, Path]:
         """
         Assign taxonomy using BLAST.
@@ -219,8 +219,8 @@ class TaxonomicAssigner:
         species_db_path: Optional[Union[str, Path]] = None,
         multithread: bool = True,
         bootstrap_threshold: int = 80,
-        contaminants: Optional[list] = None,
-        **kwargs,
+        contaminants: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> Dict[str, Path]:
         """
         Assign taxonomy using DADA2 naive Bayesian classifier.
@@ -278,8 +278,8 @@ class TaxonomicAssigner:
         asv_count_csv: Path,
         taxonomy_db: Optional[Union[str, Path]] = None,
         reference_db: Optional[Union[str, Path]] = None,
-        contaminants: Optional[list] = None,
-        **kwargs,
+        contaminants: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> Dict[str, Path]:
         """
         Assign taxonomy using ecotag (OBITools).
@@ -334,8 +334,8 @@ class TaxonomicAssigner:
         trained_classifier_path: Optional[Union[str, Path]] = None,
         threshold: int = 60,
         processors: int = 8,
-        contaminants: Optional[list] = None,
-        **kwargs,
+        contaminants: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> Dict[str, Path]:
         """
         Assign taxonomy using DECIPHER.

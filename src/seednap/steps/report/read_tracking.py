@@ -20,7 +20,7 @@ measurement is never mistaken for real data loss.
 
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union, cast
 
 import pandas as pd
 
@@ -114,7 +114,8 @@ class ReadTrackingBuilder:
 
     def _dada2_counts(self) -> pd.DataFrame:
         """Read the DADA2 ``track_reads.csv`` (filtered/denoised/merged/nonchim)."""
-        track = self.dada2_dir / "track_reads.csv"
+        # Only called when dada2_dir is set (see build()); narrow for the type checker.
+        track = cast(Path, self.dada2_dir) / "track_reads.csv"
         if not track.exists():
             logger.warning(
                 f"[WARN] read_tracking: expected=DADA2 track_reads.csv, "
@@ -139,7 +140,8 @@ class ReadTrackingBuilder:
 
     def _swarm_counts(self) -> Dict[str, int]:
         """Per-sample 'clustered' reads = column sums of ``otu_table.csv``."""
-        table = self.swarm_otu_table
+        # Only called when swarm_otu_table is set (see build()); narrow for the checker.
+        table = cast(Path, self.swarm_otu_table)
         if not table.exists():
             logger.warning(
                 f"[WARN] read_tracking: expected=SWARM otu_table.csv, "
@@ -280,4 +282,4 @@ class ReadTrackingBuilder:
         display["pct_retained"] = display["pct_retained"].apply(
             lambda v: "NA" if pd.isna(v) else f"{v:.1f}%"
         )
-        return f"Read tracking -- {self.marker}\n" + display.to_string(index=False) + "\n"
+        return f"Read tracking -- {self.marker}\n" + str(display.to_string(index=False)) + "\n"

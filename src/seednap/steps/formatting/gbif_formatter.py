@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import Optional, Union
+from typing import List, Optional, Union, cast
 
 import pandas as pd
 
@@ -18,8 +18,8 @@ class GBIFFormatter:
     for biodiversity databases.
     """
 
-    def __init__(self):
-        """Initialize GBIF formatter."""
+    def __init__(self) -> None:
+        """Initialize GBIF formatter with the standard taxonomic rank list."""
         self.taxonomic_ranks = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
 
     def _add_rank(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -86,20 +86,20 @@ class GBIFFormatter:
         """
         df = df.copy()
 
-        def get_taxon(row: pd.Series) -> Union[str, None]:
+        def get_taxon(row: pd.Series) -> Optional[str]:
             rank = row.get("rank")
 
             if rank == "species":
-                return row.get("species")
+                return cast(Optional[str], row.get("species"))
             elif rank == "genus":
-                return row.get("genus")
+                return cast(Optional[str], row.get("genus"))
             elif rank == "family":
-                return row.get("family")
+                return cast(Optional[str], row.get("family"))
             elif rank == "higher":
                 # Return first non-NA value from higher ranks
                 for col in ["order", "class", "phylum", "kingdom"]:
                     if pd.notna(row.get(col)):
-                        return row.get(col)
+                        return cast(Optional[str], row.get(col))
             return None
 
         df["taxon"] = df.apply(get_taxon, axis=1)
@@ -107,7 +107,7 @@ class GBIFFormatter:
         return df
 
     def _transform_to_long_format(
-        self, df: pd.DataFrame, taxonomic_cols: list
+        self, df: pd.DataFrame, taxonomic_cols: List[str]
     ) -> pd.DataFrame:
         """
         Transform wide format (samples as columns) to long format (samples as rows).

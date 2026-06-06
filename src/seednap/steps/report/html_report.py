@@ -27,7 +27,7 @@ import html as _html
 import io
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import pandas as pd
 from jinja2 import Template
@@ -215,7 +215,8 @@ _TEMPLATE = Template(
 )
 
 
-def _esc(v) -> str:
+def _esc(v: object) -> str:
+    """HTML-escape any value (stringified first) for safe inline embedding."""
     return _html.escape(str(v))
 
 
@@ -237,6 +238,23 @@ class HTMLReportBuilder:
         log_file: Optional[Union[str, Path]] = None,
         max_log_lines: int = 1500,
     ) -> None:
+        """Collect the inputs for one run report.
+
+        Args:
+            marker: Marker / run name shown in the title and abstract.
+            tracking_df: Per-sample read-tracking table (one row per sample).
+            warnings: Read-tracking warning strings to embed; defaults to none.
+            summary: Run-summary facts (retention thresholds, provenance, footer).
+            steps: Pipeline step column names in order; inferred from the
+                tracking table when omitted.
+            state: Pipeline state JSON (used for run date and step timing).
+            taxonomy_csv: Optional taxonomy table CSV (enables taxonomy section).
+            otu_table_full: Optional full OTU table CSV (enables feature-QC).
+            field_metadata_csv: Optional field metadata CSV (sampling location/dates).
+            project_metadata_csv: Optional project metadata CSV (sequencing/DB).
+            log_file: Optional run-log file to embed as a colorized transcript.
+            max_log_lines: Threshold above which the run log is truncated.
+        """
         self.marker = marker
         self.df = tracking_df if tracking_df is not None else pd.DataFrame()
         self.warnings = warnings or []
@@ -254,7 +272,7 @@ class HTMLReportBuilder:
             self.steps = [c for c in _DEFAULT_STEPS if c in self.df.columns] or _DEFAULT_STEPS
         self.is_dada2 = "nonchim" in self.steps
         self.final_step = self.steps[-1] if self.steps else "raw"
-        self.warn_pct = float(self.summary.get("warn_below_retention_pct", 30.0))
+        self.warn_pct = float(cast(float, self.summary.get("warn_below_retention_pct", 30.0)))
         self._tax_cache: Optional[pd.DataFrame] = None
         self._fig_n = 0
         self._tbl_n = 0
@@ -415,8 +433,9 @@ class HTMLReportBuilder:
         return f'<div class="scroll">{tbl}</div>' if scroll else tbl
 
     @staticmethod
-    def _fmt(v) -> str:
-        return "n/a" if v is None or (isinstance(v, float) and pd.isna(v)) else f"{int(v):,}"
+    def _fmt(v: object) -> str:
+        """Format a numeric value as a thousands-separated integer, ``n/a`` if missing."""
+        return "n/a" if v is None or (isinstance(v, float) and pd.isna(v)) else f"{int(cast(float, v)):,}"
 
     # ------------------------------------------------------------------ #
     # Figures (within scoped rc_context; called once)
@@ -432,7 +451,7 @@ class HTMLReportBuilder:
             return {}
         figs: Dict[str, str] = {}
 
-        def emit(fig) -> str:
+        def emit(fig: Any) -> str:
             buf = io.BytesIO()
             fig.savefig(buf, format="png")
             plt.close(fig)
@@ -548,12 +567,12 @@ class HTMLReportBuilder:
     # ------------------------------------------------------------------ #
     def _section_dataset(self) -> str:
         """Dataset identity + provenance, from config facts + field/project metadata."""
-        prov = self.summary.get("provenance") or {}
+        prov: Dict[str, object] = cast(Dict[str, object], self.summary.get("provenance") or {})
         field = self._read_meta(self.field_metadata_csv, "field")
         proj = self._read_meta(self.project_metadata_csv, "project")
         rows: List[Tuple[str, str]] = []
 
-        def add(label, value):
+        def add(label: str, value: object) -> None:
             if value not in (None, "", "NA", "nan"):
                 rows.append((label, str(value)))
 
@@ -625,7 +644,8 @@ class HTMLReportBuilder:
         v = str(proj[col].iloc[0]).strip()
         return v or None
 
-    def _section_read_tracking(self, figs) -> str:
+    def _section_read_tracking(self, figs: Dict[str, str]) -> str:
+        """Build the Read tracking section: read funnel, per-sample retention, warnings."""
         n = len(self.df)
         parts = []
         parts.append(f"<p>Reads were tracked per sample across the {len(self.steps)} stages of the "
@@ -660,7 +680,7 @@ class HTMLReportBuilder:
                                  "an asterisk fall below the retention threshold.",
                                  ["sample", *self.steps, "% retained"], rows, scroll=True))
         if self.warnings:
-            step_loss = float(self.summary.get("warn_step_loss_pct", 70.0))
+            step_loss = float(cast(float, self.summary.get("warn_step_loss_pct", 70.0)))
             nw = len(self.warnings)
             parts.append(
                 f"<p>The run raised {nw} read-tracking "
@@ -680,7 +700,7 @@ class HTMLReportBuilder:
                          'sample retained reads above the configured thresholds.</p>')
         return "\n".join(p for p in parts if p)
 
-    def _section_per_sample(self, figs) -> str:
+    def _section_per_sample(self, figs: Dict[str, str]) -> str:
         """Per-sample yield: reads retained, feature richness, and % retained."""
         feat = "ASVs" if self.is_dada2 else "OTUs"
         rich = self._richness()
@@ -716,7 +736,8 @@ class HTMLReportBuilder:
             rows, scroll=True))
         return "\n".join(p for p in parts if p)
 
-    def _section_taxonomy(self, figs) -> Optional[str]:
+    def _section_taxonomy(self, figs: Dict[str, str]) -> Optional[str]:
+        """Build the Taxonomy section, or ``None`` if no taxonomy table is available."""
         tax = self._tax()
         if tax is None:
             return None
@@ -772,7 +793,8 @@ class HTMLReportBuilder:
                                          [[_esc(str(k).replace("_", " ")), f"{int(v):,}"] for k, v in gc.items()]))
         return "\n".join(p for p in parts if p)
 
-    def _section_feature_qc(self, figs) -> Optional[str]:
+    def _section_feature_qc(self, figs: Dict[str, str]) -> Optional[str]:
+        """Build the OTU/feature-QC section, or ``None`` if no full OTU table is available."""
         otu = self._otu_full()
         if otu is None:
             return None
@@ -897,7 +919,7 @@ class HTMLReportBuilder:
         return items, True, n
 
     @staticmethod
-    def _themed_console():
+    def _themed_console() -> Any:
         """A rich recording console with the bright dark-terminal log palette
         (info blue, warning amber, error red). Raises ImportError if rich is
         absent so callers can fall back to plain text."""
@@ -918,8 +940,10 @@ class HTMLReportBuilder:
                        force_terminal=True, highlight=False, theme=theme)
 
     @staticmethod
-    def _export(con) -> str:
-        return con.export_html(inline_styles=True, code_format='<pre class="runlog">{code}</pre>')
+    def _export(con: Any) -> str:
+        """Export a recording rich console to a self-contained, inline-styled HTML ``<pre>``."""
+        return cast(str, con.export_html(inline_styles=True,
+                                         code_format='<pre class="runlog">{code}</pre>'))
 
     def _render_log_html(self, items: List[Tuple[int, str]]) -> Optional[str]:
         """Render selected log lines to a self-contained, level-colored ``<pre>``
@@ -1097,7 +1121,7 @@ class HTMLReportBuilder:
             "as a taxon; median percent identity is computed over assigned features only.</p>",
             f"<p>Retention thresholds: a sample is flagged below "
             f"{self.warn_pct:.0f}% overall retention; a step is flagged when it drops more than "
-            f"{float(s.get('warn_step_loss_pct', 70.0)):.0f}% of a sample's reads.</p>",
+            f"{float(cast(float, s.get('warn_step_loss_pct', 70.0))):.0f}% of a sample's reads.</p>",
         ]
         if s.get("footer"):
             parts.append(f"<p>{_esc(s['footer'])}</p>")
@@ -1108,6 +1132,11 @@ class HTMLReportBuilder:
     # Render
     # ------------------------------------------------------------------ #
     def render(self) -> str:
+        """Render the full report to a single self-contained HTML string.
+
+        Builds every section (skipping optional ones whose data is absent) and
+        renders them into the tabbed page template.
+        """
         self._fig_n = 0
         self._tbl_n = 0
         figs = self._make_figures()
@@ -1147,6 +1176,13 @@ class HTMLReportBuilder:
                 f'{summary_table}')
 
     def write(self, output_path: Union[str, Path]) -> Path:
+        """Render the report and write it to ``output_path``.
+
+        Creates parent directories as needed.
+
+        Returns:
+            The path the report was written to.
+        """
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(self.render(), encoding="utf-8")

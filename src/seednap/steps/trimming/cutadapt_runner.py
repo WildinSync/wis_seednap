@@ -172,7 +172,7 @@ class CutadaptRunner:
             raise FileNotFoundError(f"R1 input file not found: {r1_input}")
 
         paired_end = r2_input is not None
-        if paired_end:
+        if r2_input is not None:
             r2_input = Path(r2_input)
             if not r2_input.exists():
                 raise FileNotFoundError(f"R2 input file not found: {r2_input}")
@@ -220,7 +220,7 @@ class CutadaptRunner:
         r1_output.parent.mkdir(parents=True, exist_ok=True)
         cmd.extend(["-o", str(r1_output)])
 
-        if paired_end:
+        if paired_end and r2_output is not None:
             r2_output = Path(r2_output)
             r2_output.parent.mkdir(parents=True, exist_ok=True)
             cmd.extend(["-p", str(r2_output)])

@@ -114,6 +114,7 @@ class ControlClass(BaseModel):
 
     @property
     def is_control(self) -> bool:
+        """True for any non-``sample`` category (negative/positive control, PCR standard)."""
         return self.samp_category != "sample"
 
     @property
@@ -300,6 +301,7 @@ class SampleManifestRow(BaseModel):
     @field_validator("samp_category")
     @classmethod
     def _validate_samp_category(cls, v: str) -> str:
+        """Accept a FAIRe samp_category from the controlled vocabulary or an ``other:`` value."""
         if v in SAMP_CATEGORIES or _is_other(v):
             return v
         raise ValueError(
@@ -309,6 +311,7 @@ class SampleManifestRow(BaseModel):
     @field_validator("neg_cont_type")
     @classmethod
     def _validate_neg_cont_type(cls, v: Optional[str]) -> Optional[str]:
+        """Accept a MIxS neg_cont_type from the controlled vocabulary, an ``other:`` value, or None."""
         if v is None or v in NEG_CONT_TYPES or _is_other(v):
             return v
         raise ValueError(
@@ -350,6 +353,7 @@ class SampleManifestRow(BaseModel):
 
     @property
     def is_control(self) -> bool:
+        """True for any non-``sample`` category (negative/positive control, PCR standard)."""
         return self.samp_category != "sample"
 
 
@@ -364,6 +368,7 @@ class SampleManifest:
     """A validated collection of :class:`SampleManifestRow`, plus provenance + accessors."""
 
     def __init__(self, rows: List[SampleManifestRow], source: Optional[Path] = None) -> None:
+        """Hold validated rows and the optional source path they came from."""
         self.rows = rows
         self.source = source
 
@@ -372,16 +377,19 @@ class SampleManifest:
 
     # -- accessors --------------------------------------------------------- #
     def event_ids(self) -> List[str]:
+        """Return the eventID of every row, in order."""
         return [r.eventID for r in self.rows]
 
     def controls(self) -> List[SampleManifestRow]:
+        """Return the control rows (any non-``sample`` samp_category)."""
         return [r for r in self.rows if r.is_control]
 
     def biological_samples(self) -> List[SampleManifestRow]:
+        """Return the biological (non-control) sample rows."""
         return [r for r in self.rows if not r.is_control]
 
     def seq_run_ids(self) -> List[str]:
-        # order-preserving distinct
+        """Return the distinct seq_run_id values in first-seen order."""
         seen: Dict[str, None] = {}
         for r in self.rows:
             seen.setdefault(r.seq_run_id, None)
@@ -389,10 +397,12 @@ class SampleManifest:
 
     # -- serialisation ----------------------------------------------------- #
     def to_dataframe(self) -> pd.DataFrame:
+        """Serialise the manifest to a DataFrame in canonical column order."""
         df = pd.DataFrame([r.model_dump() for r in self.rows], columns=list(MANIFEST_COLUMNS))
         return df
 
     def to_csv(self, path: Path) -> Path:
+        """Write the manifest to ``path`` (creating parents) and return the path."""
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         self.to_dataframe().to_csv(path, index=False)

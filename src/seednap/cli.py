@@ -2,7 +2,7 @@
 
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import click
 from rich.console import Console
@@ -802,6 +802,7 @@ def dada2(
                 output_dir=output_dir,
                 rdp_db_path=rdp_db,
                 species_db_path=species_db,
+                query_fasta=outputs["query_fasta"],
                 log_file=output_dir / "02_dada2" / marker / "dada2_taxonomy.log",
             )
 
@@ -1333,7 +1334,7 @@ def report(
     dada2_dir = out / "02_dada2" / marker
     swarm_otu = out / "02_swarm" / marker / "otu_table.csv"
 
-    kwargs = {
+    kwargs: Dict[str, Any] = {
         "marker": marker, "logs_dir": out / "logs",
         "warn_below_retention_pct": warn_retention, "warn_step_loss_pct": warn_step_loss,
     }

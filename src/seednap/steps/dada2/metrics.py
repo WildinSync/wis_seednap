@@ -8,7 +8,7 @@ import json
 import logging
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import IO, Callable, Dict, List, Optional, Union
 
 import pandas as pd
 
@@ -132,6 +132,7 @@ class MetricsCollector:
             return 0
 
         try:
+            opener: Callable[..., IO[str]]
             if fastq_path.suffix == ".gz":
                 opener = gzip.open
                 mode = "rt"
@@ -331,7 +332,7 @@ class MetricsCollector:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Combine all metrics into DataFrame
-        data = []
+        data: List[Dict[str, object]] = []
         data.append({"metric": "marker", "value": self.marker, "category": "general"})
 
         # Read metrics
@@ -339,8 +340,8 @@ class MetricsCollector:
             data.append({"metric": key, "value": value, "category": "reads"})
 
         # Retention rates
-        for key, value in self.read_metrics.get_retention_rates().items():
-            data.append({"metric": f"{key}_retention_pct", "value": f"{value:.2f}", "category": "retention"})
+        for key, rate in self.read_metrics.get_retention_rates().items():
+            data.append({"metric": f"{key}_retention_pct", "value": f"{rate:.2f}", "category": "retention"})
 
         # ASV metrics
         for key, value in self.asv_metrics.to_dict().items():

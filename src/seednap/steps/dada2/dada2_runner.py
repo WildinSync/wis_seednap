@@ -89,13 +89,17 @@ class Dada2Runner(RScriptRunner):
             pool: Pool samples for denoising (default: False)
             min_len: Minimum read length (None = no filter)
             max_len: Maximum read length (None = no filter)
+            library_map: Optional path to a sample-to-library map used for
+                per-library error learning (None = no map)
             script_path: Path to R script (default: scripts/dada2_process.R)
             log_file: Path to log file
 
         Returns:
             Dictionary with paths to output files:
-            - seqtab: Sequence table CSV
-            - seqtab_clean: Chimera-free sequence table
+            - seqtab: Sequence table RDS
+            - seqtab_clean: Chimera-free sequence table CSV
+            - seqtab_clean_rds: Chimera-free sequence table RDS
+            - seqtab_clean_t: Transposed chimera-free sequence table CSV
             - query_fasta: Query FASTA for taxonomic assignment
             - corresp_seq: ASV correspondence CSV
             - metrics_dir: Directory with QC/metrics plots
@@ -140,7 +144,7 @@ class Dada2Runner(RScriptRunner):
             "seqtab_clean_t": marker_dir / "seqtab_clean_t.csv",
             "query_fasta": marker_dir / "query.fasta",
             "corresp_seq": marker_dir / "corresp_seq.csv",
-            "metrics_dir": marker_dir / "QC",  # Will rename to metrics
+            "metrics_dir": marker_dir / "QC",  # DADA2 QC plot directory
         }
 
     def check_dada2_packages(self) -> Dict[str, str]:

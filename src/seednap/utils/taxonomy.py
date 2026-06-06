@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Sequence, Union
+from typing import List, Optional, Sequence, Tuple, Union
 
 import pandas as pd
 
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 # Match BLAST's TAXONOMIC_RANKS to keep schemas aligned across methods.
-DEFAULT_RANK_COLUMNS: tuple = (
+DEFAULT_RANK_COLUMNS: Tuple[str, ...] = (
     "kingdom", "phylum", "class", "order", "family", "genus", "species",
 )
 UNASSIGNED_LABEL = "Unassigned"

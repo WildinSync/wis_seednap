@@ -9,7 +9,7 @@ This module orchestrates the complete seednap pipeline:
 """
 
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union
 
 from seednap.config.loader import load_config
 from seednap.config.models import PipelineConfig
@@ -51,6 +51,7 @@ class PipelineOrchestrator:
             ValueError: If resume=True but no state file exists
         """
         # Load configuration
+        self.config_path: Optional[Path]
         if isinstance(config, (str, Path)):
             self.config_path = Path(config)
             self.config = load_config(self.config_path)
@@ -268,12 +269,14 @@ class PipelineOrchestrator:
         return {"demux_dir": output_dir, "trimmed_dir": outputs}
 
     def _run_standard_demux(self) -> Dict[str, Path]:
-        """Run standard demultiplexing.
+        """Run standard (tag-based) demultiplexing.
 
-        Note: this protocol is not yet implemented end-to-end. The tag-file
-        generation works but the actual cutadapt demultiplex call is missing.
-        Use protocol='ligation' or pre-demultiplex your data and set
+        Note: this protocol is not yet implemented end-to-end. Use
+        protocol='ligation' or pre-demultiplex your data and set
         demultiplex.skip=true.
+
+        Raises:
+            NotImplementedError: Always; the standard protocol is not wired in.
         """
         raise NotImplementedError(
             "Standard demultiplex protocol is not yet wired end-to-end. "
@@ -284,14 +287,13 @@ class PipelineOrchestrator:
         # TODO: Implement standard demultiplexing workflow
         # This would use CutadaptRunner.demultiplex_by_tags()
 
-        return {"tag_files": tag_files, "tag_dir": tag_dir}
-
-    def run_trim(self) -> Dict[str, Path]:
+    def run_trim(self) -> Dict[str, Any]:
         """
         Run primer trimming step.
 
         Returns:
-            Dictionary with output paths
+            Dictionary with the trimmed-reads directory and the per-sample
+            trim outputs (under the ``"samples"`` key).
         """
         step_name = "trim"
 
@@ -319,14 +321,14 @@ class PipelineOrchestrator:
             samples = self._get_sample_list()
             logger.info(f"Found {len(samples)} samples to trim")
 
-            trimmed_outputs = {}
+            trimmed_outputs: Dict[str, tuple] = {}
             for sample_name in samples:
                 logger.info(f"Trimming sample: {sample_name}")
 
                 r1_input = self._find_read_file(sample_name, "R1")
                 r2_input = self._find_read_file(sample_name, "R2")
 
-                outputs = trimmer.trim_sample(
+                sample_outputs = trimmer.trim_sample(
                     r1_input=r1_input,
                     r2_input=r2_input,
                     output_dir=output_dir,
@@ -337,9 +339,12 @@ class PipelineOrchestrator:
                     discard_untrimmed=self.config.trimming.discard_untrimmed,
                 )
 
-                trimmed_outputs[sample_name] = outputs
+                trimmed_outputs[sample_name] = sample_outputs
 
-            outputs = {"trimmed_dir": output_dir, "samples": trimmed_outputs}
+            outputs: Dict[str, Any] = {
+                "trimmed_dir": output_dir,
+                "samples": trimmed_outputs,
+            }
 
             self.state.complete_step(step_name, outputs)
             self._save_state()
@@ -541,7 +546,7 @@ class PipelineOrchestrator:
             marker = self.config.marker.name
             out = self.config.paths.output
             report_dir = self._report_dir()
-            kwargs = {
+            kwargs: Dict[str, Any] = {
                 "marker": marker,
                 "logs_dir": out / "logs",
                 "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
@@ -644,7 +649,7 @@ class PipelineOrchestrator:
             marker = self.config.marker.name
             out = self.config.paths.output
             steps = set(self.config.pipeline.steps)
-            kwargs = {
+            kwargs: Dict[str, Any] = {
                 "marker": marker, "logs_dir": out / "logs",
                 "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
                 "warn_step_loss_pct": self.config.report.warn_step_loss_pct,
@@ -1073,7 +1078,7 @@ class PipelineOrchestrator:
             "*_R1*.fastq.gz", "*_R1*.fastq",
             "*.R1.fastq.gz", "*.R1.fastq",
         ]
-        r1_files = []
+        r1_files: List[Path] = []
         for pattern in r1_patterns:
             r1_files.extend(raw_dir.glob(pattern))
 

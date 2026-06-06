@@ -1,6 +1,6 @@
 """Presence-based control decontamination of an abundance table.
 
-The lab's validated standard (``docs/report/next-steps-plan/06-control-cleaning-STANDARD``):
+The lab's validated control-cleaning standard:
 
 * an **extraction blank** (``Blank-ext`` / neg_cont_type "extraction negative") cleans the
   biological samples that share its ``extraction_ID``;

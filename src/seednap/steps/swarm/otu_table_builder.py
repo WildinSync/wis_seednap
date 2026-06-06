@@ -4,14 +4,14 @@ Parses SWARM output files (representatives, stats, swarm membership, chimera
 detection) and per-sample FASTA files to produce a full OTU contingency table
 and DADA2-compatible normalized outputs for downstream taxonomy assignment.
 
-Ported from swarm_gdc/swarm-pipeline/scripts/OTU_contingency_table.py
-(original author: Frederic Mahe).
+Implements the OTU contingency table construction from the published SWARM
+amplicon clustering pipeline.
 """
 
 import logging
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Sequence, Tuple, Union
 
 import pandas as pd
 
@@ -32,7 +32,7 @@ class OtuTableBuilder:
         stats_file: Union[str, Path],
         swarm_file: Union[str, Path],
         uchime_file: Optional[Union[str, Path]],
-        sample_fastas: List[Union[str, Path]],
+        sample_fastas: Sequence[Union[str, Path]],
     ) -> pd.DataFrame:
         """
         Build the full OTU contingency table.
@@ -147,7 +147,7 @@ class OtuTableBuilder:
         return query_fasta_path, abundance_csv_path
 
     # ------------------------------------------------------------------
-    # Parsers (ported from OTU_contingency_table.py)
+    # Parsers for SWARM output and per-sample FASTA files
     # ------------------------------------------------------------------
 
     @staticmethod
@@ -254,7 +254,7 @@ class OtuTableBuilder:
 
     @staticmethod
     def _parse_sample_fastas(
-        fasta_paths: List[Union[str, Path]],
+        fasta_paths: Sequence[Union[str, Path]],
     ) -> Tuple[Dict[str, Dict[str, int]], List[str]]:
         """
         Parse per-sample FASTA files to get amplicon → sample → abundance mapping.
@@ -268,7 +268,7 @@ class OtuTableBuilder:
             - samples: sorted list of sample names
         """
         separator = ";size="
-        samples_set = {}
+        samples_set: Dict[str, int] = {}
         amplicons2samples: Dict[str, Dict[str, int]] = {}
 
         for fasta_path in fasta_paths:

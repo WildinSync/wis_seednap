@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class StandardTrimmer:
     """Two-pass primer trimming workflow for standard (non-ligation) libraries.
 
-    This workflow replicates the trimming approach from main.sh:
+    The two-pass approach:
     1. Pass 1: Trim forward/reverse primers from 5' ends (-g/-G)
     2. Pass 2: Trim reverse complement primers from 3' ends (-a/-A)
     """
@@ -141,7 +141,7 @@ class StandardTrimmer:
         r1_temp.unlink()
         r2_temp.unlink()
 
-        if not keep_untrimmed and untrimmed_r1:
+        if not keep_untrimmed and untrimmed_r1 and untrimmed_r2:
             if untrimmed_r1.exists():
                 untrimmed_r1.unlink()
             if untrimmed_r2.exists():
@@ -224,7 +224,7 @@ class StandardTrimmer:
 class LigationTrimmer:
     """Complete workflow for ligation-based library demultiplexing and trimming.
 
-    This workflow replicates demultiplex_ligation.sh:
+    The ligation demultiplexing workflow:
     1. Generate tag files from metadata
     2. Demultiplex by tags
     3. Detect primers (expected orientation)
@@ -300,16 +300,16 @@ class LigationTrimmer:
         output_base_dir = Path(output_base_dir)
 
         # Find library FASTQ files
-        r1_file = list(raw_reads_dir.glob(f"{library_name}*_R1.fastq.gz"))
-        r2_file = list(raw_reads_dir.glob(f"{library_name}*_R2.fastq.gz"))
+        r1_matches = list(raw_reads_dir.glob(f"{library_name}*_R1.fastq.gz"))
+        r2_matches = list(raw_reads_dir.glob(f"{library_name}*_R2.fastq.gz"))
 
-        if not r1_file or not r2_file:
+        if not r1_matches or not r2_matches:
             raise FileNotFoundError(
                 f"Could not find R1/R2 files for library {library_name} in {raw_reads_dir}"
             )
 
-        r1_file = r1_file[0]
-        r2_file = r2_file[0]
+        r1_file = r1_matches[0]
+        r2_file = r2_matches[0]
 
         # Step 1: Generate tag files
         logger.info("Step 1: Generating tag files from metadata")

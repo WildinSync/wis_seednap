@@ -6,8 +6,6 @@ This module provides:
 - BlastPhyloFilter: filters hits by percent identity thresholds
 - BlastLCAResolver: resolves ambiguous hits using Lowest Common Ancestor
 - BlastTaxonomicAssigner: end-to-end BLAST taxonomy pipeline
-
-Author: Théophile Sanchez (original), refactored for seednap v0.1.0
 """
 
 import logging
@@ -592,8 +590,8 @@ class CollapsedTaxonomyLCAResolver:
     windowed hits share a single non-empty value; at the first rank where they disagree, null
     that rank and every finer rank.
 
-    This is the algorithm from OceanOmics-amplicon-nf's ``LCA`` process (eDNAFlow, Mahsa
-    Mousavi-Derazmahalleh), adapted to SeeDNAP: the lineage comes from the reference FASTA
+    This is the algorithm from OceanOmics-amplicon-nf's ``LCA`` process (eDNAFlow lineage),
+    adapted to SeeDNAP: the lineage comes from the reference FASTA
     headers (SeeDNAP DBs are CRABS-formatted), so it needs **no NCBI taxids and no taxdump**
     and runs fully offline. Upstream defects are fixed: the identity-difference comparison is
     numeric (upstream compares formatted strings), taxa absent from the reference raise at the
@@ -604,6 +602,19 @@ class CollapsedTaxonomyLCAResolver:
     TAXONOMIC_RANKS = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
 
     def __init__(self, lca_pid: float = 90.0, lca_diff: float = 1.0):
+        """
+        Initialize the collapsed-taxonomy LCA resolver.
+
+        Args:
+            lca_pid: Hard percent-identity floor; hits below this are discarded
+                before collapsing (the eDNAFlow ``lca_pid``). Default 90.0.
+            lca_diff: Width of the top-identity window kept for the LCA, in
+                percent-identity points below the best in-floor hit (the eDNAFlow
+                ``lca_diff``). Default 1.0.
+
+        Raises:
+            ValueError: If lca_pid or lca_diff is outside [0, 100].
+        """
         if not (0 <= lca_pid <= 100):
             raise ValueError(f"lca_pid must be in [0, 100]; got {lca_pid}")
         if not (0 <= lca_diff <= 100):
@@ -700,7 +711,14 @@ class BlastTaxonomicAssigner:
             threshold_order: Minimum percent identity for order-level assignment
             threshold_class: Minimum percent identity for class-level assignment
             top_bitscore_pct: LCA bitscore band as percent of best hit
-                (MEGAN-LR style; default 10.0)
+                (MEGAN-LR style; default 10.0). Used by the 'cascade' resolver.
+            lca_pident_delta: pident floor for the 'cascade' resolver, in
+                percent-identity points below the best in-band hit (default 1.0).
+            lca_algorithm: Which LCA resolver to use: 'cascade' (default) or
+                'collapsed_taxonomy'. See `_make_lca_resolver`.
+            lca_pid: Identity floor for the 'collapsed_taxonomy' resolver (default 90.0).
+            lca_diff: Top-identity window width for the 'collapsed_taxonomy' resolver
+                (default 1.0).
             contaminants: List of species names (CRABS underscore format) to flag as
                 candidate contaminants. Rows are NEVER deleted; only flagged.
         """

@@ -87,6 +87,8 @@ class Dada2Processor:
             pool: Pool samples for denoising (default: False)
             min_len: Minimum read length (None = no filter)
             max_len: Maximum read length (None = no filter)
+            library_map: Optional path to a sample-to-library map used for
+                per-library error learning (None = no map)
             collect_metrics: Collect and export metrics (default: True)
 
         Returns:

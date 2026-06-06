@@ -45,10 +45,16 @@ class StepState(BaseModel):
 
     name: str = Field(..., description="Step name (e.g., 'trim', 'dada2')")
     status: StepStatus = Field(default=StepStatus.PENDING, description="Step status")
-    started_at: Optional[datetime] = Field(None, description="When step started")
-    completed_at: Optional[datetime] = Field(None, description="When step completed")
-    duration_seconds: Optional[float] = Field(None, description="Step duration in seconds")
-    error_message: Optional[str] = Field(None, description="Error message if failed")
+    started_at: Optional[datetime] = Field(default=None, description="When step started")
+    completed_at: Optional[datetime] = Field(
+        default=None, description="When step completed"
+    )
+    duration_seconds: Optional[float] = Field(
+        default=None, description="Step duration in seconds"
+    )
+    error_message: Optional[str] = Field(
+        default=None, description="Error message if failed"
+    )
     outputs: Dict[str, Any] = Field(
         default_factory=dict, description="Step output files/data"
     )
@@ -122,17 +128,21 @@ class PipelineState(BaseModel):
     """Complete pipeline execution state."""
 
     marker: str = Field(..., description="Marker name")
-    config_path: Optional[Path] = Field(None, description="Path to config file used")
+    config_path: Optional[Path] = Field(
+        default=None, description="Path to config file used"
+    )
     started_at: datetime = Field(
         default_factory=datetime.now, description="When pipeline started"
     )
     completed_at: Optional[datetime] = Field(
-        None, description="When pipeline completed"
+        default=None, description="When pipeline completed"
     )
     steps: Dict[str, StepState] = Field(
         default_factory=dict, description="State of each pipeline step"
     )
-    current_step: Optional[str] = Field(None, description="Currently executing step")
+    current_step: Optional[str] = Field(
+        default=None, description="Currently executing step"
+    )
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Pipeline metadata"
     )
