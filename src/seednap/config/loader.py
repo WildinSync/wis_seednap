@@ -52,7 +52,11 @@ def merge_configs(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, A
     Recursively merge two configuration dictionaries.
 
     The override dictionary takes precedence. Nested dictionaries are merged
-    recursively, lists and other values are replaced entirely.
+    recursively; lists and scalars are REPLACED wholesale, not appended. This is
+    why a marker YAML need only specify what differs from the model defaults (any
+    field with a default may be omitted), but also means that to change one entry
+    of a list (e.g. ``pipeline.steps`` or ``taxonomy.contaminants``) you must
+    restate the whole list, not just the changed element.
 
     Args:
         base: Base configuration dictionary

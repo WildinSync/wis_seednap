@@ -1,0 +1,25 @@
+# Minimal SeeDNAP config: only the REQUIRED fields. Everything not listed here uses a built-in
+# default (config is merged over defaults, so any defaulted key may be omitted). See
+# docs/configuration.md for the full reference and config/markers/teleo.yaml for a populated example.
+#
+# REQUIRED: marker.name, marker.primers.forward/reverse, taxonomy.method, and the matching
+# taxonomy.databases.<method> block with that method's required path(s).
+
+marker:
+  name: mymarker
+  primers:
+    forward: ACACCGCCCGTCACTCT      # 5'->3'
+    reverse: CTTCCGGTACACTTACCATG    # 5'->3'
+
+paths:
+  raw_data: /path/to/raw/fastq       # directory of paired-end FASTQ (the only path you must set)
+
+taxonomy:
+  method: blast                      # blast | dada2 | ecotag | decipher (fill only this method's block below)
+  databases:
+    blast:
+      fasta: /path/to/blast_db.fasta
+
+# Pick the clustering path with `pipeline.steps` (defaults to the DADA2 ASV path):
+#   pipeline:
+#     steps: ["trim", "swarm", "taxonomy"]   # OTU path  (or "dada2" for the ASV path)

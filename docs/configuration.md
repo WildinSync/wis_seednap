@@ -16,7 +16,46 @@ seednap validate config/markers/teleo.yaml
 
 This checks YAML syntax, field types, required values, and reports any errors.
 
-**Note:** All config models use strict validation (`extra="forbid"`). Typos in field names will be rejected at load time with a clear error message.
+> [!NOTE]
+> All config models use strict validation (`extra="forbid"`), so a typo in any field name is
+> rejected at load time with a clear error, including inside the `taxonomy.databases.<method>`
+> blocks. You learn about a misspelled key from `seednap validate`, not hours into a run.
+
+## Config at a glance
+
+```
+PipelineConfig
+  version       free-form string (default "0.1.0")
+  marker        (REQUIRED)  name + primers.{forward, reverse}
+  paths         set raw_data; output/logs/references default
+  demultiplex   off by default
+  trimming      Cutadapt 2-pass (defaults)
+  dada2         [ASV path only]   filter / merge / chimera / per_library
+  swarm         [OTU path only]   merge / clustering / chimera
+  taxonomy      (REQUIRED)  method + ONLY the matching databases.<method> block
+  export        GBIF / DarwinCore (defaults)
+  metrics       QC metrics (defaults)
+  report        read-tracking + HTML report (on by default)
+  cleaning      control decontamination (off by default)
+  logging       (defaults)
+  pipeline      steps: pick the dada2 OR the swarm path
+```
+
+The **dada2** and **swarm** sections are the two mutually-exclusive clustering paths; you fill
+in only the one named in `pipeline.steps`. Likewise under `taxonomy` you fill only
+`databases.<method>` for your chosen `method`; the other method blocks are ignored.
+
+**Required keys** are exactly: `marker.name`, `marker.primers.forward`/`reverse`,
+`taxonomy.method`, and the required path(s) in the selected database block (`blast.fasta`;
+`dada2.all`; `ecotag.tree` + `fasta`; `decipher.trained`). A minimal config setting only these
+loads and runs (see `config/markers/minimal.example.yaml`).
+
+## How config merging works
+
+Your YAML is merged over the model defaults, so you only specify what differs: any field with a
+default may be omitted. Nested sections merge recursively, but **lists and scalars are replaced
+wholesale, not appended**, so to change one entry of a list (e.g. `pipeline.steps` or
+`taxonomy.contaminants`) you restate the whole list.
 
 ## Full Configuration Structure
 
@@ -307,7 +346,9 @@ pipeline:
   skip: []                                   # Steps to skip (e.g., ["trim"])
 ```
 
-Valid step names: `demultiplex`, `trim`, `dada2`, `swarm`, `taxonomy`, `export`.
+Valid step names: `demultiplex`, `trim`, `dada2`, `swarm`, `taxonomy`, `export`. A `clean` step
+is inserted automatically after `taxonomy` when `cleaning.enabled: true`, so you do not list it
+here.
 
 ## Example Configs
 

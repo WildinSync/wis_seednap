@@ -1,4 +1,11 @@
 # Seednap Pipeline Configuration for Teleo Marker
+#
+# This is a fully-populated reference config. REQUIRED keys: marker.name,
+# marker.primers.forward/reverse, taxonomy.method, and the matching
+# taxonomy.databases.<method> block. Everything else has a built-in default and may be
+# deleted; your YAML is merged over the defaults, so omitting a key keeps its default.
+# For a bare-minimum starting point see config/markers/minimal.example.yaml.
+#
 # Configuration format version
 version: "0.1.0"
 

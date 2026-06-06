@@ -1,4 +1,25 @@
-"""Configuration data models using Pydantic for type-safe configuration."""
+"""Pydantic models for the SeeDNAP marker configuration (one YAML per marker).
+
+Every model is a ``StrictModel`` (``extra="forbid"``), so an unknown key errors at load time.
+Config is merged over these defaults by ``loader.load_config``, so a YAML only needs to specify
+what differs from the defaults.
+
+Required keys (the only ``Field(...)`` without a default): ``marker.name``,
+``marker.primers.forward``/``reverse``, ``taxonomy.method``, and the required path(s) inside the
+SELECTED database block (``blast.fasta``; ``dada2.all``; ``ecotag.tree`` + ``fasta``;
+``decipher.trained``). Everything else has a default and may be omitted.
+
+Section -> consumer map (which pipeline step reads each top-level section):
+    marker, paths        -> all steps
+    demultiplex          -> run_demultiplex (off by default)
+    trimming             -> run_trim
+    dada2                -> run_dada2          [ASV path; chosen via pipeline.steps]
+    swarm                -> run_swarm          [OTU path; chosen via pipeline.steps]
+    taxonomy             -> run_taxonomy / get_database_config
+    cleaning             -> run_clean (auto-inserted after taxonomy when cleaning.enabled)
+    export, metrics, report, logging -> their respective steps (all default-on/safe)
+    pipeline             -> run() step ordering (pick the dada2 OR the swarm path)
+"""
 
 import logging
 from pathlib import Path
@@ -13,6 +34,11 @@ class StrictModel(BaseModel):
     """Base model that rejects unknown fields to catch config typos."""
 
     model_config = ConfigDict(extra="forbid")
+
+
+# ===========================================================================
+# INPUT: marker identity, primers, paths, demultiplexing
+# ===========================================================================
 
 
 class PrimerConfig(StrictModel):
@@ -103,6 +129,11 @@ class DemultiplexConfig(StrictModel):
         return v
 
 
+# ===========================================================================
+# TRIMMING: Cutadapt two-pass primer removal
+# ===========================================================================
+
+
 class TrimmingConfig(StrictModel):
     """Primer trimming configuration."""
 
@@ -116,6 +147,12 @@ class TrimmingConfig(StrictModel):
         default=True, description="Discard reads without detected primers"
     )
     overlap: int = Field(default=3, ge=1, description="Minimum overlap for primer detection")
+
+
+# ===========================================================================
+# CLUSTERING -- DADA2 (ASV) path   [used only when "dada2" is in pipeline.steps;
+# mutually exclusive with the SWARM path below]
+# ===========================================================================
 
 
 class Dada2FilterConfig(StrictModel):
@@ -162,6 +199,12 @@ class Dada2Config(StrictModel):
     )
 
 
+# ===========================================================================
+# CLUSTERING -- SWARM (OTU) path   [used only when "swarm" is in pipeline.steps;
+# mutually exclusive with the DADA2 path above]
+# ===========================================================================
+
+
 class SwarmMergeConfig(StrictModel):
     """vsearch read merging parameters for SWARM pipeline."""
 
@@ -196,6 +239,13 @@ class SwarmConfig(StrictModel):
     min_sequence_length: int = Field(
         default=20, ge=1, description="Min sequence length after merging"
     )
+
+
+# ===========================================================================
+# TAXONOMY: one DB model per method, then the assignment config. A config fills
+# only the SELECTED method's database block (taxonomy.databases.<method>); the
+# others are ignored. _DATABASE_MODELS dispatches both validation and runtime.
+# ===========================================================================
 
 
 class Dada2DatabaseConfig(StrictModel):
@@ -310,12 +360,27 @@ class DecipherDatabaseConfig(StrictModel):
         return v.expanduser().resolve()
 
 
+# Maps each taxonomy method to the strict model that validates its database block. Single source
+# of truth for both load-time validation (validate_databases) and runtime dispatch
+# (get_database_config), so the two cannot drift.
+_DATABASE_MODELS: Dict[str, type] = {
+    "dada2": Dada2DatabaseConfig,
+    "blast": BlastDatabaseConfig,
+    "ecotag": EcotagDatabaseConfig,
+    "decipher": DecipherDatabaseConfig,
+}
+
+
 class TaxonomicAssignmentConfig(StrictModel):
     """Taxonomic assignment configuration."""
 
     method: Literal["dada2", "blast", "ecotag", "decipher"] = Field(
         ..., description="Taxonomic assignment method"
     )
+    # Open dict keyed by method name ("blast"/"dada2"/"ecotag"/"decipher"); each value is that
+    # method's database block. Only the selected method's block is used at run time
+    # (get_database_config), but validate_databases parses EVERY present block into its strict
+    # model at load time so a typo or missing path errors during `seednap validate`, not mid-run.
     databases: Dict[str, Any] = Field(default_factory=dict, description="Database configurations")
     # Marker-level contaminant list applied to whichever method is selected.
     # Species names matched against the assigned `species` column get an
@@ -330,31 +395,39 @@ class TaxonomicAssignmentConfig(StrictModel):
     @field_validator("databases")
     @classmethod
     def validate_databases(cls, v: Dict[str, Any], info: Any) -> Dict[str, Any]:
-        """Validate that appropriate database config exists for the selected method."""
-        if "method" in info.data:
-            method = info.data["method"]
-            if method not in v:
-                raise ValueError(
-                    f"No database configuration found for method '{method}'. "
-                    f"Please add '{method}' section to databases configuration."
-                )
+        """Validate the database configurations at load time.
+
+        Two checks: the selected ``method`` must have a database block, and every recognised
+        block present is parsed into its strict model now (not lazily at the taxonomy step), so a
+        typo or a missing required path surfaces during ``seednap validate`` instead of mid-run.
+        ``databases`` is an open dict, so ``extra="forbid"`` does not otherwise reach inside it.
+        """
+        method = info.data.get("method")
+        if method is not None and method not in v:
+            raise ValueError(
+                f"No database configuration found for method '{method}'. "
+                f"Please add '{method}' section to databases configuration."
+            )
+        for name, block in v.items():
+            model = _DATABASE_MODELS.get(name)
+            if model is None:
+                continue  # not a recognised method block; left untouched
+            try:
+                model(**block)
+            except Exception as exc:
+                raise ValueError(f"Invalid taxonomy.databases.{name}: {exc}") from exc
         return v
 
     def get_database_config(self) -> Any:
-        """Get the database config for the selected method."""
+        """Return the parsed database config model for the selected method."""
         db_config = self.databases.get(self.method, {})
+        model = _DATABASE_MODELS.get(self.method)
+        return model(**db_config) if model is not None else db_config
 
-        # Parse into appropriate model based on method
-        if self.method == "dada2":
-            return Dada2DatabaseConfig(**db_config)
-        elif self.method == "blast":
-            return BlastDatabaseConfig(**db_config)
-        elif self.method == "ecotag":
-            return EcotagDatabaseConfig(**db_config)
-        elif self.method == "decipher":
-            return DecipherDatabaseConfig(**db_config)
-        else:
-            return db_config
+
+# ===========================================================================
+# OUTPUTS: GBIF/DarwinCore export, metrics, run reporting
+# ===========================================================================
 
 
 class GbifExportConfig(StrictModel):
@@ -429,6 +502,11 @@ class ReportConfig(StrictModel):
         return v.expanduser().resolve() if v is not None else v
 
 
+# ===========================================================================
+# POST-PROCESSING & OPERATIONAL: control decontamination, logging, step order
+# ===========================================================================
+
+
 class CleaningConfig(StrictModel):
     """Control decontamination (cleaning) of the abundance table.
 
@@ -466,6 +544,11 @@ class PipelineStepsConfig(StrictModel):
         description="Pipeline steps to execute in order",
     )
     skip: List[str] = Field(default_factory=list, description="Steps to skip")
+
+
+# ===========================================================================
+# ROOT: the complete pipeline config (composes every section above)
+# ===========================================================================
 
 
 class PipelineConfig(StrictModel):

@@ -54,11 +54,12 @@ def test_blast_db_config_roundtrip(yaml_path: Path) -> None:
 
 
 def test_typo_in_yaml_is_rejected(tmp_path: Path) -> None:
-    """Strict validation: typos in BLAST DB fields are rejected by get_database_config().
+    """Strict validation: a typo in a taxonomy database block is rejected at LOAD time.
 
-    Note: the top-level taxonomy.databases is intentionally typed as Dict[str, Any]
-    to support multiple methods; strict validation kicks in when the dict is parsed
-    into the per-method StrictModel via get_database_config().
+    taxonomy.databases is an open Dict[str, Any] (to support multiple methods), but
+    validate_databases parses every present method block into its strict (extra="forbid")
+    model during load, so a misspelled field errors in load_config() rather than lazily
+    mid-run at get_database_config().
     """
     bad_yaml = tmp_path / "bad.yaml"
     bad_yaml.write_text(
@@ -82,6 +83,5 @@ taxonomy:
       pecr_identity: 80.0
 """
     )
-    cfg = load_config(bad_yaml)
     with pytest.raises(Exception):
-        cfg.taxonomy.get_database_config()
+        load_config(bad_yaml)
