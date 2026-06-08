@@ -16,16 +16,12 @@ marker:
   primers:
     forward: "ACACCGCCCGTCACTCT"
     reverse: "CTTCCGGTACACTTACCATG"
-    name: "Teleo"
-    target: "12S rRNA"
-    amplicon_length: [40, 100]
 
 # File paths configuration
 paths:
   raw_data: "/home/shared/edna/raw/fw_na_namibia/Teleo/raw_for_dada2/"
   output: "outputs"
   logs: "logs"
-  references: "/home/shared/edna/reference_database/2025/teleo/"
 
 # Demultiplexing configuration
 demultiplex:
@@ -35,7 +31,6 @@ demultiplex:
 
 # Primer trimming configuration (cutadapt)
 trimming:
-  tool: "cutadapt"
   min_length: 20
   max_error_rate: 0.1
   cores: 12
@@ -141,8 +136,6 @@ taxonomy:
 
 # Export configuration
 export:
-  formats:
-    - "csv"
   gbif:
     enabled: true
     add_rank: true
@@ -151,11 +144,6 @@ export:
 # Quality control metrics configuration
 metrics:
   generate_plots: true
-  plot_format: "png"  # Options: "png", "pdf", "svg"
-  metrics:
-    - "read_counts"
-    - "quality_scores"
-    - "length_distribution"
 
 # Run reporting: per-step read/sequence tracking + HTML report (both on by default)
 report:

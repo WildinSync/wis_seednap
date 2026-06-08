@@ -3,7 +3,6 @@
 from seednap.config.loader import (
     ConfigError,
     create_example_config,
-    get_default_config_path,
     load_config,
     load_yaml,
     merge_configs,
@@ -44,7 +43,6 @@ __all__ = [
     "load_yaml",
     "merge_configs",
     "validate_config_file",
-    "get_default_config_path",
     "create_example_config",
     # Models
     "PipelineConfig",

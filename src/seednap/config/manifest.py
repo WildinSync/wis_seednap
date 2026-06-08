@@ -51,8 +51,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 logger = logging.getLogger(__name__)
 
-FAIRE_VERSION = "1.0.2"
-
 # Tokens that mean "no value" in the lab CSVs, including the INSDC missing-value
 # vocabulary FAIRe mandates for Mandatory fields on control rows. Compared
 # case-insensitively against stripped cell values.

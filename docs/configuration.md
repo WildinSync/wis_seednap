@@ -82,9 +82,6 @@ marker:
   primers:
     forward: "ACACCGCCCGTCACTCT"             # Forward primer (5' to 3')
     reverse: "CTTCCGGTACACTTACCATG"          # Reverse primer (5' to 3')
-    name: "Teleo"                            # Primer set name
-    target: "12S rRNA"                       # Target gene region
-    amplicon_length: [40, 100]               # Expected amplicon range [min, max]
 ```
 
 Primer sequences are validated for valid IUPAC DNA bases (A, C, G, T, R, Y, M, K, S, W, H, B, V, D, N). Minimum length: 10 bp.
@@ -96,8 +93,10 @@ paths:
   raw_data: "/path/to/raw/fastq/files"       # Input FASTQ directory
   output: "outputs"                          # Base output directory
   logs: "logs"                               # Log files directory
-  references: "/path/to/reference/databases" # Reference databases
 ```
+
+Reference databases are not set here; each taxonomy method points at its own database under
+`taxonomy.databases.<method>` (see below).
 
 Relative paths are resolved to absolute paths. `~` is expanded. Output and log directories are created automatically.
 
@@ -129,7 +128,6 @@ failure rate crosses `max_sample_failure_rate` (default 50%). The
 
 ```yaml
 trimming:
-  tool: "cutadapt"                           # Only cutadapt supported
   min_length: 20                             # Min read length after trimming (bp)
   max_error_rate: 0.1                        # Max error rate for primer matching
   cores: 12                                  # CPU cores for cutadapt
@@ -269,8 +267,6 @@ genuine missing rank at the BLAST formatter, so neither LCA resolver treats
 
 ```yaml
 export:
-  formats:
-    - "csv"
   gbif:
     enabled: true                            # Generate GBIF-format output
     add_rank: true                           # Add taxonomic rank column
@@ -281,12 +277,7 @@ export:
 
 ```yaml
 metrics:
-  generate_plots: true                       # Generate QC plots
-  plot_format: "png"                         # "png", "pdf", or "svg"
-  metrics:
-    - "read_counts"
-    - "quality_scores"
-    - "length_distribution"
+  generate_plots: true                       # Collect DADA2 QC metrics + plots (DADA2 path only)
 ```
 
 ### `report`

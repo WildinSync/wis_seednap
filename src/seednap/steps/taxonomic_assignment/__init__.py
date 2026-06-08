@@ -2,7 +2,6 @@
 
 from seednap.steps.taxonomic_assignment.assigner import TaxonomicAssigner, TaxonomyMethod
 from seednap.steps.taxonomic_assignment.blast_runner import (
-    BlastDatabaseError,
     BlastError,
     BlastLCAResolver,
     BlastOutputFormatter,
@@ -21,7 +20,6 @@ __all__ = [
     "BlastTaxonomicAssigner",
     "BlastRunner",
     "BlastError",
-    "BlastDatabaseError",
     "EcotagRunner",
     "EcotagError",
     "Dada2TaxonomyRunner",

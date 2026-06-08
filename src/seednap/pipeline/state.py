@@ -289,39 +289,6 @@ class PipelineState(BaseModel):
             name for name, step in self.steps.items() if step.status == StepStatus.FAILED
         ]
 
-    def get_pending_steps(self, all_steps: List[str]) -> List[str]:
-        """
-        Get list of steps that haven't been completed yet.
-
-        Args:
-            all_steps: Complete list of pipeline steps
-
-        Returns:
-            List of step names that are pending
-        """
-        completed = set(self.get_completed_steps())
-        skipped = set(
-            name
-            for name, step in self.steps.items()
-            if step.status == StepStatus.SKIPPED
-        )
-        return [step for step in all_steps if step not in completed and step not in skipped]
-
-    def can_resume(self) -> bool:
-        """
-        Check if pipeline can be resumed.
-
-        Returns:
-            True if there are completed steps and no running steps
-        """
-        has_completed = any(
-            step.status == StepStatus.COMPLETED for step in self.steps.values()
-        )
-        has_running = any(
-            step.status == StepStatus.RUNNING for step in self.steps.values()
-        )
-        return has_completed and not has_running
-
     def complete_pipeline(self) -> None:
         """Mark entire pipeline as completed."""
         self.completed_at = datetime.now()

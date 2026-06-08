@@ -155,31 +155,6 @@ def validate_config_file(config_path: Path) -> tuple[bool, Optional[str]]:
         return False, f"Unexpected error: {e}"
 
 
-def get_default_config_path() -> Optional[Path]:
-    """
-    Get the default configuration file path.
-
-    Looks for config file in the following order:
-    1. ./config.yaml
-    2. ./config/default.yaml
-    3. ~/.config/seednap/config.yaml
-
-    Returns:
-        Path to default config file, or None if not found
-    """
-    candidates = [
-        Path.cwd() / "config.yaml",
-        Path.cwd() / "config" / "default.yaml",
-        Path.home() / ".config" / "seednap" / "config.yaml",
-    ]
-
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
-
-    return None
-
-
 def create_example_config(
     output_path: Path, marker: str = "teleo", minimal: bool = False
 ) -> None:
@@ -225,22 +200,17 @@ marker:
   primers:
     forward: "ACACCGCCCGTCACTCT"
     reverse: "CTTCCGGTACACTTACCATG"
-    name: "{marker.capitalize()}"
-    target: "12S rRNA"
-    amplicon_length: [100, 200]
 
 paths:
   raw_data: "data/raw"
   output: "outputs"
   logs: "logs"
-  references: "references/{marker}"
 
 demultiplex:
   enabled: false
   protocol: "none"
 
 trimming:
-  tool: "cutadapt"
   min_length: 20
   max_error_rate: 0.1
   cores: 4
@@ -298,8 +268,6 @@ taxonomy:
       trained: "references/{marker}/decipher_trained.rds"
 
 export:
-  formats:
-    - "csv"
   gbif:
     enabled: true
     add_rank: true
@@ -307,11 +275,6 @@ export:
 
 metrics:
   generate_plots: true
-  plot_format: "png"
-  metrics:
-    - "read_counts"
-    - "quality_scores"
-    - "length_distribution"
 
 report:
   read_tracking: true        # per-step read/sequence tracking table + data-loss warnings (default: on)

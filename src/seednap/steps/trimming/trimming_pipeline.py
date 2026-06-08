@@ -9,7 +9,7 @@ import gzip
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Union
 
 from seednap.steps.trimming.cutadapt_runner import CutadaptRunner
 from seednap.steps.trimming.tag_generator import TagFileGenerator

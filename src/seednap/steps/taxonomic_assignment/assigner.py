@@ -158,7 +158,7 @@ class TaxonomicAssigner:
 
         reference_fasta = Path(reference_fasta)
 
-        logger.info(f"Running BLAST taxonomic assignment")
+        logger.info("Running BLAST taxonomic assignment")
 
         # Create BLAST database if needed
         runner = BlastRunner(
@@ -197,7 +197,7 @@ class TaxonomicAssigner:
         )
 
         final_output = self.output_dir / f"{self.marker}_blast.csv"
-        result_df = assigner.assign_taxonomy(
+        assigner.assign_taxonomy(
             blast_tsv=blast_output,
             asv_count_csv=asv_count_csv,
             asv_fasta=query_fasta,
@@ -300,7 +300,7 @@ class TaxonomicAssigner:
         taxonomy_db = Path(taxonomy_db)
         reference_db = Path(reference_db)
 
-        logger.info(f"Running ecotag taxonomic assignment")
+        logger.info("Running ecotag taxonomic assignment")
 
         runner = EcotagRunner()
         outputs = runner.run_complete_workflow(
@@ -356,7 +356,7 @@ class TaxonomicAssigner:
 
         trained_classifier_path = Path(trained_classifier_path)
 
-        logger.info(f"Running DECIPHER taxonomic assignment")
+        logger.info("Running DECIPHER taxonomic assignment")
 
         runner = DecipherRunner()
         outputs = runner.run_decipher_assignment(

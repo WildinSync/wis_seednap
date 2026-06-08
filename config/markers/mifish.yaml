@@ -6,22 +6,17 @@ marker:
   primers:
     forward: "GTCGGTAAAACTCGTGCCAGC"
     reverse: "CATAGTGGGGTATCTAATCCCAGTTTG"
-    name: "MiFish-U"
-    target: "12S rRNA"
-    amplicon_length: [140, 220]
 
 paths:
   raw_data: "/home/shared/edna/raw/fw_ar_rewild_2025/mifish/"
   output: "outputs_test/mifish"
   logs: "logs"
-  references: "/home/shared/edna/reference_database/2025/mifish/"
 
 demultiplex:
   enabled: false
   protocol: "none"
 
 trimming:
-  tool: "cutadapt"
   min_length: 20
   max_error_rate: 0.1
   cores: 12
@@ -89,8 +84,6 @@ taxonomy:
       lca_diff: 1.0            # collapsed_taxonomy only: identity window; hits within this %id of the best survivor are collapsed to their lowest common ancestor
 
 export:
-  formats:
-    - "csv"
   gbif:
     enabled: false
     add_rank: true
@@ -98,9 +91,6 @@ export:
 
 metrics:
   generate_plots: false
-  plot_format: "png"
-  metrics:
-    - "read_counts"
 
 report:
   read_tracking: true        # per-step read/sequence tracking table + data-loss warnings (default: on)

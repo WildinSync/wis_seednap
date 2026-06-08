@@ -18,11 +18,6 @@ class PrimerConfig(StrictModel):
 
     forward: str = Field(..., min_length=10, description="Forward primer sequence (5' to 3')")
     reverse: str = Field(..., min_length=10, description="Reverse primer sequence (5' to 3')")
-    name: Optional[str] = Field(None, description="Primer set name (e.g., 'Teleo')")
-    target: Optional[str] = Field(None, description="Target region (e.g., '12S rRNA')")
-    amplicon_length: Optional[tuple[int, int]] = Field(
-        None, description="Expected amplicon length range [min, max]"
-    )
 
     @field_validator("forward", "reverse")
     @classmethod
@@ -37,12 +32,6 @@ class PrimerConfig(StrictModel):
                 f"Valid bases are: {', '.join(sorted(valid_bases))}"
             )
         return v_upper
-
-    def reverse_complement(self) -> tuple[str, str]:
-        """Get reverse complement of primers (calculated, not stored)."""
-        from seednap.utils.sequences import reverse_complement
-
-        return reverse_complement(self.forward), reverse_complement(self.reverse)
 
 
 class MarkerConfig(StrictModel):
@@ -59,9 +48,8 @@ class PathsConfig(StrictModel):
     raw_data: Path = Field(default=Path("data/raw"), description="Raw FASTQ data directory")
     output: Path = Field(default=Path("outputs"), description="Output directory")
     logs: Path = Field(default=Path("logs"), description="Log files directory")
-    references: Path = Field(default=Path("references"), description="Reference databases directory")
 
-    @field_validator("raw_data", "output", "logs", "references")
+    @field_validator("raw_data", "output", "logs")
     @classmethod
     def expand_path(cls, v: Path) -> Path:
         """Expand ~ and relative paths to absolute paths."""

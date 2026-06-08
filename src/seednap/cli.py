@@ -174,7 +174,7 @@ def init(output: Path, marker: str, minimal: bool, force: bool) -> None:
     try:
         create_example_config(output, marker=marker, minimal=minimal)
         print_success(f"Created example configuration: {output}")
-        console.print(f"\nEdit this file to customize for your analysis.")
+        console.print("\nEdit this file to customize for your analysis.")
         console.print(f"Validate it with: [bold]seednap validate {output}[/bold]")
     except ConfigError as e:
         print_error(f"Failed to create config: {e}")
@@ -222,7 +222,7 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
         df_out = formatter.from_method(format_type, input_file, output)
 
         # Print success message with stats
-        print_success(f"Converted to GBIF format!")
+        print_success("Converted to GBIF format!")
         console.print(f"\nOutput file: [cyan]{output}[/cyan]")
         console.print(f"Total records: [green]{len(df_out)}[/green]")
         console.print(f"Unique eventIDs: [green]{df_out['eventID'].nunique()}[/green]")
@@ -472,7 +472,7 @@ def blast(
     """
     from seednap.steps.taxonomic_assignment import BlastRunner, BlastTaxonomicAssigner
 
-    console.print(f"\n[bold]Running BLAST taxonomic assignment[/bold]")
+    console.print("\n[bold]Running BLAST taxonomic assignment[/bold]")
     console.print(f"Query: {query_fasta}")
     console.print(f"Reference: {ref_fasta}")
     console.print(f"ASV counts: {asv_count}\n")
@@ -750,6 +750,13 @@ def demultiplex(
     type=click.Path(exists=True, path_type=Path),
     help="Path to species-level taxonomy database",
 )
+@click.option(
+    "--library-map",
+    type=click.Path(exists=True, path_type=Path),
+    help="CSV with 'sample,library' columns: learn DADA2 errors per library, then merge "
+    "(DADA2-by-library). With 2+ libraries it denoises each separately and collapses identical "
+    "ASVs; omit it (or a single library) for the standard single-batch path.",
+)
 def dada2(
     marker: str,
     trimmed_reads_dir: Path,
@@ -760,6 +767,7 @@ def dada2(
     assign_taxonomy: bool,
     rdp_db: Optional[Path],
     species_db: Optional[Path],
+    library_map: Optional[Path],
 ) -> None:
     """
     Run DADA2 processing on trimmed reads.
@@ -781,7 +789,7 @@ def dada2(
     """
     from seednap.steps.dada2 import Dada2Processor
 
-    console.print(f"\n[bold]Running DADA2 processing:[/bold]")
+    console.print("\n[bold]Running DADA2 processing:[/bold]")
     console.print(f"Marker: {marker}")
     console.print(f"Trimmed reads: {trimmed_reads_dir}")
     console.print(f"Output directory: {output_dir}")
@@ -802,10 +810,11 @@ def dada2(
             trunc_q=trunc_q,
             min_overlap=min_overlap,
             collect_metrics=True,
+            library_map=library_map,
         )
 
         print_success("\nDADA2 processing completed successfully!")
-        console.print(f"\nOutput files:")
+        console.print("\nOutput files:")
         console.print(f"  Sequence table: {outputs['seqtab_clean']}")
         console.print(f"  Query FASTA: {outputs['query_fasta']}")
         console.print(f"  ASV correspondence: {outputs['corresp_seq']}")
@@ -906,7 +915,7 @@ def swarm(
     """
     from seednap.steps.swarm import SwarmProcessor
 
-    console.print(f"\n[bold]Running SWARM OTU clustering:[/bold]")
+    console.print("\n[bold]Running SWARM OTU clustering:[/bold]")
     console.print(f"Marker: {marker}")
     console.print(f"Trimmed reads: {trimmed_reads_dir}")
     console.print(f"Output directory: {output_dir}")
@@ -928,7 +937,7 @@ def swarm(
         )
 
         print_success("\nSWARM OTU clustering completed successfully!")
-        console.print(f"\nOutput files:")
+        console.print("\nOutput files:")
         console.print(f"  Query FASTA: {outputs['query_fasta']}")
         console.print(f"  OTU table: {outputs['seqtab_clean_t']}")
         console.print(f"  Full OTU table: {outputs['otu_table_full']}")
@@ -1104,7 +1113,7 @@ def assign_taxonomy(
     """
     from seednap.steps.taxonomic_assignment import TaxonomicAssigner
 
-    console.print(f"\n[bold]Taxonomic Assignment:[/bold]")
+    console.print("\n[bold]Taxonomic Assignment:[/bold]")
     console.print(f"Method: {method}")
     console.print(f"Marker: {marker}")
     console.print(f"Query: {query_fasta}")
@@ -1176,7 +1185,7 @@ def assign_taxonomy(
             **kwargs,
         )
 
-        print_success(f"\nTaxonomic assignment completed!")
+        print_success("\nTaxonomic assignment completed!")
         console.print("\nOutput files:")
         for key, path in outputs.items():
             if path and Path(path).exists():
@@ -1263,7 +1272,7 @@ def run_pipeline(
         console.print(f"[bold]Taxonomy method:[/bold] {config_obj.taxonomy.method}")
 
         if resume:
-            console.print(f"\n[yellow]Resuming from previous run[/yellow]")
+            console.print("\n[yellow]Resuming from previous run[/yellow]")
 
         console.print()
 
@@ -1285,7 +1294,7 @@ def run_pipeline(
         console.print(f"  Skipped steps: {summary['skipped']}")
 
         if summary["completed"] > 0:
-            console.print(f"\n[bold]Completed steps:[/bold]")
+            console.print("\n[bold]Completed steps:[/bold]")
             for step_name, step_info in summary["steps"].items():
                 if step_info["status"] == "completed":
                     duration = step_info["duration_seconds"]
@@ -1296,7 +1305,7 @@ def run_pipeline(
                     )
 
         if summary["failed"] > 0:
-            console.print(f"\n[bold yellow]Failed steps:[/bold yellow]")
+            console.print("\n[bold yellow]Failed steps:[/bold yellow]")
             for step_name, step_info in summary["steps"].items():
                 if step_info["status"] == "failed":
                     error = step_info.get("error", "Unknown error")

@@ -142,7 +142,7 @@ class Dada2Processor:
             log_file=log_file,
         )
 
-        logger.info(f"DADA2 processing completed successfully")
+        logger.info("DADA2 processing completed successfully")
         logger.info(f"Outputs saved to: {self.output_dir}")
 
         # Collect metrics if requested

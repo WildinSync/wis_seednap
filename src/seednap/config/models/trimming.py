@@ -1,7 +1,5 @@
 """Trimming config: Cutadapt two-pass primer removal."""
 
-from typing import Literal
-
 from pydantic import Field
 
 from seednap.config.models.base import StrictModel
@@ -15,7 +13,6 @@ from seednap.config.models.base import StrictModel
 class TrimmingConfig(StrictModel):
     """Primer trimming configuration."""
 
-    tool: Literal["cutadapt"] = Field(default="cutadapt", description="Trimming tool to use")
     min_length: int = Field(default=20, ge=1, description="Minimum read length after trimming")
     max_error_rate: float = Field(
         default=0.1, ge=0.0, le=1.0, description="Maximum error rate for primer matching"

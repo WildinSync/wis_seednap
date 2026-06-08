@@ -36,10 +36,6 @@ class BlastError(Exception):
     pass
 
 
-# Backwards-compatible alias
-BlastDatabaseError = BlastError
-
-
 # ---------------------------------------------------------------------------
 # Command runner
 # ---------------------------------------------------------------------------

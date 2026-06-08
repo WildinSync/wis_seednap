@@ -74,7 +74,6 @@ paths:
   raw_data: "/tmp/raw"
   output: "/tmp/output"
   logs: "/tmp/logs"
-  references: "/tmp/refs"
 taxonomy:
   method: "blast"
   databases:

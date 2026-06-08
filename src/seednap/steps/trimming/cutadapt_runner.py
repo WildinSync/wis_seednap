@@ -102,7 +102,7 @@ class CutadaptRunner:
                     f.write(result.stdout)
                     f.write(result.stderr)
 
-            logger.debug(f"cutadapt completed successfully")
+            logger.debug("cutadapt completed successfully")
             return result.stdout
 
         except subprocess.CalledProcessError as e:

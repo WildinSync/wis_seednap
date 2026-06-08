@@ -177,11 +177,6 @@ class DarwinCoreBuilder:
         # scheme used a per-run taxon_seqindex which broke GBIF dataset versioning.
         merged["occurrenceID"] = self._create_occurrence_id(merged, marker)
 
-        # Protocol (optional column)
-        protocol = ""
-        if "protocol" in project_meta.columns:
-            protocol = project_meta["protocol"].iloc[0]
-
         # Build the DarwinCore output DataFrame
         out = pd.DataFrame()
 

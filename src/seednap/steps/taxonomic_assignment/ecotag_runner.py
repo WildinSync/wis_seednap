@@ -127,7 +127,7 @@ class EcotagRunner:
                 "  conda activate obitools  # before running seednap\n"
                 "or set:\n"
                 "  export SEEDNAP_OBITOOLS_BIN=/opt/anaconda3/envs/obitools/bin\n\n"
-                f"Probed locations:\n  - " + "\n  - ".join(probed)
+                "Probed locations:\n  - " + "\n  - ".join(probed)
             )
         logger.info(f"Discovered OBITools at {discovered}")
         return discovered
@@ -374,7 +374,7 @@ class EcotagRunner:
         logger.info(f"Starting ecotag workflow for {marker}")
 
         # Step 1: Run ecotag
-        ecotag_fasta = output_dir / f"query_ecotag.fasta"
+        ecotag_fasta = output_dir / "query_ecotag.fasta"
         self.run_ecotag(
             query_fasta=query_fasta,
             taxonomy_db=taxonomy_db,
@@ -384,7 +384,7 @@ class EcotagRunner:
         )
 
         # Step 2: Clean annotations
-        cleaned_fasta = output_dir / f"query_ecotag_temp.fasta"
+        cleaned_fasta = output_dir / "query_ecotag_temp.fasta"
         self.clean_annotations(
             input_fasta=ecotag_fasta,
             output_fasta=cleaned_fasta,
@@ -392,7 +392,7 @@ class EcotagRunner:
         )
 
         # Step 3: Convert to table
-        taxonomy_tsv = output_dir / f"query_ecotag.tsv"
+        taxonomy_tsv = output_dir / "query_ecotag.tsv"
         self.convert_to_table(
             input_fasta=cleaned_fasta,
             output_tsv=taxonomy_tsv,

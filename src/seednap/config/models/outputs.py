@@ -1,7 +1,7 @@
 """Outputs config: GBIF/DarwinCore export, metrics, run reporting."""
 
 from pathlib import Path
-from typing import List, Literal, Optional
+from typing import Optional
 
 from pydantic import Field, field_validator
 
@@ -24,7 +24,6 @@ class GbifExportConfig(StrictModel):
 class ExportConfig(StrictModel):
     """Output export configuration."""
 
-    formats: List[str] = Field(default=["csv"], description="Output formats to generate")
     gbif: GbifExportConfig = Field(
         default_factory=GbifExportConfig, description="GBIF export settings"
     )
@@ -33,13 +32,9 @@ class ExportConfig(StrictModel):
 class MetricsConfig(StrictModel):
     """Quality control metrics configuration."""
 
-    generate_plots: bool = Field(default=True, description="Generate QC plots")
-    plot_format: Literal["png", "pdf", "svg"] = Field(
-        default="png", description="Plot output format"
-    )
-    metrics: List[str] = Field(
-        default=["read_counts", "quality_scores", "length_distribution"],
-        description="Metrics to calculate",
+    generate_plots: bool = Field(
+        default=True,
+        description="Collect DADA2 QC metrics and per-sample plots (DADA2 path only)",
     )
 
 
