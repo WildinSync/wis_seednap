@@ -96,17 +96,20 @@ seednap dada2 MARKER TRIMMED_READS_DIR [OPTIONS]
 | `--assign-taxonomy` | | Run DADA2 taxonomic assignment (requires `--rdp-db` and `--species-db`) |
 | `--rdp-db PATH` | | RDP-formatted taxonomy database |
 | `--species-db PATH` | | Species-level database |
+| `--library-map PATH` | | Per-library DADA2 error learning from a `sample,library` CSV (see note below) |
 
 ```bash
 seednap dada2 teleo /path/to/trimmed -o outputs --max-ee 2.0 --trunc-q 11
 ```
 
-> DADA2 can learn a separate error model per sequencing library (grouped
-> from the FAIRe manifest's `seq_run_id`) and merge the per-library
-> sequence tables, via the `dada2.per_library` config field (default
-> `false` = single pooled error model). See
-> [configuration.md](configuration.md). This is a YAML-only knob; it is
-> not exposed on the `dada2` CLI command.
+> DADA2 can learn a separate error model per sequencing library and merge the
+> per-library sequence tables (2+ libraries are denoised separately then have
+> identical ASVs collapsed; a single library uses the standard pooled path). On
+> this standalone `dada2` command, enable it with `--library-map PATH`, a CSV
+> with `sample,library` columns. In a full `run-pipeline` run it is instead
+> driven by the `dada2.per_library` config field (default `false`), with
+> libraries grouped automatically from the FAIRe manifest's `seq_run_id`. See
+> [configuration.md](configuration.md).
 
 ---
 

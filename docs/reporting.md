@@ -13,8 +13,10 @@ SeeDNAP produces three reporting artifacts for every run:
    headline, QC figures, and a contamination check.
 
 **Both are generated automatically on every `run-pipeline`** (the HTML report is
-built at the end of the run). Set `report.html_report: false` (or
-`report.read_tracking: false`) in the marker YAML to turn either off. By default
+built at the end of the run). Set `report.html_report: false` in the marker YAML
+to disable just the HTML report; set `report.read_tracking: false` to disable the
+read-tracking table, the step summary, and the HTML report together (the HTML
+report is built only when `read_tracking` is also on). By default
 they are written under `<paths.output>/04_report/<marker>/`; set
 `report.output_dir` to store them elsewhere. Reporting only reads artifacts the
 pipeline already produced, it never alters the run, and a reporting failure is
@@ -205,9 +207,9 @@ seednap report teleo -o outputs --html \
 | `--log-file PATH` | auto | Run log to embed in the HTML report's Run-log section |
 
 If `--field-metadata` / `--project-metadata` are omitted, the command
-auto-locates `metadata_field_<marker>.csv` / `metadata_proj_<marker>.csv` next
-to the output directory (or in an adjacent `metadata/` folder) and warns if none
-is found.
+auto-locates `metadata_field_<marker>.csv` / `metadata_proj_<marker>.csv` inside
+the output directory (`<output>/` or its `<output>/metadata/` subfolder) and
+warns if none is found.
 
 During `run-pipeline`, the read-tracking table is written after the clustering
 step and the HTML report after the full run (unless disabled with

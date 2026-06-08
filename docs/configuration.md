@@ -33,7 +33,7 @@ block is actually used, and flags any referenced database or `raw_data` path tha
 PipelineConfig
   version       free-form string (default "0.1.0")
   marker        (REQUIRED)  name + primers.{forward, reverse}
-  paths         set raw_data; output/logs/references default
+  paths         set raw_data; output/logs default
   demultiplex   off by default
   trimming      Cutadapt 2-pass (defaults)
   dada2         [ASV path only]   filter / merge / chimera / per_library
@@ -130,7 +130,7 @@ failure rate crosses `max_sample_failure_rate` (default 50%). The
 trimming:
   min_length: 20                             # Min read length after trimming (bp)
   max_error_rate: 0.1                        # Max error rate for primer matching
-  cores: 12                                  # CPU cores for cutadapt
+  cores: 1                                   # CPU cores for cutadapt (default 1; shipped marker configs raise to 12)
   discard_untrimmed: true                    # Discard reads without primers
   overlap: 3                                 # Min overlap for primer detection (bp)
 ```

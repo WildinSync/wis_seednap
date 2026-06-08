@@ -57,13 +57,16 @@ SeeDNAP supports four taxonomic assignment methods. Each method is selected via 
    *Methods in Ecology and Evolution* 16:2380-2394, with rRNA-marker
    tweaks; family raised vs eDNAFlow):
 
-   | Rank | YAML default | CLI shortcut default |
-   |---|---|---|
-   | `threshold_species` | 99.0 | 98.0 |
-   | `threshold_genus` | 96.0 | 96.0 |
-   | `threshold_family` | 90.0 | 86.5 |
-   | `threshold_order` | 80.0 | (YAML only) |
-   | `threshold_class` | 70.0 | (YAML only) |
+   | Rank | Default |
+   |---|---|
+   | `threshold_species` | 99.0 |
+   | `threshold_genus` | 96.0 |
+   | `threshold_family` | 90.0 |
+   | `threshold_order` | 80.0 |
+   | `threshold_class` | 70.0 |
+
+   Each is also settable on the `blast` and `assign-taxonomy` CLI commands via
+   the matching `--threshold-<rank>` flag, with the same default.
 
 5. **MEGAN-LR top-bitscore LCA.** The resolver no longer requires exact
    bitscore ties. All hits within `top_bitscore_pct` (default 10%) of

@@ -67,6 +67,7 @@ Defined in `pyproject.toml`:
 - `biopython >= 1.80` -- Sequence handling
 - `rich >= 13.0` -- Console output formatting
 - `jinja2 >= 3.0` -- Template rendering
+- `matplotlib >= 3.5` -- Charts for the optional HTML run report
 - `python-dotenv >= 1.0` -- Environment variable loading
 
 ### External Tools
