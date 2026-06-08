@@ -47,8 +47,10 @@ def _find_obitools_bin() -> Optional[Path]:
     OBITools cannot be found anywhere we know to look.
 
     Resolution order:
-        1. ``SEEDNAP_OBITOOLS_BIN`` env var (user override).
-        2. Whatever's already on PATH (so an activated obitools env wins).
+        1. Whatever's already on PATH -- an activated obitools env wins, when
+           ecotag/obiannotate/obitab all resolve there.
+        2. ``SEEDNAP_OBITOOLS_BIN`` env var -- a fallback bin dir, used when the
+           tools are not all on PATH.
         3. The well-known install locations in :data:`_OBITOOLS_CANDIDATE_BINS`.
     """
     override = os.environ.get("SEEDNAP_OBITOOLS_BIN")
@@ -111,8 +113,8 @@ class EcotagRunner:
         discovered = _find_obitools_bin()
         if discovered is None:
             probed = [
-                "$SEEDNAP_OBITOOLS_BIN (env var override)",
                 "PATH",
+                "$SEEDNAP_OBITOOLS_BIN (env var fallback)",
                 *_OBITOOLS_CANDIDATE_BINS,
             ]
             raise EcotagError(

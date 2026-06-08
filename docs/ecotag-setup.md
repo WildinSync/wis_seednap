@@ -7,8 +7,10 @@ environment -- it lives in its own env.
 
 The seednap pipeline auto-discovers OBITools in three ways, in this order:
 
-1. **`SEEDNAP_OBITOOLS_BIN` environment variable** -- explicit override.
-2. **`PATH`** -- whatever's already activated (`conda activate obitools`).
+1. **`PATH`** -- if `ecotag`, `obiannotate`, and `obitab` are all already on
+   PATH (e.g. after `conda activate obitools`), that directory is used.
+2. **`SEEDNAP_OBITOOLS_BIN` environment variable** -- a fallback bin directory,
+   used when the tools are not all on PATH.
 3. **Well-known install locations** -- `/opt/anaconda3/envs/obitools/bin`,
    `/opt/conda/envs/obitools/bin`, `~/miniconda3/envs/obitools/bin`,
    `~/.conda/envs/obitools/bin`, `~/anaconda3/envs/obitools/bin`.
