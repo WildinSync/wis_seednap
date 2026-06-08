@@ -13,6 +13,17 @@ from seednap.utils.subprocess import run_subprocess
 
 logger = logging.getLogger(__name__)
 
+# The bundled R scripts live at the repo root in ``scripts/`` (a sibling of ``src/``).
+# Anchor them to the installed package so they resolve from any working directory, and
+# always use the canonical scripts rather than whatever ``scripts/`` happens to sit under
+# the current CWD (e.g. a stale per-project checkout).
+SCRIPTS_DIR = Path(__file__).resolve().parents[3] / "scripts"
+
+
+def r_script_path(name: str) -> Path:
+    """Absolute path to a bundled R script (``scripts/<name>``), CWD-independent."""
+    return SCRIPTS_DIR / name
+
 
 class RScriptError(Exception):
     """Base exception for R script execution errors."""

@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-from seednap.utils.r_runner import RScriptRunner
+from seednap.utils.r_runner import RScriptRunner, r_script_path
 from seednap.utils.subprocess import run_subprocess
 
 logger = logging.getLogger(__name__)
@@ -105,7 +105,7 @@ class DecipherRunner(RScriptRunner):
             FileNotFoundError: If required inputs are missing
         """
         if script_path is None:
-            script_path = Path("scripts/taxo_decipher_marker.R")
+            script_path = r_script_path("taxo_decipher_marker.R")
 
         trained_classifier_path = Path(trained_classifier_path)
         query_fasta = Path(query_fasta)

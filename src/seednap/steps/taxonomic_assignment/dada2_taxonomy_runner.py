@@ -8,7 +8,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-from seednap.utils.r_runner import RScriptRunner
+from seednap.utils.r_runner import RScriptRunner, r_script_path
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +89,7 @@ class Dada2TaxonomyRunner(RScriptRunner):
             FileNotFoundError: If any input file is missing
         """
         if script_path is None:
-            script_path = Path("scripts/taxo_dada2_marker.R")
+            script_path = r_script_path("taxo_dada2_marker.R")
 
         rdp_db_path = Path(rdp_db_path)
         species_db_path = Path(species_db_path)

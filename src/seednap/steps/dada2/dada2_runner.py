@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, Optional, Union
 
-from seednap.utils.r_runner import RScriptRunner
+from seednap.utils.r_runner import RScriptRunner, r_script_path
 
 logger = logging.getLogger(__name__)
 
@@ -108,8 +108,7 @@ class Dada2Runner(RScriptRunner):
             Dada2Error: If processing fails
         """
         if script_path is None:
-            # Default to the legacy R script
-            script_path = Path("scripts/dada2_process.R")
+            script_path = r_script_path("dada2_process.R")
 
         self._run_r_script(
             script_path=script_path,
