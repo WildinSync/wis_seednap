@@ -523,15 +523,18 @@ def blast(
         console.print("[cyan]Step 3/3:[/cyan] Finalizing results...")
         print_success("BLAST taxonomic assignment completed!")
         console.print(f"\nOutput file: [cyan]{output}[/cyan]")
-        console.print(f"Total ASVs with taxonomy: [green]{len(result)}[/green]")
+        console.print(f"Total ASVs/OTUs: [green]{len(result)}[/green]")
 
-        # Show taxonomic resolution summary
+        # Show taxonomic resolution summary. Unassigned ranks are the literal string
+        # "Unassigned" (never NaN), so they must be excluded from the assigned count, or the
+        # summary would report 100% at every rank.
+        unassigned = {"Unassigned", "nan", "", "NA", "None"}
         taxonomic_ranks = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
         console.print("\n[bold]Taxonomic resolution:[/bold]")
         for rank in taxonomic_ranks:
             if rank in result.columns:
-                n_assigned = result[rank].notna().sum()
-                pct = (n_assigned / len(result)) * 100
+                n_assigned = int((~result[rank].astype(str).isin(unassigned)).sum())
+                pct = (n_assigned / len(result) * 100) if len(result) else 0.0
                 console.print(f"  {rank.capitalize()}: {n_assigned} ({pct:.1f}%)")
 
         # Clean up temporary directory
