@@ -68,7 +68,7 @@ Temporary files from pass 1 are deleted after pass 2 completes. If `discard_untr
 
 ### File Naming
 
-The trimmer supports both `.R1.fastq` and `_R1.fastq` naming conventions. Output files use the same naming as input.
+The trimmer detects input files using both `.R1.fastq` and `_R1.fastq` naming conventions (and `_R1_001.fastq` / `.gz` variants). Trimmed output files are always written as `{sample}.R1.fastq` / `{sample}.R2.fastq`.
 
 ---
 
@@ -175,7 +175,7 @@ datasets.
 
 ## 3. Taxonomic Assignment
 
-**Input:** Representative sequences (`query.fasta`) and abundance table (`otu_table.csv` from SWARM, or `seqtab_clean.csv` from DADA2)
+**Input:** Representative sequences (`query.fasta`) and abundance table (`otu_table.csv` from SWARM, or `seqtab_clean_t.csv` from DADA2)
 **Output:** Taxonomy CSV in `outputs/03_taxo/{marker}/` and final table at `outputs/{marker}_{method}.csv` (the `{method}` token is `blast` / `ecotag` / `decipher` / `dada2RDP`, e.g. `teleo_dada2RDP.csv` for the DADA2 RDP classifier)
 
 All four methods (BLAST, DADA2 RDP, DECIPHER, ecotag) share a common
@@ -190,7 +190,7 @@ work on either DADA2 ASVs or SWARM OTUs -- they no longer require a
 
 **BLAST LCA algorithm.** The BLAST method resolves multi-hit ambiguity with one
 of two header-based, offline LCA resolvers selected by
-`taxonomy.blast.lca_algorithm`. The default `cascade` keeps the MEGAN-LR
+`taxonomy.databases.blast.lca_algorithm`. The default `cascade` keeps the MEGAN-LR
 top-bitscore band (`top_bitscore_pct`, default 10) with a percent-identity floor
 (`lca_pident_delta`, default 1) and per-rank identity thresholds
 (species 99 / genus 96 / family 90 / order 80 / class 70). The optional
@@ -245,7 +245,7 @@ occurrence CSV via `seednap create-gbif`.
 
 Transforms the wide-format taxonomy table (samples as columns) into GBIF
 long format (one row per sample-OTU observation). Adds `rank`
-(species/genus/family) and `taxon` (lowest available name) columns.
+(species/genus/family/higher) and `taxon` (lowest available name) columns.
 Zero-count observations are removed. `is_contaminant_candidate` is
 carried through and surfaces in the DarwinCore output as
 `contamination_flag`.
@@ -279,9 +279,10 @@ taxonomy headline (assignment rate per rank, top taxa), feature QC (chimeras,
 length), a control/contamination check, the run timeline, and the full console
 run log colorized by level (the same palette as the live console).
 
-The read-tracking table is written after the clustering step; the HTML report
-after the full run (so taxonomy/provenance are available). Both can be
-regenerated from existing outputs with `seednap report MARKER [--html]`.
+The read-tracking table and the HTML report are both written during the
+`report` step (last in the default steps, so taxonomy/provenance are already
+available). Both can be regenerated from existing outputs with
+`seednap report MARKER [--html]`.
 
 See [reporting.md](reporting.md) for full details.
 
@@ -292,7 +293,7 @@ See [reporting.md](reporting.md) for full details.
 ```
 outputs/
   01_trim/{marker}/              # Trimmed FASTQ files
-    demux/                       #   Demultiplexed FASTQ (ligation demux, if enabled)
+    demux/                       #   Demultiplexed FASTQ (ligation demux, if "demultiplex" is in pipeline.steps)
   02_swarm/{marker}/             # SWARM outputs
     merged/                      #   Merged reads per sample
     dereplicated/                #   Dereplicated per sample
@@ -307,7 +308,7 @@ outputs/
     read_tracking.txt            #   Human-readable table
     report.html                  #   Self-contained HTML run report (when report.html_report)
   {marker}_{method}.csv          # Final taxonomy + abundance table (method = blast/ecotag/decipher/dada2RDP)
-  {marker}_{method}_cleaned.csv  # Decontaminated table (if "clean" is in pipeline.steps)
+  {marker}_{taxonomy.method}_cleaned.csv  # Decontaminated table, token from taxonomy.method = blast/ecotag/decipher/dada2 (if "clean" is in pipeline.steps)
   .{marker}_state.json           # Pipeline state (for resume)
 ```
 

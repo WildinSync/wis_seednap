@@ -20,7 +20,9 @@ seednap validate config/markers/teleo.yaml
 ```
 
 This checks YAML syntax, field types, required values, reports which `taxonomy.databases.<method>`
-block is actually used, and flags any referenced database or `raw_data` path that is missing on disk.
+block is actually used, and runs a preflight that **fails** (non-zero exit) if any referenced
+database or `raw_data` path is missing on disk, so a config that loads but points at missing
+inputs is caught here rather than mid-run.
 
 > [!NOTE]
 > All config models use strict validation (`extra="forbid"`), so a typo in any field name is

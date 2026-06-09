@@ -136,8 +136,8 @@ seednap clean outputs/02_swarm/teleo/otu_table.csv \
   outputs/teleo_otu_clean.csv --mode subtract
 ```
 
-In a full run this is the `cleaning:` config section
-(`enabled`, default `false`; `mode`). See
+In a full run this is the `cleaning:` config section (`mode`, default
+`flag`); it runs only when `clean` is listed in `pipeline.steps`. See
 [configuration.md](configuration.md).
 
 ---
@@ -358,9 +358,10 @@ seednap validate CONFIG
 ## `report`
 
 Build the read/sequence-tracking report (and optionally the HTML run report)
-from an existing run's outputs. `run-pipeline` already generates both at the end
-of every run by default (see the `report:` config block); this command is for
-**regenerating** them from outputs that already exist.
+from an existing run's outputs. When `report` is listed in `pipeline.steps`
+(it is in the default steps), `run-pipeline` generates both at the end of the
+run (the HTML document is gated by `report.html_report`, default `true`); this
+command is for **regenerating** them from outputs that already exist.
 
 ```
 seednap report MARKER [OPTIONS]
@@ -406,6 +407,24 @@ seednap monitor MARKER [OPTIONS]
 
 ```bash
 seednap monitor teleo -o outputs
+```
+
+---
+
+## `explain`
+
+Explain a seednap error code in depth. Error messages may reference a code
+(e.g. `SDN-CFG-001`); pass it here for the full what/why/fix detail.
+
+```
+seednap explain [CODE]
+```
+
+With no `CODE`, lists every known error code with its title.
+
+```bash
+seednap explain SDN-CFG-001
+seednap explain
 ```
 
 ---

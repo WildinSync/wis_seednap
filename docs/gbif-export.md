@@ -20,8 +20,9 @@ the input path with a `_gbif_input.csv` suffix if omitted.
 2. Removes zero-count observations
 3. Adds `rank` column (species, genus, family, or higher)
 4. Adds `taxon` column (lowest available taxonomic name)
-5. Carries through `is_contaminant_candidate` from the taxonomy step (if
-   set) so the DarwinCore builder can populate `contamination_flag`.
+5. Normalises upstream schema differences: a capital-S `Sequence` column is
+   renamed to `sequence`, and the literal `Unassigned` taxonomy value is
+   mapped to empty before rank/taxon are computed.
 
 ### Output columns
 

@@ -210,10 +210,11 @@ auto-locates `metadata_field_<marker>.csv` / `metadata_proj_<marker>.csv` inside
 the output directory (`<output>/` or its `<output>/metadata/` subfolder) and
 warns if none is found.
 
-During `run-pipeline`, the read-tracking table is written after the clustering
-step and the HTML report after the full run (unless disabled with
-`html_report: false`), so the taxonomy and provenance sections are populated.
-The `report` command above is for regenerating these from an existing run.
+During `run-pipeline`, the `report` step writes the read-tracking table, step
+summary, and (unless disabled with `html_report: false`) the HTML report
+together, after the rest of the pipeline has run, so the taxonomy and
+provenance sections are populated. The `report` command above is for
+regenerating these from an existing run.
 
 ## Outputs
 

@@ -107,7 +107,7 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 |---|---|
 | `run-pipeline CONFIG` | Run the full pipeline from a YAML config |
 | `init` | Generate an example config file |
-| `validate CONFIG` | Validate a config file |
+| `validate CONFIG` | Validate a config file (schema check plus preflight: fails if referenced files are missing or the database block is unresolved) |
 | `trim INPUT_DIR` | Primer trimming with Cutadapt |
 | `swarm MARKER READS_DIR` | SWARM OTU clustering |
 | `dada2 MARKER READS_DIR` | DADA2 ASV processing |
@@ -120,6 +120,7 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 | `clean ABUNDANCE FIELD_META OUTPUT` | Decontaminate an abundance table against its negative controls (flag or subtract) |
 | `report MARKER` | Build the read-tracking report (+ `--html` for the visual run report) from existing outputs |
 | `monitor MARKER` | Summarise a finished or in-progress run from its state JSON |
+| `explain [CODE]` | Explain a seednap error code in depth; with no argument, list all codes |
 | `version` | Print the installed SeeDNAP version |
 
 Run `seednap --help` or `seednap <command> --help` for full options.
