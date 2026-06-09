@@ -1,13 +1,51 @@
 # CLI Reference
 
+Complete reference for every `seednap` command, its arguments, and its options.
+
+SeeDNAP exposes one command group with several subcommands. `run-pipeline` runs
+the whole pipeline from a YAML config; the remaining commands run or regenerate a
+single stage standalone. For the per-stage behavior and algorithms see
+[pipeline-steps.md](pipeline-steps.md); for every config key see
+[configuration.md](configuration.md).
+
+## Where commands write
+
+`run-pipeline` writes under the canonical output tree rooted at `paths.output`
+(default `outputs/`):
+
+| Path | Contents |
+|---|---|
+| `<output>/01_trim/<marker>/` | Trimmed reads (and `demux/` for the demultiplex step) |
+| `<output>/02_dada2/<marker>/` or `<output>/02_swarm/<marker>/` | ASV or OTU tables |
+| `<output>/03_taxo/<marker>/` | Taxonomy intermediates (BLAST TSV, etc.) |
+| `<output>/04_report/<marker>/` | `read_tracking.{csv,txt}`, `step_summary.csv`, `report.html` |
+| `<output>/<marker>_<method>.csv` | Final merged taxonomy + abundance table |
+| `<output>/<marker>_<method>_gbif.csv` | Final GBIF long-format table |
+| `<output>/.<marker>_state.json` | Pipeline state JSON (drives `--resume`) |
+
+`<method>` is the `taxonomy.method` token, except the DADA2 taxonomy table uses
+`dada2RDP` (so `<marker>_dada2RDP.csv`). The standalone commands write where you
+point `-o`/`--output`; the example paths below assume the default tree.
+
 ## Global Options
 
+`-v`/`--verbose` and `-q`/`--quiet` are options on the top-level group.
+
+| Option | Description |
+|---|---|
+| `--version` | Show the version and exit |
+| `--help` | Show help and exit |
+| `-v, --verbose` | Verbose logging (DEBUG level) |
+| `-q, --quiet` | Quiet mode (errors only) |
+
+```bash
+seednap --version
+seednap -v run-pipeline config/markers/teleo.yaml
 ```
-seednap --version           Show version
-seednap --help              Show help
-seednap -v <command>        Verbose output (DEBUG level)
-seednap -q <command>        Quiet mode (errors only)
-```
+
+> [!TIP]
+> `-v` and `-q` must come BEFORE the subcommand (`seednap -v run-pipeline ...`).
+> Placed after the subcommand they are not recognized and the command fails.
 
 ---
 
@@ -19,17 +57,34 @@ Run the complete pipeline end-to-end from a YAML config.
 seednap run-pipeline CONFIG [OPTIONS]
 ```
 
-| Option | Description |
-|---|---|
-| `--resume` | Resume from previous run (skip completed steps) |
-| `--state-file PATH` | Custom state file path |
-| `--stop-on-error / --continue-on-error` | Stop or continue on first error (default: stop) |
+| Option | Default | Description |
+|---|---|---|
+| `--resume` | off | Skip steps already marked done in the state JSON |
+| `--state-file PATH` | `<output>/.<marker>_state.json` | State JSON path |
+| `--stop-on-error / --continue-on-error` | stop | Stop or continue on the first failed step |
 
 ```bash
 seednap run-pipeline config/markers/teleo.yaml
 seednap run-pipeline config/markers/teleo.yaml --resume
 seednap run-pipeline config/markers/teleo.yaml --continue-on-error
 ```
+
+`--resume` reads the state JSON (`--state-file`, defaulting to
+`<output>/.<marker>_state.json`) and skips steps recorded as completed, rerunning
+from the first incomplete or failed step.
+
+> [!WARNING]
+> If `pipeline.steps` lists `demultiplex` with any `demultiplex.protocol` other
+> than `ligation` (including the default `none`), the config is REJECTED AT LOAD
+> with a `ValueError`, before any step runs. Only the `ligation` protocol is
+> implemented. Either set `demultiplex.protocol: ligation`, or, if your reads are
+> already demultiplexed, drop `demultiplex` from `pipeline.steps` so the pipeline
+> starts at trimming.
+
+> [!IMPORTANT]
+> `run-pipeline` runs a preflight before any compute: if a referenced database
+> or `raw_data` path is missing on disk, it exits 1 instead of failing mid-run.
+> Run `seednap validate CONFIG` first to catch this earlier.
 
 ---
 
@@ -46,7 +101,7 @@ seednap trim INPUT_DIR [OPTIONS]
 | `--forward-primer TEXT` | Yes | Forward primer sequence (5' to 3') |
 | `--reverse-primer TEXT` | Yes | Reverse primer sequence (5' to 3') |
 | `-o, --output-dir PATH` | Yes | Output directory for trimmed reads |
-| `-c, --cores INTEGER` | No | Number of CPU cores |
+| `-c, --cores INTEGER` | No | Number of CPU cores (default: 1) |
 
 ```bash
 seednap trim /path/to/raw/fastq \
@@ -54,6 +109,9 @@ seednap trim /path/to/raw/fastq \
   --reverse-primer CTTCCGGTACACTTACCATG \
   -o outputs/01_trim/teleo
 ```
+
+In a full run this is the `trimming:` config section. See
+[configuration.md](configuration.md).
 
 ---
 
@@ -70,12 +128,15 @@ seednap swarm MARKER TRIMMED_READS_DIR [OPTIONS]
 | `-o, --output-dir PATH` | `outputs/` | Base output directory |
 | `-d, --distance INTEGER` | `1` | SWARM distance threshold |
 | `-t, --threads INTEGER` | `4` | CPU threads |
-| `--no-fastidious` | | Disable singleton refinement |
-| `--no-chimera-filter` | | Skip chimera detection |
+| `--no-fastidious` | off | Disable singleton refinement |
+| `--no-chimera-filter` | off | Skip de novo chimera detection |
 
 ```bash
 seednap swarm teleo /path/to/trimmed -o outputs -d 1 -t 8
 ```
+
+In a full run this is the `swarm:` config section. See
+[configuration.md](configuration.md).
 
 ---
 
@@ -91,33 +152,36 @@ seednap dada2 MARKER TRIMMED_READS_DIR [OPTIONS]
 |---|---|---|
 | `-o, --output-dir PATH` | `outputs/` | Base output directory |
 | `--max-ee FLOAT` | `2.0` | Maximum expected errors for filtering |
-| `--trunc-q INTEGER` | `11` | Truncate at first base with quality below this |
+| `--trunc-q INTEGER` | `11` | Truncate at first base with quality at or below this |
 | `--min-overlap INTEGER` | `20` | Minimum overlap for merging paired reads |
-| `--assign-taxonomy` | | Run DADA2 taxonomic assignment (requires `--rdp-db` and `--species-db`) |
+| `--assign-taxonomy` | off | Run DADA2 taxonomic assignment (requires `--rdp-db` and `--species-db`) |
 | `--rdp-db PATH` | | RDP-formatted taxonomy database |
 | `--species-db PATH` | | Species-level database |
-| `--library-map PATH` | | Per-library DADA2 error learning from a `sample,library` CSV (see note below) |
+| `--library-map PATH` | | Per-library error learning from a `sample,library` CSV |
 
 ```bash
 seednap dada2 teleo /path/to/trimmed -o outputs --max-ee 2.0 --trunc-q 11
 ```
 
-> DADA2 can learn a separate error model per sequencing library and merge the
-> per-library sequence tables (2+ libraries are denoised separately then have
-> identical ASVs collapsed; a single library uses the standard pooled path). On
-> this standalone `dada2` command, enable it with `--library-map PATH`, a CSV
-> with `sample,library` columns. In a full `run-pipeline` run it is instead
-> driven by the `dada2.per_library` config field (default `false`), with
-> libraries grouped automatically from the FAIRe manifest's `seq_run_id`. See
-> [configuration.md](configuration.md).
+`--library-map` learns a separate DADA2 error model per sequencing library and
+merges the per-library tables (2+ libraries denoised separately then identical
+ASVs collapsed; a single library uses the standard pooled path). In `run-pipeline`
+this is the `dada2.per_library` config field (default `false`), with libraries
+grouped from the manifest's `seq_run_id`. See [configuration.md](configuration.md).
+
+> [!NOTE]
+> The standalone `dada2` command always collects ASV metrics (writes
+> `metrics.json`/`csv`) and does not expose the chimera method or pooling flags.
+> `dada2.chimera.method` and `dada2.pool` are configurable only via
+> `run-pipeline`.
 
 ---
 
 ## `clean`
 
-Decontaminate an abundance table against its negative controls. Control
-identity (extraction vs PCR blanks, extraction batches) is derived from a
-FAIRe manifest migrated from the field metadata.
+Decontaminate an abundance table against its negative controls. Control identity
+(extraction vs PCR blanks, extraction batches) is derived from a FAIRe manifest
+migrated from the field metadata.
 
 ```
 seednap clean ABUNDANCE_CSV FIELD_METADATA OUTPUT [OPTIONS]
@@ -136,8 +200,8 @@ seednap clean outputs/02_swarm/teleo/otu_table.csv \
   outputs/teleo_otu_clean.csv --mode subtract
 ```
 
-In a full run this is the `cleaning:` config section (`mode`, default
-`flag`); it runs only when `clean` is listed in `pipeline.steps`. See
+In a full run this is the `cleaning:` config section (`mode`, default `flag`); it
+runs only when `clean` is listed in `pipeline.steps`. See
 [configuration.md](configuration.md).
 
 ---
@@ -168,14 +232,13 @@ seednap blast QUERY_FASTA REF_FASTA ASV_COUNT [OPTIONS]
 | `--lca-pid FLOAT` | `90.0` | collapsed_taxonomy only: hard %identity floor for hits |
 | `--lca-diff FLOAT` | `1.0` | collapsed_taxonomy only: identity-window width collapsed to the LCA |
 
-**LCA algorithms.** `cascade` (default) applies the per-rank thresholds
-above within a MEGAN-LR bitscore band (`--top-bitscore-pct`) above a
-`--lca-pident-delta` floor. `collapsed_taxonomy` is the
-eDNAFlow/OceanOmics %identity-window collapse-to-LCA: it ignores the
-per-rank thresholds and instead collapses disagreeing hits within
-`--lca-diff` %id of one another to their LCA, above the `--lca-pid` hard
-floor. It is header-based (reads the CRABS lineage from the reference
-FASTA headers), needs no NCBI taxids/taxdump, and runs offline.
+**LCA algorithms.** `cascade` (default) applies the per-rank thresholds within a
+MEGAN-LR bitscore band (`--top-bitscore-pct`) above a `--lca-pident-delta` floor.
+`collapsed_taxonomy` is the eDNAFlow/OceanOmics %identity-window collapse-to-LCA:
+it ignores the per-rank thresholds and collapses disagreeing hits within
+`--lca-diff` %id of one another, above the `--lca-pid` floor. It reads the lineage
+from the reference FASTA headers, needs no NCBI taxdump, and runs offline. See
+[taxonomy-methods.md](taxonomy-methods.md#blast--lca-recommended) for details.
 
 ```bash
 seednap blast outputs/02_swarm/teleo/query.fasta \
@@ -185,19 +248,18 @@ seednap blast outputs/02_swarm/teleo/query.fasta \
   --evalue 1e-10 --threshold-species 100
 ```
 
-Reference headers may carry the literal string `NA` for an unknown rank
-(2025 CRABS DBs); SeeDNAP normalizes `NA`/empty/`nan` to a genuine
-missing rank, which surfaces as `Unassigned` in the export rather than a
-taxon named `NA`.
+> [!NOTE]
+> Reference headers may carry the literal string `NA` for an unknown rank (2025
+> CRABS DBs); SeeDNAP normalizes `NA`/empty/`nan` to a genuine missing rank, which
+> surfaces as `Unassigned` in the export rather than a taxon named `NA`.
 
-See [configuration.md](configuration.md#taxonomy) and
-[taxonomy-methods.md](taxonomy-methods.md#blast--lca-recommended).
+See [configuration.md](configuration.md#taxonomy).
 
 ---
 
 ## `assign-taxonomy`
 
-Generic taxonomic assignment supporting all methods.
+Generic taxonomic assignment supporting all four methods.
 
 ```
 seednap assign-taxonomy {blast|dada2|ecotag|decipher} MARKER QUERY_FASTA ASV_COUNT_CSV [OPTIONS]
@@ -227,8 +289,15 @@ Additional options:
 | `--lca-pident-delta FLOAT` | `1.0` | cascade LCA: in-band hits within this %id of the best in-band hit (BLAST) |
 | `--lca-pid FLOAT` | `90.0` | collapsed_taxonomy: hard %identity floor (BLAST) |
 | `--lca-diff FLOAT` | `1.0` | collapsed_taxonomy: identity-window width collapsed to the LCA (BLAST) |
-| `--confidence-threshold INT` | `60` | Confidence threshold (DECIPHER) |
+| `--confidence-threshold INTEGER` | `60` | Confidence threshold (DECIPHER) |
 | `-c, --processors INTEGER` | `8` | CPU cores |
+
+> [!NOTE]
+> Unlike the standalone `blast` command, the `assign-taxonomy` BLAST path does NOT
+> expose `--task`, `--perc-identity`, `--qcov-hsp-perc`, or `--evalue`; those stay
+> at their defaults (`task=megablast`, `perc_identity=80`, `qcov_hsp_perc=80`,
+> `evalue=1e-25`). Use the `blast` command, or set them in the `taxonomy.databases.blast`
+> config, to change them.
 
 ---
 
@@ -243,7 +312,7 @@ seednap format-gbif INPUT_FILE [OPTIONS]
 | Option | Required | Description |
 |---|---|---|
 | `-f, --format {dada2\|ecotag\|blast\|decipher}` | Yes | Input format type |
-| `-o, --output PATH` | No | Output path (default: auto-generated) |
+| `-o, --output PATH` | No | Output path (default: `<input>_gbif_input.csv`) |
 
 ```bash
 seednap format-gbif outputs/teleo_blast.csv -f blast -o outputs/teleo_gbif.csv
@@ -259,62 +328,72 @@ Build a full DarwinCore-compliant GBIF occurrence CSV.
 seednap create-gbif TAXONOMY_RESULTS SAMPLE_METADATA PROJECT_METADATA OUTPUT [OPTIONS]
 ```
 
-| Option | Description |
-|---|---|
-| `--summarise-pcr / --no-summarise-pcr` | Aggregate PCR replicates per sample |
-| `--skip-enrichment` | Skip NCBI/WORMS taxonomy enrichment |
-
-Requires `NCBI_API_KEY` in `.env` for taxonomy enrichment. See `.env.example`.
+| Option | Default | Description |
+|---|---|---|
+| `--summarise-pcr / --no-summarise-pcr` | off | Aggregate PCR replicates per sample |
+| `--skip-enrichment` | off | Skip NCBI/WORMS taxonomy enrichment |
 
 ```bash
 seednap create-gbif outputs/teleo_gbif.csv metadata/samples.csv metadata/project.csv outputs/teleo_darwincore.csv
 ```
 
+> [!WARNING]
+> Enrichment needs `NCBI_API_KEY` in `.env` (see `.env.example`). Without a key,
+> NCBI throttles the step heavily; pass `--skip-enrichment` to skip it entirely.
+
+See [gbif-export.md](gbif-export.md) for the metadata column requirements.
+
 ---
 
 ## `demultiplex`
 
-Demultiplex ligation-based libraries.
+Demultiplex ligation-based libraries (Cutadapt under the hood).
 
 ```
 seednap demultiplex RAW_READS_DIR LIBRARY_NAME METADATA_CSV [OPTIONS]
 ```
+
+`METADATA_CSV` must contain `eventID`, `tag_demultiplex`, and `library` columns.
 
 | Option | Required | Description |
 |---|---|---|
 | `-f, --forward-primer TEXT` | Yes | Forward primer sequence |
 | `-r, --reverse-primer TEXT` | Yes | Reverse primer sequence |
 | `-o, --output-dir PATH` | Yes | Output base directory |
-| `-c, --cores INTEGER` | No | CPU cores |
-| `--no-gunzip` | No | Keep output files gzipped |
+| `-c, --cores INTEGER` | No | CPU cores (default: 1) |
+| `--no-gunzip` | No | Keep output files gzipped (default: outputs are gunzipped) |
+
+> [!WARNING]
+> In `run-pipeline`, listing `demultiplex` in `pipeline.steps` with any
+> `demultiplex.protocol` other than `ligation` is REJECTED AT CONFIG LOAD. Only
+> the `ligation` protocol is implemented.
 
 ---
 
 ## `manifest`
 
-Build (and optionally validate) a canonical FAIRe sample manifest from the
-lab's existing CSVs. The manifest is the source of truth for sample ->
-library grouping (used by `dada2.per_library`) and control identity (used
-by `clean`). Standalone and read-only on its inputs.
+Build (and optionally validate) a canonical FAIRe sample manifest from the lab's
+existing CSVs. The manifest is the source of truth for sample -> library grouping
+(used by `dada2.per_library`) and control identity (used by `clean`). Standalone
+and read-only on its inputs.
 
 ```
 seednap manifest FIELD_METADATA [OPTIONS]
 ```
 
-`FIELD_METADATA` is the per-sample field metadata CSV
-(`metadata_field_*.csv`), or a legacy demux lab CSV
-(`metadata_lab_*.csv`) carrying library/tag columns.
+`FIELD_METADATA` is the per-sample field metadata CSV (`metadata_field_*.csv`), or
+a legacy demux lab CSV (`metadata_lab_*.csv`) carrying library/tag columns.
 
 | Option | Default | Description |
 |---|---|---|
-| `--project-metadata PATH` | | Project metadata CSV (supplies the marker -> target_gene/assay_name) |
-| `--lab-metadata PATH` | | Legacy demux metadata CSV (supplies seq_run_id/library and tag barcodes) |
+| `--project-metadata PATH` | | Project metadata CSV (marker -> target_gene/assay_name) |
+| `--lab-metadata PATH` | | Legacy demux metadata CSV (seq_run_id/library and tag barcodes) |
 | `--seq-run-id TEXT` | | Sequencing-run id for the whole dataset (overrides lab/derived value) |
 | `--target-gene TEXT` | | Marker / target_gene (overrides the project metadata) |
-| `--date-order {ymd\|dmy\|mdy}` | | Force the eventDate field order for genuinely-ambiguous dotted dates (otherwise such files raise rather than be guessed) |
+| `--date-order {ymd\|dmy\|mdy}` | | Force eventDate field order for ambiguous dotted dates (otherwise such files raise) |
 | `-o, --output PATH` | | Write the canonical manifest CSV here |
 | `--abundance PATH` | | Validate the manifest's eventIDs against this abundance/OTU table |
-| `--strict` | | Raise if the abundance table has sample columns absent from the manifest (default: warn) |
+| `--strict` | off | Raise if the abundance table has sample columns absent from the manifest (default: warn) |
 
 ```bash
 seednap manifest metadata/metadata_field_my_dataset.csv \
@@ -338,30 +417,41 @@ seednap init [OPTIONS]
 | `-m, --marker TEXT` | `teleo` | Marker name |
 | `-o, --output PATH` | `config/markers/example.yaml` | Output path |
 | `--minimal / --full` | `--minimal` | Required-fields-only config (default) or the fully-annotated reference template |
-| `-f, --force` | | Overwrite existing file |
+| `-f, --force` | off | Overwrite existing file |
+
+> [!IMPORTANT]
+> `--minimal` (the default) emits ONLY the required fields, leaving everything
+> else on built-in defaults. Pass `--full` for the fully-annotated template that
+> shows every knob.
 
 ---
 
 ## `validate`
 
-Validate a YAML configuration file. Checks syntax, field types, and required fields (including
-typos inside `taxonomy.databases.<method>`, which are rejected at load). The summary also reports
-which database block is live for the selected method and flags any referenced database or
-`raw_data` path that is missing on disk.
+Validate a YAML configuration file. Checks syntax, field types, and required
+fields (including typos inside `taxonomy.databases.<method>`, which are rejected
+at load). The summary reports which database block is live for the selected
+method and runs a preflight on referenced files.
 
 ```
 seednap validate CONFIG
 ```
 
+> [!IMPORTANT]
+> `validate` runs a preflight and EXITS 1 if a referenced database or `raw_data`
+> path is missing on disk, or the taxonomy DB block is unresolved. A
+> syntactically-valid config can still fail here. This is the recommended pre-run
+> gate before `run-pipeline`.
+
 ---
 
 ## `report`
 
-Build the read/sequence-tracking report (and optionally the HTML run report)
-from an existing run's outputs. When `report` is listed in `pipeline.steps`
-(it is in the default steps), `run-pipeline` generates both at the end of the
-run (the HTML document is gated by `report.html_report`, default `true`); this
-command is for **regenerating** them from outputs that already exist.
+Build the read/sequence-tracking report (and optionally the HTML run report) from
+an existing run's outputs. When `report` is in `pipeline.steps` (it is by
+default), `run-pipeline` generates both at the end of the run (the HTML document
+is gated by `report.html_report`, default `true`); this command REGENERATES them
+from outputs that already exist.
 
 ```
 seednap report MARKER [OPTIONS]
@@ -370,12 +460,12 @@ seednap report MARKER [OPTIONS]
 | Option | Default | Description |
 |---|---|---|
 | `-o, --output-dir PATH` | `outputs/` | Base output directory of the run |
-| `--html` | | Also generate the self-contained HTML run report |
+| `--html` | off | Also generate the self-contained HTML run report |
 | `--warn-retention FLOAT` | `30.0` | Warn for samples retaining below this % of raw reads |
 | `--warn-step-loss FLOAT` | `70.0` | Warn when a single step drops more than this % of a sample's reads |
 | `--field-metadata PATH` | auto | Field metadata CSV (location, dates, sites) for the Dataset section |
 | `--project-metadata PATH` | auto | Project metadata CSV (recorder, sequencing, reference DB) |
-| `--log-file PATH` | auto | Run log to embed (colorized) in the HTML report's Run-log section; auto-located under `logs/` if omitted |
+| `--log-file PATH` | auto | Run log to embed in the HTML report; auto-located under `logs/` if omitted |
 
 ```bash
 seednap report teleo -o outputs --html \
@@ -384,17 +474,16 @@ seednap report teleo -o outputs --html \
 ```
 
 Writes `outputs/04_report/<marker>/read_tracking.{csv,txt}` and, with `--html`,
-`report.html`. See [reporting.md](reporting.md) for details.
+`report.html`. See [reporting.md](reporting.md).
 
 ---
 
 ## `monitor`
 
-Summarise a finished or in-progress run from its state JSON. Prints a
-per-step status/duration table plus the read-tracking headline (raw ->
-final reads, mean retention, warnings), and writes a
-`monitoring_summary.csv` when per-sample counts are present. Standalone
-and read-only; regenerable any time without a re-run.
+Summarise a finished or in-progress run from its state JSON. Prints a per-step
+status/duration table plus the read-tracking headline (raw -> final reads, mean
+retention, warnings), and writes `monitoring_summary.csv` when per-sample counts
+are present. Standalone, read-only, and regenerable any time without a re-run.
 
 ```
 seednap monitor MARKER [OPTIONS]
@@ -413,8 +502,8 @@ seednap monitor teleo -o outputs
 
 ## `explain`
 
-Explain a seednap error code in depth. Error messages may reference a code
-(e.g. `SDN-CFG-001`); pass it here for the full what/why/fix detail.
+Explain a SeeDNAP error code in depth. Error messages may reference a code (e.g.
+`SDN-CFG-001`); pass it here for the full what/why/fix detail.
 
 ```
 seednap explain [CODE]
@@ -436,3 +525,13 @@ Show detailed version information.
 ```
 seednap version
 ```
+
+---
+
+## See also
+
+- [configuration.md](configuration.md) -- every config key with type, default, and meaning
+- [pipeline-steps.md](pipeline-steps.md) -- per-stage behavior and algorithms
+- [taxonomy-methods.md](taxonomy-methods.md) -- BLAST/DADA2/DECIPHER/ecotag details
+- [gbif-export.md](gbif-export.md) -- DarwinCore export and metadata columns
+- [reporting.md](reporting.md) -- read tracking and the HTML run report

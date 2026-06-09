@@ -11,7 +11,7 @@
 
 ## What is SeeDNAP?
 
-SeeDNAP is an end-to-end Python pipeline for processing environmental DNA (eDNA) metabarcoding data. It takes raw paired-end FASTQ files and produces taxonomically assigned OTU/ASV tables ready for biodiversity analysis or GBIF submission.
+SeeDNAP is an end-to-end Python pipeline for processing environmental DNA (eDNA) metabarcoding data. It takes raw paired-end FASTQ files and produces taxonomically assigned OTU/ASV tables ready for biodiversity analysis or GBIF submission. Every step's status is recorded in a per-run state JSON, so a failed run can be resumed from the step that failed.
 
 ```mermaid
 flowchart LR
@@ -65,7 +65,8 @@ conda env create -f environment.yml
 conda activate seednap
 pip install -e .
 
-# Create and edit a config
+# Create and edit a config (--minimal, the default, emits only required fields;
+# --full emits the annotated reference template)
 seednap init --marker teleo --output config/markers/my_marker.yaml
 
 # Run the pipeline
@@ -73,6 +74,11 @@ seednap run-pipeline config/markers/my_marker.yaml
 ```
 
 That's it. See [docs/](docs/) for configuration details, step-by-step guides, and CLI reference.
+
+> [!TIP]
+> If a run fails partway, fix the cause and re-run with `seednap run-pipeline config.yaml --resume`
+> to skip completed steps (it reads the state JSON at `outputs/.<marker>_state.json`). Decode any
+> error code with `seednap explain <code>`.
 
 ## Requirements
 
@@ -91,15 +97,31 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 
 | Step | Tool | Description |
 |---|---|---|
-| **Demultiplex** *(optional)* | Built-in | Ligation-tag demultiplexing; list `demultiplex` in `pipeline.steps` to run it, omit it for pre-demultiplexed inputs |
+| **Demultiplex** *(optional)* | Built-in | Ligation-tag demultiplexing; list `demultiplex` in `pipeline.steps` to run it, omit it for pre-demultiplexed inputs. Aborts if more than `demultiplex.max_sample_failure_rate` (default 0.5) of samples fail. |
 | **Trim** | Cutadapt | Two-pass primer removal (5' then 3') |
-| **Cluster** | SWARM or DADA2 | OTU clustering or ASV denoising (DADA2 can learn error models per sequencing library, then merge, via `dada2.per_library`) |
-| **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Taxonomic assignment with cascade-null per-rank thresholds and MEGAN-LR top-bitscore LCA (BLAST, default), an optional eDNAFlow/OceanOmics collapsed-taxonomy LCA (`lca_algorithm: collapsed_taxonomy`), or RDP bootstrap (DADA2) |
-| **Decontaminate** *(optional)* | Built-in | Flag or subtract reads found in negative controls, identified from the FAIRe manifest (add `clean` to `pipeline.steps`) |
-| **Export** | Built-in | GBIF long format and DarwinCore occurrence CSV with deterministic `occurrenceID` and `contamination_flag` |
-| **Report** | Built-in | A per-step read/sequence tracking table + data-loss warnings, and a self-contained HTML run report (dataset provenance, taxonomy headline, QC charts, and the colorized console run log). Runs when `report` is in `pipeline.steps` (it is by default); `report.html_report: false` writes the table only |
+| **Cluster** | SWARM or DADA2 | OTU clustering or ASV denoising. DADA2 can learn error models per sequencing library, then merge, via `dada2.per_library`. |
+| **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Taxonomic assignment. BLAST (default) supports `lca_algorithm: cascade` or `collapsed_taxonomy`; DADA2 uses RDP bootstrap. See [docs/taxonomy-methods.md](docs/taxonomy-methods.md). |
+| **Decontaminate** *(optional)* | Built-in | Flag or subtract reads found in negative controls, identified from the FAIRe manifest (add `clean` to `pipeline.steps`). |
+| **Export** | Built-in | GBIF long format and DarwinCore occurrence CSV with deterministic `occurrenceID` and `contamination_flag`. |
+| **Report** | Built-in | Per-step read/sequence tracking table, data-loss warnings, and a self-contained HTML run report. Runs when `report` is in `pipeline.steps` (the default); `report.html_report: false` writes the tables only. |
 
-> Each stage runs **only if listed in `pipeline.steps`** (the single ordered source of truth); the order is validated against stage dependencies at config load. `dada2` and `swarm` are mutually exclusive.
+> [!NOTE]
+> Each stage runs only if listed in `pipeline.steps` (the single ordered source of truth). The list
+> order is validated against stage dependencies at config load: `demultiplex` before `trim`; `dada2`
+> or `swarm` before `taxonomy`/`clean`; `taxonomy` before `export`. `dada2` and `swarm` are mutually
+> exclusive (keep exactly one).
+
+> [!WARNING]
+> Only the `ligation` demultiplexing protocol is implemented. Listing `demultiplex` in
+> `pipeline.steps` with any other `demultiplex.protocol` (including the default `none`) is rejected
+> at config load, before any step runs. If your reads are already demultiplexed, leave `demultiplex`
+> out of `pipeline.steps`.
+
+> [!IMPORTANT]
+> `taxonomy.contaminants` is a list of species names (CRABS underscore format) flagged as candidate
+> contaminants in the export `contamination_flag` column. It is empty by default, so nothing is
+> flagged unless you populate it. This is distinct from the manifest-driven `clean` step, which acts
+> on negative-control reads.
 
 ## CLI Commands
 
@@ -125,6 +147,12 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 
 Run `seednap --help` or `seednap <command> --help` for full options.
 
+> [!NOTE]
+> `seednap validate` is more than a schema check: it runs a preflight that fails if referenced
+> files (raw data, reference databases) are missing on disk or the taxonomy database block is
+> unresolved. `run-pipeline` runs the same preflight before any compute, so a syntactically valid
+> config can still fail fast.
+
 ## Configuration
 
 Everything is controlled by a single YAML file per marker. Example configs are in [config/markers/](config/markers/). Key sections:
@@ -146,62 +174,49 @@ pipeline:
 
 Full configuration reference: [docs/configuration.md](docs/configuration.md)
 
+## Outputs
+
+Per-step artifacts go under `<paths.output>/<NN_step>/<marker>/` (`01_trim`, `02_dada2` or
+`02_swarm`, `03_taxo`, `04_report`). The two final tables land at the output root:
+
+| File | Contents |
+|---|---|
+| `<paths.output>/<marker>_<method>.csv` | Merged taxonomy + abundance table (e.g. `teleo_blast.csv`, `teleo_dada2RDP.csv`) |
+| `<paths.output>/<marker>_<method>_gbif.csv` | GBIF long-format / DarwinCore export |
+
+The `<method>` token follows `taxonomy.method`, except the DADA2 taxonomy table uses `dada2RDP`.
+Run state lives at `<paths.output>/.<marker>_state.json`.
+
 ## Reporting
 
-> [!TIP]
-> The `report` step is in the default `pipeline.steps`, so every run reports on itself out of the box, writing these artifacts to `outputs/04_report/<marker>/`. Drop `report` from `steps` to skip it, or set `report.html_report: false` for the tables only.
+The `report` step is in the default `pipeline.steps`, so every run reports on itself out of the box,
+writing these artifacts to `<paths.output>/04_report/<marker>/`:
 
 ```
 read_tracking.csv / .txt    reads & sequences surviving each step, per sample
 step_summary.csv            run totals: reads + ASVs/OTUs after each step
-report.html                 self-contained visual report, open it in any browser
+report.html                 self-contained visual report (no JavaScript, no CDN), open in any browser
 ```
 
-**Read tracking** records read pairs and sequences into and out of every step (`raw -> trimmed
--> ... -> nonchim` for DADA2, `raw -> trimmed -> clustered` for SWARM) plus a `pct_retained`
-column. Two thresholds raise data-loss warnings: `warn_below_retention_pct` (30) and
-`warn_step_loss_pct` (70).
+Read tracking records read pairs and sequences into and out of every step plus a `pct_retained`
+column, and raises data-loss warnings against two thresholds: `report.warn_below_retention_pct`
+(default 30) and `report.warn_step_loss_pct` (default 70). The HTML report adds QC charts, a
+taxonomy headline, dataset provenance, and the colorized console log.
 
 > [!IMPORTANT]
-> A count that cannot be measured is written as `NA` with a `[WARN]`, never a misleading `0`, so "missing" and "genuinely zero" stay distinct.
+> A count that cannot be measured is written as `NA` with a `[WARN]`, never a misleading `0`, so
+> "missing" and "genuinely zero" stay distinct.
 
-**Step summary** (`step_summary.csv`) is the run-level table you would drop into a methods section: one row per step, with the total reads and the number of features after each step. For example (SWARM):
-
-| step | total_reads | n_features |
-|---|---|---|
-| raw | 4289230 | |
-| trimmed | 3286124 | |
-| clustered | 3001342 | 2645 |
-
-`total_reads` is the run total at that step; `n_features` is the ASV count (DADA2 path, filled at `merged` and `nonchim`) or the OTU count (SWARM, at `clustered`), and is left blank at the read-level steps where no feature table exists yet. The same table is shown in the HTML report's Read-tracking tab.
-
-**The HTML report** is one self-contained file: no JavaScript, no CDN, no external assets (charts
-are inline base64 PNGs), styled like a scientific paper. It opens anywhere and prints to a clean
-PDF (every panel expands). Panels:
-
-| Panel | Contents |
-|---|---|
-| Summary | Run descriptor, auto-written abstract, run-summary table |
-| Dataset | Marker, primers, location/dates/sites, institution, sequencing, reference DB |
-| Read tracking | Read-funnel and retention figures, the per-sample table, data-loss warnings |
-| Per-sample detail | Reads retained, features detected, retention per sample |
-| Taxonomic assignment | Assignment rate per rank, identity distribution, top species and genera |
-| OTU / feature QC | Chimera classification and sequence-length distribution (SWARM) |
-| Controls & contamination | Features detected in the negative controls |
-| Run provenance | Per-step status and wall-clock duration |
-| Run log | The full console transcript, colorized, with a fullscreen toggle |
-| Notes & methods | Definitions and thresholds |
-
-Toggle with `report.html_report: false`, redirect with `report.output_dir`, and add sampling
-provenance via `report.sample_metadata` / `report.project_metadata`. Regenerate any time from an
-existing run (this never re-runs the pipeline):
+Toggle the HTML with `report.html_report: false`, redirect with `report.output_dir`, and add
+sampling provenance via `report.sample_metadata` / `report.project_metadata`. Regenerate the report
+from an existing run at any time (this never re-runs the pipeline):
 
 ```bash
 seednap report teleo --html --field-metadata metadata_field_my_dataset.csv
 ```
 
-`seednap monitor <marker>` prints a quick text summary from the same run state. Full detail:
-[docs/reporting.md](docs/reporting.md).
+`seednap monitor <marker>` prints a quick text summary from the same run state. Full detail,
+including the per-panel breakdown: [docs/reporting.md](docs/reporting.md).
 
 ## Documentation
 

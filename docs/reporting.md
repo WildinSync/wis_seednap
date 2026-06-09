@@ -1,35 +1,35 @@
 # Run Reporting
 
-SeeDNAP produces three reporting artifacts for every run:
+How SeeDNAP records what happened in a run: the read-tracking table, the step summary, and the HTML run report.
 
-1. a **read/sequence tracking table** (`read_tracking.csv` + `.txt`): how many
-   reads/sequences survive each pipeline step, per sample, with data-loss
-   warnings;
-2. a run-level **step summary** (`step_summary.csv`): one row per step with the
-   total reads and the number of features (ASVs for DADA2, OTUs for SWARM) after
-   that step, the table commonly reported in eDNA papers; and
-3. a self-contained **HTML run report** (`report.html`): a
-   scientific-paper-style document with dataset provenance, a taxonomy
-   headline, QC figures, and a contamination check.
+Every `report` step writes a per-sample read/sequence tracking table and a run-level step summary, and (by default) a self-contained HTML report. Read this when you want to audit data loss, share results, or regenerate a report from a finished run.
 
-**The `report` step runs when it is listed in `pipeline.steps`** (it is in the default
-steps, so it runs unless you remove it). When it runs it always writes the read-tracking
-table + step summary; set `report.html_report: false` in the marker YAML to skip just the
-HTML document. To skip reporting entirely, omit `report` from `pipeline.steps`. By default
-they are written under `<paths.output>/04_report/<marker>/`; set
-`report.output_dir` to store them elsewhere. Reporting only reads artifacts the
-pipeline already produced, it never alters the run, and a reporting failure is
-logged as a `[WARN]` and never fails the pipeline. The same artifacts can also
-be regenerated from existing outputs at any time with the `report` command (see
-below).
+## When reporting runs
+
+The `report` step runs when `report` is listed in `pipeline.steps` (it is in the default steps, so it runs unless you remove it). When it runs it always writes `read_tracking.csv` + `.txt` and `step_summary.csv`; set `report.html_report: false` to skip only the HTML document. To skip reporting entirely, omit `report` from `pipeline.steps`.
+
+Reporting only reads artifacts the pipeline already produced. It never alters the run, and a reporting failure is logged as `[WARN]` and never fails the pipeline.
+
+> [!NOTE]
+> `report.html_report` has no effect unless `report` is in `pipeline.steps`. The whole step is gated first: if `report` is not listed, `run_report` returns early before reading `html_report`.
+
+## Artifacts
+
+| Artifact | File | Always written |
+|---|---|---|
+| Read/sequence tracking table | `read_tracking.csv` + `read_tracking.txt` | Yes (when `report` runs) |
+| Run-level step summary | `step_summary.csv` | Yes (when `report` runs) |
+| HTML run report | `report.html` | Only when `html_report` is on (or `--html`) |
+
+By default these go to `<paths.output>/04_report/<marker>/`. Set `report.output_dir` to redirect them (a per-marker subdirectory is created inside it).
 
 ## Read-tracking table
 
 The table records per-sample read counts at each stage. The stages depend on
 the clustering path:
 
-- **SWARM:** `raw → trimmed → clustered`
-- **DADA2:** `raw → trimmed → filtered → denoised → merged → nonchim`
+- **SWARM:** `raw -> trimmed -> clustered`
+- **DADA2:** `raw -> trimmed -> filtered -> denoised -> merged -> nonchim`
 
 | Source | Counts |
 |---|---|
@@ -47,15 +47,14 @@ stage.
 
 ### Data-loss warnings
 
-Two configurable thresholds drive warnings (written to the run log, and shown
-in the HTML report's Read-tracking section under a **Read-tracking warnings**
-header that explains what each line means; the warnings are rendered in the
-same colorized terminal style as the run log):
+Two thresholds drive warnings, written to the run log and shown in the HTML report's Read-tracking section:
 
-- `warn_below_retention_pct` (default **30**): warn when a sample's final reads
-  fall below this percentage of its raw reads.
-- `warn_step_loss_pct` (default **70**): warn when a single step drops more
-  than this percentage of a sample's reads.
+| Key | Default | Range | Meaning |
+|---|---|---|---|
+| `warn_below_retention_pct` | `30.0` | 0-100 | Warn when a sample's final reads fall below this percent of its raw reads. |
+| `warn_step_loss_pct` | `70.0` | 0-100 | Warn when a single step drops more than this percent of a sample's reads. |
+
+Both are validated at config load; a value outside 0-100 errors before the run starts.
 
 ## Step summary (`step_summary.csv`)
 
@@ -68,125 +67,89 @@ A compact run-level table, one row per step, with two columns:
   first exist once a sequence/OTU table is built, so the read-level steps
   (`raw`/`trimmed`/`filtered`/`denoised`) carry no feature count.
 
-This is the "reads and ASVs/OTUs lost at each step" table commonly reported in
-eDNA metabarcoding papers. The ASV counts come from a small `feature_counts.csv`
-the DADA2 R step writes (`ncol` of the merged and non-chimeric sequence tables);
-the OTU count is the number of rows in the SWARM `otu_table.csv`. If a step is
-measured for some samples but not others, `total_reads` is the sum over the
-measured samples and a `[WARN]` names the unmeasured ones, so an incomplete run
-total is never reported silently. The same table is shown in the HTML report's
-Read-tracking tab. Generated on every run alongside the read-tracking table (and
-regenerated by `seednap report`).
+This is the "reads and ASVs/OTUs lost at each step" table commonly reported in eDNA metabarcoding papers. The ASV counts come from a `feature_counts.csv` the DADA2 R step writes (`ncol` of the merged and non-chimeric sequence tables); the OTU count is the number of rows in the SWARM `otu_table.csv`. If a step is measured for some samples but not others, `total_reads` is the sum over the measured samples and a `[WARN]` names the unmeasured ones. The same table is shown in the HTML report's Read-tracking tab.
 
-## HTML run report (`--html`)
+## HTML run report
 
-A single self-contained `.html` file (no external assets, no CDN, no
-JavaScript; charts are embedded as base64 PNGs) styled like a typeset
-scientific paper. A **sticky top navigation bar** carries one button per
-section; clicking a button shows that **panel** (pure-CSS tabs: one panel
-visible at a time on screen, all panels expanded when the page is printed).
-Each section is fully self-contained in its own tab, so nothing is repeated
-across tabs. Sections:
+A single self-contained `.html` file (no external assets, no CDN, no JavaScript; charts are embedded as base64 PNGs) styled like a typeset scientific paper. A sticky top navigation bar carries one button per section; clicking a button shows that panel (pure-CSS tabs: one panel visible at a time on screen, all panels expanded when printed).
 
-1. **Summary**: the run descriptor, the abstract, and the run-summary table.
-2. **Dataset**: identity and provenance (see below).
-3. **Read tracking**: the read funnel and per-sample retention figures, the
-   full per-sample table, and the data-loss warnings.
-4. **Per-sample detail**: reads retained, features detected (richness), and
-   retention per sample, as a figure and a table.
-5. **Taxonomic assignment**: assignment rate per rank (figure plus an exact
-   per-rank table), best-hit identity distribution, detected species with read
-   counts and sample occupancy, and top genera *(when a taxonomy table is
-   available)*.
-6. **OTU / feature QC**: chimera classification and sequence-length
-   distribution *(SWARM path only)*.
-7. **Controls & contamination**: features detected in negative controls,
-   computed from the blank sample columns *(when a taxonomy table is
-   available)*.
-8. **Run provenance**: per-step status and duration from the run state JSON.
-9. **Run log**: the complete console transcript, colorized by level *(when a
-   run log is available; see below)*.
-10. **Notes & methods**: definitions and the thresholds used.
+Six sections are always present; four are conditional on their input data being available:
 
-Figures use a publication style (Computer Modern serif via matplotlib, a
-restrained grey + single sea-green accent palette). For runs with more than 50
-samples, the per-sample retention bar chart becomes a retention-distribution
-histogram (the table still lists every sample).
+| # | Section | Contents | Condition |
+|---|---|---|---|
+| 1 | Summary | Run descriptor, abstract, run-summary table | Always |
+| 2 | Dataset | Identity and provenance (see below) | Always |
+| 3 | Read tracking | Read funnel, per-sample retention figures, full table, data-loss warnings | Always |
+| 4 | Per-sample detail | Reads retained, features detected (richness), retention per sample | Always |
+| 5 | Taxonomic assignment | Assignment rate per rank, best-hit identity distribution, detected species, top genera | Only if a taxonomy table is present |
+| 6 | OTU / feature QC | Chimera classification and sequence-length distribution | Only on the SWARM path (full OTU table present) |
+| 7 | Controls & contamination | Features detected in negative controls | Always |
+| 8 | Run provenance | Per-step status and duration from the run state JSON | Only if state steps are present |
+| 9 | Run log | Complete console transcript, colorized by level | Only if a run log is resolved |
+| 10 | Notes & methods | Definitions and the thresholds used | Always |
 
-`matplotlib` is an optional dependency: if it is missing, the report still
-renders as text and tables, with a `[WARN]`.
+> [!NOTE]
+> The numbering above is the maximum (at-most-ten) layout. The Taxonomic-assignment, OTU/feature-QC, Run-provenance, and Run-log tabs appear only when their inputs exist, so the tab set and its numbering vary between runs.
+
+Figures use a publication style (Computer Modern serif via matplotlib, a restrained grey + single sea-green accent palette). For runs with more than 50 samples, the per-sample retention bar chart becomes a retention-distribution histogram (the table still lists every sample).
+
+> [!WARNING]
+> `matplotlib` is a required runtime dependency (a normal `pip install` always pulls it). If a custom or minimal install lacks it, figure rendering fails: the report still renders with text and tables but no charts, and emits a `[WARN]`. Do not treat matplotlib as optional.
 
 ### Run-log section
 
-Its own tab renders the pipeline's full console transcript
-(`logs/<marker>_pipeline_run.log`) inside a **real terminal window**: dark
-chrome with traffic-light dots, a large scrolling body, and a **Fullscreen**
-button (pure CSS, no JavaScript) that expands the terminal to fill the viewport
-for easier reading. It is colorized by log level with `rich`'s own HTML export
-so the styling matches the live console (on a dark background: `INFO` blue,
-`WARNING` amber, `ERROR` red). Short logs are
-shown whole; long ones are truncated to keep the file portable, but **every
-`WARNING`/`ERROR` line is always kept** along with the run's start/end, and
-intervening runs of routine lines are replaced by explicit `… N omitted …`
-markers (never a silent drop). The transcript scrolls within the terminal, and
-the on-disk path to the complete log is printed alongside it. In an orchestrator run the log is wired automatically; for the
-standalone `report` command it is auto-located under `logs/` (or supplied with
-`--log-file`). If no log is found, the section says so explicitly.
+Its own tab renders the pipeline's full console transcript (`logs/<marker>_pipeline_run.log`) inside a styled terminal window with a Fullscreen button (pure CSS, no JavaScript). It is colorized by log level with `rich`'s own HTML export so the styling matches the live console (on a dark background: `INFO` blue, `WARNING` amber, `ERROR` red). Short logs are shown whole; long ones are truncated to keep the file portable, but every `WARNING`/`ERROR` line is always kept along with the run's start/end, and intervening runs of routine lines are replaced by explicit `... N omitted ...` markers (never a silent drop). The on-disk path to the complete log is printed alongside it.
+
+In an orchestrator run the log is wired automatically. For the standalone `report` command it is auto-located under `logs/` (or supplied with `--log-file`). If no log is found, the section says so explicitly.
 
 ### Dataset & provenance section
 
-So scientists can tell *what* the dataset is and *where/when* it was collected,
-the report's first section summarizes provenance from three sources:
+So scientists can tell what the dataset is and where/when it was collected, the report summarizes provenance from three sources:
 
-- **Pipeline config** (always present in an orchestrator run): dataset name,
-  marker, primers, raw-data path, reference DB.
-- **Field metadata CSV** (optional): sampling location (lat/lon centroid +
-  range), distinct sites, site names / basin / ecosystem / water body /
-  environment, sampling-date range, depth, institution, laboratory. Controls
-  (samples named `Blank*`) are excluded from the geography.
-- **Project metadata CSV** (optional): recorder, sequencing method, reference
-  DB, assignment method.
+- **Pipeline config** (always present in an orchestrator run): dataset name, marker, primers, raw-data path, reference DB.
+- **Field metadata CSV** (optional, `report.sample_metadata`): sampling location (lat/lon centroid + range), distinct sites, site names / basin / ecosystem / water body / environment, sampling-date range, depth, institution, laboratory. Controls (samples named `Blank*`) are excluded from the geography.
+- **Project metadata CSV** (optional, `report.project_metadata`): recorder, sequencing method, reference DB, assignment method.
 
-If no field/project metadata is provided, the section says so explicitly rather
-than omitting silently.
+If no field/project metadata is provided, the section says so explicitly rather than omitting it silently.
+
+> [!NOTE]
+> When `report.sample_metadata` is set, the run also cross-checks the derived manifest's eventIDs against the abundance table's sample columns. A mismatch (e.g. an unlabelled `Blank-PCR-3` column) emits a `[WARN]`. The check is warn-only and never alters or fails the run.
 
 ## Configuration
 
-Reporting runs when `report` is in `pipeline.steps`; its parameters live in the `report:`
-block in the marker YAML:
+Reporting runs when `report` is in `pipeline.steps`. Its parameters live in the `report:` block in the marker YAML.
 
 ```yaml
 report:
-  html_report: true                # also write report.html (default: true; false = table only)
-  output_dir: null                 # base dir for artifacts; null -> "<output>/04_report"
-  warn_below_retention_pct: 30.0   # per-sample retention floor (raw -> final)
-  warn_step_loss_pct: 70.0         # single-step loss ceiling
+  html_report: true                # also write report.html (default: true; false = tables only)
+  output_dir: null                 # base dir for artifacts; null -> "<paths.output>/04_report"
+  warn_below_retention_pct: 30.0   # per-sample retention floor (raw -> final), 0-100
+  warn_step_loss_pct: 70.0         # single-step loss ceiling, 0-100
   # Optional dataset metadata for the Dataset/provenance section:
   # sample_metadata: "/path/to/metadata_field_<dataset>.csv"
   # project_metadata: "/path/to/metadata_proj_<dataset>.csv"
 ```
 
-All fields are optional and the block itself is optional (defaults apply, with
-both the table and the HTML report on). The config model is strict
-(`extra="forbid"`), so a typo errors at load time.
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `html_report` | bool | `true` | Generate the self-contained HTML run report. `false` writes the tables only. |
+| `output_dir` | path \| null | `null` | Base directory for artifacts; a per-marker subdirectory is created inside it. `null` resolves to `<paths.output>/04_report`. |
+| `warn_below_retention_pct` | float (0-100) | `30.0` | Per-sample retention warning floor. |
+| `warn_step_loss_pct` | float (0-100) | `70.0` | Single-step loss warning ceiling. |
+| `sample_metadata` | path \| null | `null` | Per-sample (field) metadata CSV for the Dataset/provenance section. |
+| `project_metadata` | path \| null | `null` | Project metadata CSV for the Dataset section. |
 
-**Where artifacts go.** By default the table and report are written to
-`<paths.output>/04_report/<marker>/`. Set `output_dir` to redirect them; a
-per-marker subdirectory is created inside it, so
+The block and all its fields are optional; defaults apply with both the tables and the HTML report on. The config model is strict (`extra="forbid"`), so a typo errors at load time. `~` is expanded and relative paths are resolved at load time.
 
-```yaml
-report:
-  output_dir: "/data/edna/reports"   # marker "teleo" -> /data/edna/reports/teleo/
-```
-
-`~` is expanded and relative paths are resolved at load time.
+> [!NOTE]
+> The config key is `sample_metadata`, but the standalone `report` command's flag for the same input is `--field-metadata`. Likewise `project_metadata` maps to `--project-metadata`. The YAML key and the CLI flag names differ for the field metadata.
 
 ## CLI
 
-The report can be regenerated from existing outputs at any time:
+The report can be regenerated from existing outputs at any time.
 
 ```bash
-# Read-tracking table only
+# Read-tracking table + step summary only
 seednap report teleo -o outputs
 
 # Full HTML report with dataset provenance
@@ -197,7 +160,7 @@ seednap report teleo -o outputs --html \
 
 | Option | Default | Description |
 |---|---|---|
-| `-o, --output-dir PATH` | `outputs/` | Base output directory of the run |
+| `-o, --output-dir PATH` | `outputs` | Base output directory of the run |
 | `--html` | off | Also generate the self-contained HTML report |
 | `--warn-retention FLOAT` | `30.0` | Per-sample retention warning threshold (%) |
 | `--warn-step-loss FLOAT` | `70.0` | Single-step loss warning threshold (%) |
@@ -205,23 +168,29 @@ seednap report teleo -o outputs --html \
 | `--project-metadata PATH` | auto | Project metadata CSV (recorder, sequencing, DB) |
 | `--log-file PATH` | auto | Run log to embed in the HTML report's Run-log section |
 
-If `--field-metadata` / `--project-metadata` are omitted, the command
-auto-locates `metadata_field_<marker>.csv` / `metadata_proj_<marker>.csv` inside
-the output directory (`<output>/` or its `<output>/metadata/` subfolder) and
-warns if none is found.
+If `--field-metadata` / `--project-metadata` are omitted, the command auto-locates `metadata_field_<marker>.csv` / `metadata_proj_<marker>.csv` inside the output directory (`<output>/` or its `<output>/metadata/` subfolder) and warns if none is found.
 
-During `run-pipeline`, the `report` step writes the read-tracking table, step
-summary, and (unless disabled with `html_report: false`) the HTML report
-together, after the rest of the pipeline has run, so the taxonomy and
-provenance sections are populated. The `report` command above is for
-regenerating these from an existing run.
+> [!TIP]
+> The standalone `report` command loads no YAML config, so it always writes to `<-o>/04_report/<marker>/` and does not honor `report.output_dir`. Only the in-pipeline `report` step honors `report.output_dir`.
+
+During `run-pipeline`, the `report` step writes the read-tracking table, step summary, and (unless disabled with `html_report: false`) the HTML report together, after the rest of the pipeline has run, so the taxonomy and provenance sections are populated.
 
 ## Outputs
 
+```text
+<paths.output>/04_report/<marker>/
+  read_tracking.csv      # per-sample counts at each step + % retained
+  read_tracking.txt      # human-readable aligned table
+  step_summary.csv       # run-level: total reads + ASV/OTU count after each step
+  report.html            # self-contained HTML report (only with html_report / --html)
+  cleaning_report.csv    # only when the clean step ran; co-located here
 ```
-outputs/04_report/<marker>/
-  read_tracking.csv     # per-sample counts at each step + % retained
-  read_tracking.txt     # human-readable aligned table
-  step_summary.csv      # run-level: total reads + ASV/OTU count after each step
-  report.html           # self-contained HTML report (only with html_report / --html)
-```
+
+> [!NOTE]
+> The `clean` step writes `cleaning_report.csv` into this same per-marker report directory. It is a decontamination artifact, not a reporting artifact, but it lands alongside the reporting files.
+
+## See also
+
+- [Pipeline steps](pipeline-steps.md) for the report step's place in the run and decontamination details.
+- [Configuration reference](configuration.md) for the full `report:` block and `pipeline.steps`.
+- [CLI reference](cli-reference.md) for the `report` command.

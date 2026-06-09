@@ -1,6 +1,14 @@
 # Taxonomic Assignment Methods
 
-SeeDNAP supports four taxonomic assignment methods. Each method is selected via the `taxonomy.method` field in the YAML config.
+How SeeDNAP assigns taxonomy to OTUs/ASVs, with one section per supported method.
+
+SeeDNAP supports four taxonomic assignment methods, selected via the `taxonomy.method` field in the YAML config. This doc covers each method's algorithm, reference database format, and configuration keys. For per-key config tables across the whole pipeline see [configuration.md](configuration.md).
+
+> [!TIP]
+> The taxonomy stage runs only if `taxonomy` appears in `pipeline.steps` (a stage runs iff listed). Setting `taxonomy.method` alone does not trigger it. When it runs, it writes the final merged taxonomy+abundance table to `<paths.output>/<marker>_<method>.csv` and, if `export` is also listed, the GBIF table to `<paths.output>/<marker>_<method>_gbif.csv`.
+
+> [!NOTE]
+> All four methods produce the same output schema: identical column names, identical null/cascade semantics, and an `is_contaminant_candidate` column in the same position. Downstream tooling never branches on the method.
 
 ## Method Comparison
 
@@ -10,6 +18,9 @@ SeeDNAP supports four taxonomic assignment methods. Each method is selected via 
 | **DADA2 RDP** | Naive Bayesian classifier | Fast | Standard workflows, DADA2 format databases |
 | **DECIPHER** | IdTaxa machine learning classifier | Fast | Pre-trained models, confidence scores |
 | **ecotag** | OBITools global alignment | Slow | Legacy OBITools workflows |
+
+> [!NOTE]
+> `<method>` in output filenames is the `taxonomy.method` value, except DADA2: the DADA2 path writes `<marker>_dada2RDP.csv`, not `<marker>_dada2.csv`. The other methods use `blast`, `decipher`, or `ecotag` directly.
 
 ---
 
@@ -32,30 +43,28 @@ SeeDNAP supports four taxonomic assignment methods. Each method is selected via 
       -max_target_seqs {max_target_seqs}
     ```
 
-    `task` defaults to `megablast` (word size 28), the right call for
-    short, high-identity vertebrate amplicons against curated reference
-    databases. Switch to `blastn` (word size 11) for divergent references
-    where the family/order tier of hits matters.
+    These four search knobs gate which raw hits BLAST returns:
 
-3. **Phylogeny extraction:** Taxonomy is parsed from reference FASTA headers. Expected format:
+    | Key | Effect | Default |
+    |---|---|---|
+    | `perc_identity` | Minimum percent identity for a hit to be reported. Absolute floor on the raw blastn alignment; distinct from the per-rank `threshold_*` cascade below. | `80.0` |
+    | `qcov_hsp_perc` | Minimum query coverage per HSP. Hits aligning less than this fraction of the query are dropped. | `80.0` |
+    | `evalue` | Maximum e-value; larger (less significant) hits are discarded. | `1e-25` |
+    | `max_target_seqs` | Maximum number of database hits kept per query. | `5` |
+    | `task` | blastn algorithm; see the task table below. | `megablast` |
 
-    ```
-    >ACCESSION\tKingdom;Phylum;Class;Order;Family;Genus;Species
-    ```
+    The `task` field accepts four values:
 
-    The reference parser hard-fails with a descriptive error on malformed
-    headers (wrong tab count, wrong semicolon count) so a corrupt DB
-    cannot silently produce empty assignments.
+    | Value | Word size / use |
+    |---|---|
+    | `megablast` (default) | Word size 28; for short, high-identity vertebrate amplicons against curated references. |
+    | `blastn` | Word size 11; for divergent references where the family/order tier of hits matters. |
+    | `dc-megablast` | Discontiguous megablast; tolerant of substitutions, for cross-species comparisons. |
+    | `blastn-short` | Tuned for very short queries (under ~30 bp). |
 
-4. **Cascade-null per-rank filtering.** The post-processor walks ranks
-   from species down to class. When the hit's percent identity is below
-   the threshold for a rank, that rank **and every finer rank** are set
-   to null. The output therefore never contains orphan ranks like
-   `kingdom=Metazoa, phylum=None, class=Mammalia`.
+3. **Phylogeny extraction:** Taxonomy is parsed from reference FASTA headers (see Reference Database Format below).
 
-   Per-rank thresholds (YAML defaults follow Pappalardo 2025,
-   *Methods in Ecology and Evolution* 16:2380-2394, with rRNA-marker
-   tweaks; family raised vs eDNAFlow):
+4. **Cascade-null per-rank filtering.** The post-processor walks ranks from species down to class. When the hit's percent identity is below the threshold for a rank, that rank **and every finer rank** are set to null. The output therefore never contains orphan ranks like `kingdom=Metazoa, phylum=None, class=Mammalia`.
 
    | Rank | Default |
    |---|---|
@@ -65,24 +74,21 @@ SeeDNAP supports four taxonomic assignment methods. Each method is selected via 
    | `threshold_order` | 80.0 |
    | `threshold_class` | 70.0 |
 
-   Each is also settable on the `blast` and `assign-taxonomy` CLI commands via
-   the matching `--threshold-<rank>` flag, with the same default.
+   Each is also settable on the `blast` and `assign-taxonomy` CLI commands via the matching `--threshold-<rank>` flag, with the same default.
 
-5. **MEGAN-LR top-bitscore LCA.** The resolver no longer requires exact
-   bitscore ties. All hits within `top_bitscore_pct` (default 10%) of
-   the best bitscore are pooled, and disagreeing ranks across that pool
-   are nulled (Lowest Common Ancestor). Setting `top_bitscore_pct: 0`
-   reverts to the old exact-tie behavior.
+   > [!NOTE]
+   > `perc_identity` and the `threshold_*` values are two different identity controls. `perc_identity` is the absolute blastn cutoff that decides which raw hits exist at all; the `threshold_*` cascade decides which ranks of an accepted hit survive. A hit can clear `perc_identity` (80%) yet still be nulled below the species level (99%).
 
-6. **Output merging.** Taxonomy is **left-joined** onto the OTU/ASV
-   abundance table so that OTUs without any BLAST hit surface in the
-   final output as `Unassigned` rows rather than being silently dropped.
+   > [!NOTE]
+   > The default thresholds follow Pappalardo et al. 2025 (*Methods in Ecology and Evolution* 16:2380-2394), with rRNA-marker tweaks (family raised vs eDNAFlow).
 
-7. **Contamination flagging.** If `taxonomy.contaminants` is set, every
-   row whose `species` matches one of the listed names gets
-   `is_contaminant_candidate=True`. Rows are **never** deleted; the flag
-   propagates through the GBIF formatter into the DarwinCore output as
-   `contamination_flag` for downstream review.
+5. **MEGAN-LR top-bitscore LCA.** The resolver does not require exact bitscore ties. All hits within `top_bitscore_pct` (default 10%) of the best bitscore are pooled, with an in-band identity floor `lca_pident_delta` (default 1.0 %id points below the best). Ranks that disagree across that pool are nulled (Lowest Common Ancestor). Setting `top_bitscore_pct: 0` reverts to exact-tie behavior.
+
+6. **Output merging.** Taxonomy is **left-joined** onto the OTU/ASV abundance table so that OTUs without any BLAST hit surface as `Unassigned` rows rather than being silently dropped.
+
+7. **Contamination flagging.** If `taxonomy.contaminants` is set, every row whose `species` matches one of the listed names gets `is_contaminant_candidate=True`. Rows are **never** deleted; the flag propagates through the GBIF formatter into the DarwinCore output as `contamination_flag` for downstream review. The default is an empty list, so omitting `contaminants` flags nothing.
+
+The merged final table is written to `<paths.output>/<marker>_blast.csv`. The intermediate BLAST TSV and other per-method artifacts live under `<paths.output>/03_taxo/<marker>/`.
 
 ### Reference Database Format
 
@@ -93,91 +99,75 @@ The reference FASTA must have tab-separated headers with semicolon-delimited tax
 CACCGCGGTTATACGAGAGGCCCAAGCTGAC...
 ```
 
-Exactly 7 semicolon-separated ranks are required: kingdom, phylum, class, order, family, genus, species. Use `NA` for unknown ranks.
+At least 7 semicolon-separated ranks are required: kingdom, phylum, class, order, family, genus, species. Only the first 7 are consumed; any extra ranks are silently ignored. Use `NA` for unknown ranks.
 
-Databases built with [CRABS](https://github.com/gjeunen/reference_database_creator) (Jeunen et al., 2023) are compatible out of the box. The 2025 CRABS reference DBs write the literal string `NA` where a rank is unknown. SeeDNAP normalizes `NA` (and `""`/`nan`) to a genuine missing rank at the BLAST formatter, in one place, so **neither** LCA resolver treats `NA` as a real taxon -- no over-collapse onto a phantom shared rank, and no literal `NA` leaking into the export. Missing ranks surface as `Unassigned`.
+> [!IMPORTANT]
+> Build the BLAST database with `makeblastdb` from the **exact same** reference FASTA you pass to seednap. If a BLAST hit references a sequence ID that has no lineage among the parsed FASTA headers, the parser hard-fails with a descriptive error. This guards against the known silent-zero failure class: a mismatched DB and FASTA would otherwise produce empty assignments that look valid.
+
+The parser also hard-fails on a header with too few tab fields (no taxonomy after the ID) or fewer than 7 semicolon ranks. It does not reject headers with more than 7 ranks.
+
+Databases built with [CRABS](https://github.com/gjeunen/reference_database_creator) (Jeunen et al., 2023) are compatible out of the box. The 2025 CRABS reference DBs write the literal string `NA` where a rank is unknown. SeeDNAP normalizes `NA` (and `""`/`nan`) to a genuine missing rank at the BLAST formatter, in one place, so **neither** LCA resolver treats `NA` as a real taxon: no over-collapse onto a phantom shared rank, and no literal `NA` leaking into the export. Missing ranks surface as `Unassigned`.
 
 ### Configuration
-
-Example with the production cascade defaults made explicit (software
-defaults shown in parentheses where they differ):
 
 ```yaml
 taxonomy:
   method: "blast"
-  contaminants:
+  contaminants:                            # default: [] (flags nothing)
     - "Homo_sapiens"
     - "Bos_taurus"
   databases:
     blast:
-      fasta: "/path/to/reference.fasta"
-      perc_identity: 80.0                    # (default: 80.0)
-      qcov_hsp_perc: 80.0                    # (default: 80.0)
-      evalue: 1.0e-25                        # (default: 1.0e-25)
-      max_target_seqs: 5                     # (default: 5)
-      task: "megablast"                      # (default: "megablast")
-      threshold_species: 99.0                # (default: 99.0)
-      threshold_genus: 96.0                  # (default: 96.0)
-      threshold_family: 90.0                 # (default: 90.0)
-      threshold_order: 80.0                  # (default: 80.0)
-      threshold_class: 70.0                  # (default: 70.0)
-      top_bitscore_pct: 10.0                 # (default: 10.0)
+      fasta: "/path/to/reference.fasta"    # REQUIRED
+      perc_identity: 80.0                   # (default: 80.0) absolute blastn cutoff
+      qcov_hsp_perc: 80.0                   # (default: 80.0) min query coverage per HSP
+      evalue: 1.0e-25                       # (default: 1.0e-25) max e-value
+      max_target_seqs: 5                    # (default: 5) max hits per query
+      task: "megablast"                     # (default: "megablast")
+      threshold_species: 99.0               # (default: 99.0)
+      threshold_genus: 96.0                 # (default: 96.0)
+      threshold_family: 90.0                # (default: 90.0)
+      threshold_order: 80.0                 # (default: 80.0)
+      threshold_class: 70.0                 # (default: 70.0)
+      top_bitscore_pct: 10.0                # (default: 10.0) LCA bitscore band
+      lca_pident_delta: 1.0                 # (default: 1.0) in-band %id floor below best
 ```
+
+> [!TIP]
+> Only the `databases.<method>` block for the selected method is read; the others are ignored. You do not need to fill in `databases.dada2` when `method: "blast"`.
 
 ### Optional: collapsed-taxonomy LCA (eDNAFlow/OceanOmics)
 
-The default LCA resolver is `cascade` (steps 4--6 above): the MEGAN-LR
-top-bitscore band (`top_bitscore_pct`, default 10) gated by an in-band
-identity floor (`lca_pident_delta`, default 1), then per-rank identity
-thresholds. An alternative resolver is selectable via
-`lca_algorithm: collapsed_taxonomy`, the %identity-window collapse-to-LCA
-used by eDNAFlow and OceanOmics.
+`lca_algorithm` selects the LCA resolver. The default is `cascade` (steps 4-6 above). An alternative is `collapsed_taxonomy`, the percent-identity-window collapse used by eDNAFlow and OceanOmics.
 
-It works as follows:
+`collapsed_taxonomy` works as follows:
 
-1. Discard every hit below `lca_pid` (default 90.0), a hard percent-identity
-   floor.
-2. Among the surviving hits, take the best percent identity and keep all hits
-   within `lca_diff` (default 1.0) identity points of it. This is the
-   "identity window".
-3. Collapse the lineages of the windowed hits to their Lowest Common
-   Ancestor: ranks on which the windowed hits disagree are nulled (and, as
-   everywhere in this pipeline, every finer rank cascades to null).
+1. Discard every hit below `lca_pid` (default 90.0), a hard percent-identity floor.
+2. Among survivors, take the best percent identity and keep all hits within `lca_diff` (default 1.0) identity points of it (the "identity window").
+3. Collapse the windowed lineages to their Lowest Common Ancestor: ranks on which they disagree are nulled, and every finer rank cascades to null.
 
-Like `cascade`, it is **header-based**: the lineage comes from the CRABS
-reference FASTA headers (Section *Reference Database Format*). It needs **no**
-NCBI taxids and no `taxdump`, so it runs fully offline.
+| | `cascade` (default) | `collapsed_taxonomy` |
+|---|---|---|
+| Identity controls | Per-rank `threshold_*` (species 99 / genus 96 / family 90 / order 80 / class 70) | `lca_pid` floor + `lca_diff` window only; `threshold_*` ignored |
+| Hit pooling | `top_bitscore_pct` band + `lca_pident_delta` | `lca_diff` identity window |
+| Low identity | Nulls below per-rank thresholds | More permissive: a 90-96% hit can still resolve to its windowed LCA |
+| Disagreement | Resolved by per-rank threshold | More conservative: any disagreement in the window collapses to the LCA |
+| Lineage source | Header-based, offline | Header-based, offline |
 
-How it differs from `cascade`:
+Both resolvers are **header-based**: the lineage comes from the CRABS reference FASTA headers, needing no NCBI taxids and no `taxdump`. Query coverage is enforced the same way for both, at the `blastn` step via `qcov_hsp_perc`.
 
-- **No per-rank thresholds.** `collapsed_taxonomy` ignores
-  `threshold_species`/`threshold_genus`/`threshold_family`/`threshold_order`/
-  `threshold_class`; the only identity controls are the `lca_pid` floor and
-  the `lca_diff` window. `cascade` keeps its per-rank thresholds (species 99 /
-  genus 96 / family 90 / order 80 / class 70).
-- **More permissive at low identity.** A 90--96% hit that `cascade` would
-  null below the species/genus thresholds can still be reported (down to its
-  windowed LCA) once it clears `lca_pid`.
-- **More conservative on disagreement.** Because any disagreement *within the
-  identity window* collapses to the LCA, a tight cluster of near-equal hits
-  spanning two genera resolves only to family, even at high identity, rather
-  than picking a rank by per-rank threshold.
-
-Query coverage is enforced separately at the `blastn` step via
-`qcov_hsp_perc`, the same as for `cascade`.
-
-`fishbase_tiered` is accepted by the schema but **not implemented** and raises
-if selected.
+> [!NOTE]
+> `lca_algorithm: fishbase_tiered` is accepted by the schema but not implemented; selecting it raises `NotImplementedError` at run time.
 
 ```yaml
 taxonomy:
   method: "blast"
   databases:
     blast:
-      fasta: "/path/to/reference.fasta"
-      lca_algorithm: "collapsed_taxonomy"    # (default: "cascade")
-      lca_pid: 90.0                          # (default: 90.0) hard %identity floor
-      lca_diff: 1.0                          # (default: 1.0) identity-window width
+      fasta: "/path/to/reference.fasta"    # REQUIRED
+      lca_algorithm: "collapsed_taxonomy"   # (default: "cascade")
+      lca_pid: 90.0                         # (default: 90.0) hard %identity floor
+      lca_diff: 1.0                         # (default: 1.0) identity-window width
 ```
 
 ---
@@ -188,16 +178,9 @@ Uses the naive Bayesian classifier from DADA2 (Wang et al., 2007; Callahan et al
 
 ### Algorithm and Bootstrap Threshold
 
-`assignTaxonomy` returns a per-rank bootstrap confidence (0--100). The
-post-processor applies a configurable bootstrap threshold (`bootstrap_threshold`,
-default **80**, the Wang 2007 recommendation for short rRNA reads):
-ranks below the threshold are nulled, and every finer rank cascades to
-null in the same way as the BLAST path. The resulting frame matches the
-BLAST schema exactly (same column names, same null semantics, contaminant
-flag in the same position) so downstream tooling does not branch on
-method.
+`assignTaxonomy` returns a per-rank bootstrap confidence (0-100). The post-processor applies a configurable `bootstrap_threshold` (default 80, the Wang 2007 recommendation for short rRNA reads): ranks below the threshold are nulled, and every finer rank cascades to null, exactly as in the BLAST path.
 
-### Configuration
+### Configuration (DADA2)
 
 ```yaml
 taxonomy:
@@ -206,16 +189,12 @@ taxonomy:
     - "Homo_sapiens"
   databases:
     dada2:
-      all: "/path/to/dada2_all.fasta"
-      species: "/path/to/dada2_species.fasta"
-      bootstrap_threshold: 80                # (default: 80)
+      all: "/path/to/dada2_all.fasta"       # REQUIRED, ranks kingdom..genus
+      species: "/path/to/dada2_species.fasta"  # REQUIRED for the dada2 method; the step errors without it
+      bootstrap_threshold: 80               # (default: 80)
 ```
 
-The `all` database provides ranks kingdom through genus. The `species` database adds species-level exact matching.
-
-DADA2 RDP works on both DADA2 ASVs and SWARM OTUs; the runner accepts the
-query FASTA explicitly and no longer requires a `seqtab_clean.rds` from
-the DADA2 step.
+DADA2 RDP works on both DADA2 ASVs and SWARM OTUs; the runner accepts the query FASTA explicitly and does not require a `seqtab_clean.rds` from the DADA2 step. The merged final table is written to `<paths.output>/<marker>_dada2RDP.csv`.
 
 ---
 
@@ -223,23 +202,25 @@ the DADA2 step.
 
 Uses the DECIPHER IdTaxa classifier (Murali et al., 2018). Requires a pre-trained `.rds` classifier file and the R `DECIPHER` package.
 
-### Configuration
+### Configuration (DECIPHER)
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `trained` | Path | REQUIRED | Path to the trained DECIPHER `.rds` classifier. |
+| `threshold` | int | 60 | Confidence (0-100) required for assignment. Lower values assign more sequences with less certainty. |
+| `processors` | int | 8 | Number of CPU cores IdTaxa uses. |
 
 ```yaml
 taxonomy:
   method: "decipher"
   databases:
     decipher:
-      trained: "/path/to/trained_classifier.rds"
-      threshold: 60
-      processors: 8
+      trained: "/path/to/trained_classifier.rds"  # REQUIRED
+      threshold: 60                         # (default: 60)
+      processors: 8                         # (default: 8)
 ```
 
-The `threshold` parameter (0-100) controls confidence required for assignment. Lower values assign more sequences but with less certainty.
-
-DECIPHER results are post-processed through the same shared utility as
-BLAST and DADA2 RDP, so the output schema and contaminant flag column
-are identical across all four methods.
+The merged final table is written to `<paths.output>/<marker>_decipher.csv`.
 
 ---
 
@@ -247,24 +228,34 @@ are identical across all four methods.
 
 Uses the ecotag algorithm from OBITools (Boyer et al., 2016). Requires an NCBI-format taxonomy tree and a reference sequence database.
 
-**Note:** ecotag requires OBITools v1, which has Python 2 dependencies. It
-lives in its own conda env. The runner auto-discovers the binary via
-`SEEDNAP_OBITOOLS_BIN`, the active `PATH`, or a set of well-known install
-paths -- no manual `conda activate obitools` needed when running through
-seednap. Setup details: [ecotag-setup.md](ecotag-setup.md).
+> [!WARNING]
+> ecotag requires OBITools v1, which has Python 2 dependencies and lives in its own conda env. The runner auto-discovers the binary in this order: (1) the active `PATH` (an activated obitools env wins when `ecotag`, `obiannotate`, and `obitab` all resolve there); (2) the `SEEDNAP_OBITOOLS_BIN` environment variable; (3) a set of well-known install paths. `PATH` takes precedence over the env var, not the other way around. No manual `conda activate obitools` is needed when running through seednap. Setup details: [ecotag-setup.md](ecotag-setup.md).
 
-### Configuration
+### Configuration (ecotag)
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `tree` | Path | REQUIRED | Path to the NCBI taxonomy tree directory. |
+| `fasta` | Path | REQUIRED | Path to the reference FASTA database. |
 
 ```yaml
 taxonomy:
   method: "ecotag"
   databases:
     ecotag:
-      tree: "/path/to/ncbi/taxonomy/"
-      fasta: "/path/to/reference.fasta"
+      tree: "/path/to/ncbi/taxonomy/"       # REQUIRED, NCBI taxonomy tree directory
+      fasta: "/path/to/reference.fasta"     # REQUIRED, reference FASTA database
 ```
 
+The merged final table is written to `<paths.output>/<marker>_ecotag.csv`.
+
 ---
+
+## See also
+
+- [configuration.md](configuration.md) - full config key reference for every section.
+- [pipeline-steps.md](pipeline-steps.md) - where the taxonomy step sits in the pipeline.
+- [ecotag-setup.md](ecotag-setup.md) - installing the OBITools v1 environment.
 
 ## References
 
@@ -272,7 +263,7 @@ taxonomy:
 - Callahan, B.J. et al. (2016). DADA2: High-resolution sample inference from Illumina amplicon data. *Nature Methods*, 13, 581-583.
 - Camacho, C. et al. (2009). BLAST+: architecture and applications. *BMC Bioinformatics*, 10, 421.
 - Huson, D.H. et al. (2018). MEGAN-LR: new algorithms allow accurate binning and easy interactive exploration of metagenomic long reads and contigs. *Biology Direct*, 13, 6.
-- Jeunen, G.J. et al. (2023). crabs -- A software program to generate curated reference databases. *Molecular Ecology Resources*, 23, 725-738.
+- Jeunen, G.J. et al. (2023). crabs - A software program to generate curated reference databases. *Molecular Ecology Resources*, 23, 725-738.
 - Murali, A., Bhargava, A. & Wright, E.S. (2018). IDTAXA: a novel approach for accurate taxonomic classification of microbiome sequences. *Microbiome*, 6, 140.
 - Pappalardo, P. et al. (2025). A field-standard set of identity thresholds for eDNA metabarcoding taxonomic assignment. *Methods in Ecology and Evolution*, 16, 2380-2394.
 - Wang, Q. et al. (2007). Naive Bayesian classifier for rapid assignment of rRNA sequences. *Applied and Environmental Microbiology*, 73, 5261-5267.

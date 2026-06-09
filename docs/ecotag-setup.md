@@ -1,26 +1,30 @@
 # ecotag (OBITools) setup
 
-The ecotag taxonomy method uses OBITools v1, which has Python 2 dependencies
-that conflict with Python 3 tools (Cutadapt 5.x, DADA2 R packages, etc.).
-For that reason OBITools is **not** installed in the main `seednap` conda
-environment -- it lives in its own env.
+How to install and configure OBITools v1 so seednap can run the `ecotag` taxonomy method.
 
-The seednap pipeline auto-discovers OBITools in three ways, in this order:
+ecotag assigns taxonomy with OBITools v1, which has Python 2 dependencies and therefore lives in its own conda env, separate from the main `seednap` env. This doc covers the install, how seednap discovers it, and the config keys it needs.
 
-1. **`PATH`** -- if `ecotag`, `obiannotate`, and `obitab` are all already on
-   PATH (e.g. after `conda activate obitools`), that directory is used.
-2. **`SEEDNAP_OBITOOLS_BIN` environment variable** -- a fallback bin directory,
-   used when the tools are not all on PATH.
-3. **Well-known install locations** -- `/opt/anaconda3/envs/obitools/bin`,
-   `/opt/conda/envs/obitools/bin`, `~/miniconda3/envs/obitools/bin`,
-   `~/.conda/envs/obitools/bin`, `~/anaconda3/envs/obitools/bin`.
+> [!IMPORTANT]
+> ecotag only runs when a marker config sets `taxonomy.method: "ecotag"` **and** lists `"taxonomy"` in `pipeline.steps`. The shipped configs default to `method: "blast"` (see `config/markers/teleo.yaml`), so `seednap run-pipeline <config>` alone does not exercise ecotag. Switch the method first.
 
-If none of those work, the runner emits a clear error pointing here.
+## How seednap finds OBITools
 
-## On the ETH ELE eDNA server (recommended)
+The runner auto-discovers the OBITools bin directory by probing these sources in order, requiring all three of `ecotag`, `obiannotate`, and `obitab`:
 
-OBITools is already installed at `/opt/anaconda3/envs/obitools`. No setup
-needed; the runner will find it automatically. Just run:
+| Order | Source | When used |
+| --- | --- | --- |
+| 1 | `PATH` | All three tools resolve on PATH (e.g. after `conda activate obitools`). The directory of the first tool is used. |
+| 2 | `SEEDNAP_OBITOOLS_BIN` env var | A bin directory used when the tools are not all on PATH. |
+| 3 | Well-known install locations | `/opt/anaconda3/envs/obitools/bin`, `/opt/conda/envs/obitools/bin`, `~/miniconda3/envs/obitools/bin`, `~/.conda/envs/obitools/bin`, `~/anaconda3/envs/obitools/bin`. |
+
+If none contain all three binaries, the runner raises `EcotagError` with inline install instructions (the `conda activate` and `SEEDNAP_OBITOOLS_BIN` options) and the list of probed locations.
+
+> [!NOTE]
+> PATH wins over `SEEDNAP_OBITOOLS_BIN` only when `ecotag`, `obiannotate`, and `obitab` all resolve on PATH. Otherwise the env-var fallback and well-known locations are tried in turn.
+
+## On the ETH ELE eDNA server
+
+OBITools is already installed at `/opt/anaconda3/envs/obitools`. No setup is needed; the runner finds it automatically. With a config that selects ecotag (see above):
 
 ```bash
 seednap run-pipeline config/markers/mymarker.yaml
@@ -28,52 +32,60 @@ seednap run-pipeline config/markers/mymarker.yaml
 
 ## On a fresh machine
 
-Install OBITools v1 in a separate conda env:
+Install OBITools v1 in its own conda env:
 
 ```bash
 conda create -n obitools -c bioconda obitools -y
 ```
 
-Then either activate it or point seednap at it:
+Then either activate it, or point seednap at it without activating:
 
 ```bash
 # Option 1: activate before running seednap
 conda activate obitools
 
-# Option 2: point seednap at it without activating
+# Option 2: point seednap at the env's bin directory
 export SEEDNAP_OBITOOLS_BIN=$(conda info --base)/envs/obitools/bin
 ```
+
+> [!WARNING]
+> OBITools v1 cannot share an env with the main seednap tools: its Python 2.7 dependencies conflict with seednap's Python 3 stack (Cutadapt 5.x in the trim step). It MUST be a separate conda env. OBITools v3/v4 are the maintained Python 3 / Go rewrites but use a different command set (`obitag`, not `ecotag`) and have not been benchmarked against the v1 reference databases in this lab, so seednap targets v1.
 
 Verify the runner can find it:
 
 ```python
 from seednap.steps.taxonomic_assignment.ecotag_runner import EcotagRunner
-EcotagRunner()  # raises EcotagError with install instructions if not found
+
+EcotagRunner()                          # auto-discovers; raises EcotagError if not found
+EcotagRunner(bin_dir="/path/to/bin")    # or pass the bin directory explicitly
 ```
 
-## Why a separate env?
-
-OBITools v1's installation chain:
-
-- `obitools` 1.x package -> Python 2.7
-- Cutadapt 5.x (used in seednap's trim step) -> Python 3.10+
-- These can't coexist in the same conda environment.
-
-OBITools v3 / OBITools4 are the maintained Python 3 / Go rewrites, but they
-use a different command set (`obitag` instead of `ecotag`) and have not been
-benchmarked against the same reference databases as v1 in this lab. For now
-seednap targets OBITools v1; migration to v4 is a separate work stream.
+`EcotagRunner` also accepts `timeout` (seconds per OBITools command, default `3600` = 1 hour).
 
 ## Reference databases
 
-ecotag needs an NCBI-format taxonomy tree (a directory of `.tdx`/`.adx` files
-from `obitaxonomy --download-ncbi-taxdump`) and a reference sequence FASTA in
-OBITools format. On the server these live at
+ecotag needs two inputs, configured under `taxonomy.databases.ecotag` in the marker YAML:
 
-```
-/home/shared/edna/reference_database/2023_06/teleo_custom_embl/customtaxonomy/
-/home/shared/edna/reference_database/2023_06/teleo_custom_embl/db_teleo_custom_and_embl.fasta
+| Key | Type | Default | Meaning |
+| --- | --- | --- | --- |
+| `tree` | Path | required | NCBI taxonomy tree directory (the `.tdx`/`.adx` files from `obitaxonomy`), passed to `ecotag -t`. |
+| `fasta` | Path | required | OBITools-format reference sequence FASTA, passed to `ecotag -R`. |
+
+On the server these are, for the teleo marker:
+
+```yaml
+taxonomy:
+  method: "ecotag"
+  databases:
+    ecotag:
+      tree: "/home/shared/edna/reference_database/2023_06/teleo_custom_embl/customtaxonomy/"
+      fasta: "/home/shared/edna/reference_database/2023_06/teleo_custom_embl/db_teleo_custom_and_embl.fasta"
 ```
 
-and are referenced from `config/markers/teleo.yaml` under
-`taxonomy.databases.ecotag`.
+> [!TIP]
+> Run `seednap validate <config>` before a full run. Pydantic only path-expands `tree` and `fasta` at load time; it does not check that the paths exist. A missing path passes the model check and otherwise fails only at the taxonomy step at run time. `validate`'s preflight flags such a path as MISSING in its summary table.
+
+## See also
+
+- [taxonomy-methods.md](taxonomy-methods.md) -- all taxonomy methods, output schema, and the `is_contaminant_candidate` flag from `taxonomy.contaminants`.
+- [configuration.md](configuration.md) -- full config reference.
