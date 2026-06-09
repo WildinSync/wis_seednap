@@ -116,8 +116,13 @@ def load_config(
     1. Loads default configuration (if provided)
     2. Loads user configuration
     3. Merges them (user config takes precedence)
-    4. Validates using Pydantic model
-    5. Returns validated configuration object
+    4. Validates using Pydantic model (only when validate=True)
+    5. Returns the validated config object, or the raw merged dict
+
+    Side effect: when validate=True, constructing PipelineConfig runs its
+    model_post_init, which calls mkdir on paths.output and paths.logs. Loading
+    a config therefore creates those two directories (and can raise on an
+    unwritable path); it is not a read-only operation.
 
     Args:
         config_path: Path to user configuration YAML file
@@ -125,7 +130,9 @@ def load_config(
         validate: Whether to validate the configuration (default: True)
 
     Returns:
-        Validated PipelineConfig object
+        A validated PipelineConfig when validate=True. When validate=False, the
+        raw merged config dict is returned instead (the return annotation still
+        reads PipelineConfig; this path is for debugging/special cases only).
 
     Raises:
         ConfigError: If configuration is invalid or cannot be loaded
@@ -156,9 +163,13 @@ def load_config(
 
 def validate_config_file(config_path: Path) -> tuple[bool, Optional[str]]:
     """
-    Validate a configuration file without loading it fully.
+    Validate a configuration file by fully loading it.
 
-    Useful for CLI validation commands.
+    This performs a complete load_config(validate=True): it merges defaults,
+    runs the full Pydantic model, and (via PipelineConfig.model_post_init)
+    creates paths.output and paths.logs. It is not a lightweight, side-effect-
+    free check; it reports any failure as (False, message) instead of raising.
+    Used by CLI validation commands.
 
     Args:
         config_path: Path to configuration file

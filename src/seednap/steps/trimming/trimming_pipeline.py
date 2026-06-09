@@ -170,6 +170,9 @@ class StandardTrimmer:
             forward_primer: Forward primer sequence
             reverse_primer: Reverse primer sequence
             keep_untrimmed: Save untrimmed reads (default: False)
+            discard_untrimmed: When True (default), pass-1 cutadapt drops reads in
+                which the 5' primer was not found; when False they are kept. Passed
+                through to trim_sample for each sample. See trim_sample for details.
 
         Returns:
             List of (r1_output, r2_output) tuples for each sample
@@ -230,6 +233,7 @@ class LigationTrimmer:
     3. Detect primers (expected orientation)
     4. Detect primers (reverse orientation)
     5. Merge and realign reads
+    6. Gunzip final output files (optional, controlled by gunzip_output)
     """
 
     def __init__(
@@ -439,11 +443,20 @@ class LigationTrimmer:
         realigned_dir = output_base_dir / "00_demultiplex_ligation" / "realigned"
         realigned_dir.mkdir(parents=True, exist_ok=True)
 
+        # Reads can be sequenced in either orientation. Round 1 (step 3) keeps
+        # reads where R1 carries the forward primer and R2 the reverse primer;
+        # round 2 (step 4) keeps the opposite-orientation reads, where R1 carries
+        # the reverse primer and R2 the forward primer. To make the final output
+        # consistent (final R1 always = forward-strand read, final R2 always =
+        # reverse-strand read), round 2's mates are swapped before merging:
+        # round2.R2 (the forward-primer read in opposite-orientation pairs) joins
+        # the final R1, and round2.R1 (the reverse-primer read) joins the final R2.
         for sample in samples:
             if sample in failed_samples:
                 continue
             try:
-                # Merge R1: round1_R1 + round2_R2 (swapped!)
+                # Final R1 = forward-strand reads: round1.R1 (already forward)
+                # + round2.R2 (forward-primer read from the swapped pairs).
                 self._merge_gzip_files(
                     [
                         primer_detect_dir / f"trim_round1_{sample}.R1.fastq.gz",
@@ -452,7 +465,8 @@ class LigationTrimmer:
                     realigned_dir / f"{sample}.R1.fastq.gz",
                 )
 
-                # Merge R2: round1_R2 + round2_R1 (swapped!)
+                # Final R2 = reverse-strand reads: round1.R2 (already reverse)
+                # + round2.R1 (reverse-primer read from the swapped pairs).
                 self._merge_gzip_files(
                     [
                         primer_detect_dir / f"trim_round1_{sample}.R2.fastq.gz",

@@ -3,12 +3,14 @@
 Renders a single portable ``.html`` file styled like a typeset scientific
 paper: a warm-paper page, serif (Computer Modern) typography, justified text,
 ``Figure N`` / ``Table N`` captions, and restrained monochrome publication
-figures with a single SeeDNAP-green accent. Every section (Summary, Dataset,
-Read tracking, Per-sample detail, Taxonomy, Feature QC, Controls, Provenance,
-Run log, Notes) is a self-contained selectable panel behind a sticky top
-navigation bar, implemented with pure CSS radio-tabs -- one panel visible at a
-time on screen, all panels expanded when printed. Nothing is repeated across
-tabs.
+figures with a single SeeDNAP-green accent. Each section is a self-contained
+selectable panel behind a sticky top navigation bar, implemented with pure CSS
+radio-tabs -- one panel visible at a time on screen, all panels expanded when
+printed. Nothing is repeated across tabs. Four sections are always present
+(Summary, Dataset, Read tracking, Per-sample detail), then Controls and
+Notes; the Taxonomic-assignment, OTU/feature-QC, Run-provenance, and Run-log
+sections are added by ``render`` only when their input data was supplied, so
+the live panel count varies (at most ten).
 
 Charts are matplotlib PNGs embedded as base64, so there are no external
 assets, no CDN, and no JavaScript (the tab switching is pure CSS). It is dataset-agnostic: every number and
@@ -145,6 +147,10 @@ _TEMPLATE = Template(
         padding:.3rem .7rem; border:1px solid var(--hair); border-radius:5px; color:var(--muted); background:#fff;}
   .tabs label:hover{color:var(--ink); border-color:var(--accent);}
   .panel{display:none;} .panel h2{margin-top:.2rem;} .panel{padding-top:1.4rem; padding-bottom:1rem;}
+  /* These three loops emit the show/active/focus CSS rules per tab index.
+     range(12) is a fixed upper bound on the number of panels (render emits at
+     most ten); bump it if more sections are ever added or panels beyond the
+     cap will not display. */
   {% for i in range(12) %}#tab-{{ i }}:checked ~ #panel-{{ i }}{% if not loop.last %},
   {% endif %}{% endfor %}{display:block;}
   {% for i in range(12) %}#tab-{{ i }}:checked ~ .topbar label[for="tab-{{ i }}"]{% if not loop.last %},
@@ -332,6 +338,10 @@ class HTMLReportBuilder:
             otu = self._otu_full()
             if otu is None:
                 return None
+            # The full OTU table has a different schema from the taxonomy CSV
+            # (no rank columns, but extra OTU-level columns total/length/chimera/
+            # spread), so its non-sample column set is listed separately here
+            # rather than reusing _TAX_META.
             meta = {"OTU", "OTU_ID", "ASV_ID", "total", "length", "chimera", "spread",
                     "sequence", "Sequence"}
             cols = [c for c in otu.columns if c not in meta]

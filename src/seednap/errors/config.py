@@ -147,6 +147,10 @@ def _one(err: Any) -> Tuple[str, str]:
         # Custom validators (pipeline.steps DAG, taxonomy.databases) already produce
         # self-contained messages; surface them verbatim minus pydantic's prefix.
         text = msg[len("Value error, "):] if msg.startswith("Value error, ") else msg
+        # Pick the code from where in the loc path the failing validator sits, so
+        # `seednap explain <CODE>` lands on the right topic: a validator rooted at
+        # `pipeline.*` (the steps DAG) -> 006; any path containing `databases`
+        # (a taxonomy database block) -> 008; anything else -> 005 (generic invalid value).
         code = "SDN-CFG-006" if loc and str(loc[0]) == "pipeline" else (
             "SDN-CFG-008" if "databases" in (str(p) for p in loc) else "SDN-CFG-005")
         return text, code

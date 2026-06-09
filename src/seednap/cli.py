@@ -17,6 +17,9 @@ console = Console()
 # Set by main() from the -v/--verbose flag. Command error handlers use it to show a full
 # Python traceback only when the user asked for verbose output; otherwise the actionable
 # message (often the external tool's own stderr) is what they see, not a buried stack trace.
+# Newer commands call _maybe_traceback() (which reads this global); older command handlers
+# (format-gbif, create-gbif, blast, manifest, clean) inline the same traceback dump but read
+# ctx.obj["verbose"] instead. Both carry the same flag, set together in main().
 _VERBOSE = False
 
 
@@ -500,14 +503,13 @@ def blast(
     REF_FASTA: Path to reference database FASTA file
     ASV_COUNT: Path to ASV count table CSV (seqtab_clean.csv from DADA2)
 
-    This command:
-    1. Creates BLAST database (if needed) from reference FASTA
-    2. Runs blastn search with configurable parameters
-    3. Extracts phylogeny from reference database headers
-    4. Filters hits by percent identity thresholds (species/genus/family)
-    5. Resolves ambiguous hits using LCA (Lowest Common Ancestor)
-    6. Merges taxonomy with ASV abundance table
-    7. Outputs final table with taxonomy and counts
+    Reported as three console stages:
+    1. Run blastn search (builds the BLAST DB from REF_FASTA if needed).
+    2. Process BLAST results: extract lineage from the reference headers,
+       apply the per-rank percent-identity thresholds (species/genus/family/
+       order/class), resolve ambiguous hits with the selected LCA algorithm,
+       and left-merge taxonomy onto the ASV abundance table.
+    3. Finalize: write the taxonomy+counts CSV and print a resolution summary.
     """
     from seednap.steps.taxonomic_assignment import BlastRunner, BlastTaxonomicAssigner
 
@@ -564,9 +566,11 @@ def blast(
         console.print(f"\nOutput file: [cyan]{output}[/cyan]")
         console.print(f"Total ASVs/OTUs: [green]{len(result)}[/green]")
 
-        # Show taxonomic resolution summary. Unassigned ranks are the literal string
-        # "Unassigned" (never NaN), so they must be excluded from the assigned count, or the
-        # summary would report 100% at every rank.
+        # Show taxonomic resolution summary, excluding unassigned ranks from the assigned
+        # count (otherwise the summary would report 100% at every rank). No-hit OTUs get the
+        # literal "Unassigned" (see BlastOutputFormatter), but the LCA cascade also NULLs
+        # ranks below the resolved level; .astype(str) renders those None/NaN cells as
+        # "None"/"nan", so the empty/NA-like strings here are real producers, not dead guards.
         unassigned = {"Unassigned", "nan", "", "NA", "None"}
         taxonomic_ranks = ["kingdom", "phylum", "class", "order", "family", "genus", "species"]
         console.print("\n[bold]Taxonomic resolution:[/bold]")
@@ -878,6 +882,9 @@ def dada2(
                 rdp_db_path=rdp_db,
                 species_db_path=species_db,
                 query_fasta=outputs["query_fasta"],
+                # "02_dada2" is the DADA2 step's output subdir convention (see the
+                # orchestrator/processor and the `report` command); keep this literal in
+                # sync with that layout if the output tree ever changes.
                 log_file=output_dir / "02_dada2" / marker / "dada2_taxonomy.log",
             )
 

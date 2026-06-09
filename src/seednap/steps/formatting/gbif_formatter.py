@@ -248,7 +248,7 @@ class GBIFFormatter:
             raise FileNotFoundError(
                 f"Taxonomy results file not found: {input_path}. This is the "
                 f"per-marker taxonomy CSV produced by the taxonomy step (e.g. "
-                f"outputs/03_taxonomy/<marker>/<marker>_<method>.csv). Check the "
+                f"outputs/<marker>_<method>.csv). Check the "
                 f"path is correct; if you are resuming a pipeline, the file may "
                 f"have been moved or deleted -- re-run the taxonomy step, or point "
                 f"--input at the existing taxonomy CSV."
@@ -335,6 +335,11 @@ class GBIFFormatter:
         if "rank" in df_long.columns:
             final_cols.append("rank")
         final_cols.extend(["sequence", "nb_reads", "eventID"])
+        # Preserve the contaminant annotation so create-gbif can surface contamination_flag.
+        # _transform_to_long_format carries it through the melt; the column is only present
+        # when taxonomy.contaminants was set (else create-gbif defaults the flag to False).
+        if "is_contaminant_candidate" in df_long.columns:
+            final_cols.append("is_contaminant_candidate")
 
         df_out = df_long[final_cols]
 
@@ -367,7 +372,10 @@ class GBIFFormatter:
         1. Reads ecotag output CSV
         2. Renames ecotag-specific columns to standard names
         3. Adds placeholder kingdom, phylum, class columns (as NA)
-        4. Drops ecotag-specific metadata columns
+        4. Drops ecotag-specific metadata columns: the named columns
+           id, definition, count, scientific_name, plus any column whose
+           name contains best_identity, best_match, match_count,
+           species_list, or taxid (pattern-matched)
         5. Performs same transformation as DADA2 (long format, add rank/taxon)
         6. Exports to CSV (if output_path specified)
 
@@ -390,7 +398,7 @@ class GBIFFormatter:
             raise FileNotFoundError(
                 f"Ecotag results file not found: {input_path}. This is the "
                 f"per-marker ecotag taxonomy CSV produced by the taxonomy step "
-                f"(e.g. outputs/03_taxonomy/<marker>/<marker>_ecotag.csv). Check "
+                f"(e.g. outputs/<marker>_ecotag.csv). Check "
                 f"the path is correct; if you are resuming a pipeline, the file may "
                 f"have been moved or deleted -- re-run the ecotag taxonomy step, or "
                 f"point --input at the existing ecotag CSV."
@@ -508,6 +516,9 @@ class GBIFFormatter:
         if "rank" in df_long.columns:
             final_cols.append("rank")
         final_cols.extend(["sequence", "nb_reads", "eventID"])
+        # Preserve the contaminant annotation so create-gbif can surface contamination_flag
+        # (same as from_dada2_rdp); the filter below drops it harmlessly when absent.
+        final_cols.append("is_contaminant_candidate")
 
         # Only include columns that exist
         final_cols = [col for col in final_cols if col in df_long.columns]

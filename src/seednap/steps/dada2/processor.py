@@ -1,7 +1,9 @@
 """DADA2 workflow orchestration for eDNA metabarcoding.
 
 This module provides high-level orchestration for the complete DADA2 workflow,
-integrating R script execution with metrics collection and quality reporting.
+integrating R script execution with ASV metrics collection and a short metrics
+summary. The QC plots are produced by the R script (dada2_process.R), not by
+this Python layer.
 """
 
 import logging
@@ -20,9 +22,12 @@ class Dada2Processor:
 
     This class coordinates:
     - DADA2 processing (quality control, filtering, denoising, chimera removal)
-    - Metrics collection and tracking
-    - Optional taxonomic assignment
-    - Report generation
+      by invoking the dada2_process.R script via Dada2Runner
+    - ASV metrics collection and a short metrics summary (summary.txt + JSON/CSV)
+
+    Taxonomic assignment is a separate orchestrator step
+    (steps/taxonomic_assignment/), and the pipeline run report (04_report) is
+    produced elsewhere; neither happens in this module.
     """
 
     def __init__(
@@ -94,11 +99,18 @@ class Dada2Processor:
             multithread: Use multithreading (default: True)
             chimera_method: Chimera detection method (default: "consensus")
             max_mismatch: Maximum mismatches in overlap region (default: 0)
-            pool: Pool samples for denoising (default: False)
+            pool: Pool samples for denoising (default: False). Ignored when
+                library_map resolves to >=2 libraries: the per-library branch
+                in dada2_process.R always denoises each sample independently
+                regardless of this flag.
             min_len: Minimum read length (None = no filter)
             max_len: Maximum read length (None = no filter)
             library_map: Optional path to a sample-to-library map used for
-                per-library error learning (None = no map)
+                per-library error learning (None = no map). When it groups
+                samples into >=2 libraries, errors are learned per library and
+                samples are denoised per-sample within each library (pool is
+                not honored on this path). With 0 or 1 library the standard
+                single-batch path runs and pool applies normally.
             collect_metrics: Collect and export metrics (default: True)
 
         Returns:
@@ -181,9 +193,10 @@ class Dada2Processor:
         Args:
             outputs: Dictionary of output paths from DADA2 processing
         """
-        # Note: For full metrics collection, we'd need to parse the DADA2 log files
-        # or run additional R commands to extract intermediate read counts.
-        # For now, we collect what's available from the outputs.
+        # This collects only ASV-level metrics from the final sequence table.
+        # Per-step intermediate read counts are written by dada2_process.R to
+        # track_reads.csv / feature_counts.csv and surfaced by the run report;
+        # they are not recomputed here.
 
         # Collect ASV metrics
         if outputs["seqtab_clean_t"].exists():

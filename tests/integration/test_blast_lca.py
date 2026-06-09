@@ -1,16 +1,32 @@
-"""Integration test for BlastTaxonomicAssigner correctness.
+"""Integration tests for BlastTaxonomicAssigner correctness.
 
 Builds a tiny synthetic BLAST TSV + reference DB + ASV count table, then
-verifies the four behaviors that Commits A, B, and C had to get right:
+exercises both LCA strategies (the default 'cascade' resolver and the
+'collapsed_taxonomy' resolver) plus the surrounding merge/contaminant logic.
+The behaviors covered:
 
-1. (I-1) OTUs with no BLAST hits survive the merge as 'Unassigned' rows.
-2. (I-2) The top-bitscore band collapses near-best disagreeing hits via LCA
-   (a single near-best hit alone does not lock in a confident species call
-   when the runner-up disagrees).
-3. (I-3) Cascade nulling: hits below a rank threshold null that rank and
-   every finer rank.
-4. (I-7) Candidate contaminants get is_contaminant_candidate=True without
-   being deleted.
+- Unassigned survival: OTUs with no BLAST hits survive the merge as
+  'Unassigned' rows rather than being silently dropped (also the empty-TSV
+  edge case).
+- Top-bitscore band collapse: equally-good (near-best) hits inside the
+  bitscore band that disagree on a rank collapse to their LCA, while hits
+  outside the band are ignored and the best hit's call survives.
+- lca_pident_delta floor: a hit inside the bitscore band but more than
+  lca_pident_delta below the best identity is excluded so it cannot
+  over-collapse a confident high-identity call.
+- Cascade nulling: a hit below the threshold for rank R nulls R and every
+  finer rank, keeping coarser ranks.
+- collapsed_taxonomy resolver: its identity window excludes lower-%id
+  off-targets, equally-good disagreeing hits collapse to their LCA, and a
+  hit below lca_pid yields Unassigned.
+- LCA-algorithm factory: 'cascade' and 'collapsed_taxonomy' build their
+  resolvers, 'fishbase_tiered' raises NotImplementedError, unknown values
+  raise ValueError.
+- CRABS 'NA'-sentinel handling for both resolvers: a missing-rank 'NA' is
+  treated as missing, never as a taxon and never leaked as the literal
+  string 'NA'.
+- Contaminant flagging: contaminant species get is_contaminant_candidate
+  set without being removed from the table.
 """
 
 from __future__ import annotations
@@ -103,7 +119,7 @@ def _write_blast_tsv(path: Path, rows: list[tuple]) -> None:
 
 
 def test_unassigned_otus_survive_merge(fixture_dir: Path) -> None:
-    """I-1: OTUs with no BLAST hits appear in the output as Unassigned."""
+    """OTUs with no BLAST hits appear in the output as Unassigned."""
     blast_tsv = fixture_dir / "blast.tsv"
     # Only OTU_1 gets a hit. OTU_2, OTU_3, OTU_4 should appear as Unassigned.
     _write_blast_tsv(
@@ -130,7 +146,7 @@ def test_unassigned_otus_survive_merge(fixture_dir: Path) -> None:
 
 
 def test_top_bitscore_band_collapses_near_best_disagreement(fixture_dir: Path) -> None:
-    """I-2: When equally-good (same-identity) hits disagree on family, LCA collapses below class.
+    """When equally-good (same-identity) hits disagree on family, LCA collapses below class.
 
     OTU_1 has two 100%-identity hits, Perca_fluviatilis (bitscore 119) and
     Cyprinus_carpio (bitscore 113, within MEGAN's 10% band). They agree on class
@@ -171,7 +187,7 @@ def test_top_bitscore_band_collapses_near_best_disagreement(fixture_dir: Path) -
 
 
 def test_lca_pident_floor_excludes_lower_identity_offtarget(fixture_dir: Path) -> None:
-    """D1 regression: a hit inside the bitscore band but >lca_pident_delta below the best
+    """Regression: a hit inside the bitscore band but >lca_pident_delta below the best
     identity must NOT collapse the LCA. Mirrors the real greina case where a 98.6% peanut
     worm sat in the bitscore band of seven 100% Bos hits and nulled them to kingdom.
 
@@ -355,7 +371,7 @@ def test_collapsed_taxonomy_below_floor_is_unassigned(fixture_dir: Path) -> None
 
 
 def test_top_bitscore_band_excludes_far_hit(fixture_dir: Path) -> None:
-    """I-2 (negative): Hits outside the band don't trigger LCA collapse.
+    """Negative case: hits outside the band don't trigger LCA collapse.
 
     Same as above but the runner-up bitscore (90) is outside the 10% band
     (threshold = 119 * 0.9 = 107.1). LCA should ignore it and keep the best
@@ -384,7 +400,7 @@ def test_top_bitscore_band_excludes_far_hit(fixture_dir: Path) -> None:
 
 
 def test_cascade_null_below_threshold(fixture_dir: Path) -> None:
-    """I-3: Below threshold for rank R, R and every finer rank are nulled."""
+    """Below threshold for rank R, R and every finer rank are nulled."""
     blast_tsv = fixture_dir / "blast.tsv"
     # pident = 87 -> below family threshold (90), above order (80).
     # Expect family/genus/species nulled, order/class kept.
@@ -417,7 +433,7 @@ def test_cascade_null_below_threshold(fixture_dir: Path) -> None:
 
 
 def test_contaminant_flagged_not_deleted(fixture_dir: Path) -> None:
-    """I-7: Contaminant species are flagged in is_contaminant_candidate, never removed."""
+    """Contaminant species are flagged in is_contaminant_candidate, never removed."""
     blast_tsv = fixture_dir / "blast.tsv"
     _write_blast_tsv(
         blast_tsv,

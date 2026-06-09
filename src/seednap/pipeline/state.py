@@ -4,7 +4,10 @@ This module provides state tracking functionality that allows the pipeline to:
 - Track which steps have been completed
 - Store step outputs and metadata
 - Resume from the last successful step after failure
-- Validate dependencies between steps
+
+Step ordering and dependency validation is not done here; it lives in
+config/models/operational.py (PipelineStepsConfig._validate_step_dependencies),
+which runs at config load time.
 """
 
 import json

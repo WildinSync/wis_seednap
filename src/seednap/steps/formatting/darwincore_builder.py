@@ -321,11 +321,15 @@ class DarwinCoreBuilder:
             r"_\d{2}$", "", regex=True
         )
 
+        # is_contaminant_candidate is per-sequence, so keeping it as a group key carries the
+        # contaminant flag through the replicate-summing groupby (it would otherwise be dropped,
+        # silently zeroing contamination_flag downstream on the --summarise-pcr path).
         group_cols = [
             c
             for c in [
                 "kingdom", "phylum", "class", "order", "family",
                 "genus", "species", "taxon", "rank", "sequence", "sampleID",
+                "is_contaminant_candidate",
             ]
             if c in df.columns
         ]
@@ -339,7 +343,18 @@ class DarwinCoreBuilder:
 
     @staticmethod
     def _remove_controls(df: pd.DataFrame) -> pd.DataFrame:
-        """Remove control samples (blank, CNEG, CMET, CEXT)."""
+        """Drop control rows whose eventID matches blank/CNEG/CMET/CEXT.
+
+        This is a self-contained, name-based filter on the GBIF formatting
+        path. It is NOT the same scheme as config.manifest.classify_control,
+        which is the FAIRe-anchored single source of truth for control identity
+        and recognises a strict superset of these patterns (CPCR, water,
+        EXT_NC/PCR_NC and underscore/space/run-suffixed forms). The two paths
+        can therefore disagree: e.g. a 'water' or 'CPCR' control is caught by
+        classify_control but passes through this regex untouched. They are kept
+        independent because GBIF formatting consumes the already-built taxonomy
+        table directly and does not carry the manifest classification through.
+        """
         mask = df["eventID"].str.contains(
             r"blank|CNEG|CMET|CEXT", case=False, na=False
         )

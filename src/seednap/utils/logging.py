@@ -9,7 +9,16 @@ from rich.logging import RichHandler
 
 
 class LogConfig:
-    """Logging configuration singleton."""
+    """Logging configuration singleton.
+
+    Re-entrancy contract: __init__ runs its body only once (guarded by
+    _initialized), so the stderr Console created on the first construction is
+    cached and reused for the lifetime of the process. setup_logging, by
+    contrast, may be called more than once (cli.py and orchestrator.py both
+    call the module-level setup_logging); each call clears the root logger's
+    handlers and re-adds fresh console/file handlers. In short: first call wins
+    for the Console, every call resets the root handlers.
+    """
 
     _instance: Optional["LogConfig"] = None
     _initialized: bool = False
@@ -82,8 +91,12 @@ class LogConfig:
 
             # Detailed format for file logs
             if format_style == "json":
-                # For JSON format, we'd need a JSON formatter library
-                # For now, use structured format
+                # WARNING: this is a JSON-shaped template, not guaranteed-valid
+                # JSON. The message is interpolated raw via %(message)s with no
+                # escaping, so any log message containing a double-quote,
+                # backslash, or newline (e.g. multi-line what/why/fix errors or
+                # a subprocess stderr dump) produces malformed JSON. A real JSON
+                # formatter is needed before feeding this to a log shipper.
                 file_format = (
                     '{"time": "%(asctime)s", "level": "%(levelname)s", '
                     '"logger": "%(name)s", "message": "%(message)s"}'
@@ -143,7 +156,10 @@ def log_pipeline_step(step_name: str, status: str = "start", logger: Optional[lo
 
     Args:
         step_name: Name of the pipeline step
-        status: Status of the step (start, complete, error)
+        status: Status of the step. "start" and "complete" log at INFO,
+            "error" logs at ERROR. Any other status string is accepted and
+            logged generically at INFO ("Pipeline step <name>: <status>");
+            no status value is rejected.
         logger: Logger instance (uses root if None)
     """
     if logger is None:

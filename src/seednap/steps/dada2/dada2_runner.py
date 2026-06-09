@@ -104,6 +104,12 @@ class Dada2Runner(RScriptRunner):
             - corresp_seq: ASV correspondence CSV
             - metrics_dir: Directory with QC/metrics plots
 
+            Note: this dict is not the complete output inventory. The R script
+            also writes track_reads.csv (per-sample read counts per step) and
+            feature_counts.csv (run-level ASV counts at merge/nonchim stages)
+            into the same marker dir; those are read directly by the report
+            subsystem rather than returned here.
+
         Raises:
             Dada2Error: If processing fails
         """

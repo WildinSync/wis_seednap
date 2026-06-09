@@ -86,7 +86,10 @@ class SwarmClusterer:
             output_dir: Directory for SWARM output files
             d: Clustering distance threshold (default: 1)
             fastidious: Enable fastidious mode to refine singletons (default: True)
-            boundary: Min mass for large OTUs in fastidious mode (default: 3)
+            boundary: Mass threshold for fastidious mode (swarm --boundary,
+                default: 3). OTUs whose total abundance (mass) exceeds this
+                value are "large"/heavy; OTUs with mass at or below it are
+                "small"/light and are the candidates grafted onto large OTUs.
             threads: Number of threads (default: 4)
             log_file: Optional log file path
 

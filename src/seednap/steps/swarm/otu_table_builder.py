@@ -100,7 +100,9 @@ class OtuTableBuilder:
         """
         Write normalized outputs compatible with the taxonomy assignment step.
 
-        Filters chimeric OTUs and produces:
+        Drops only OTUs flagged as definite chimeras (chimera == "Y").
+        Borderline ("?") and unscored ("NA") OTUs are intentionally KEPT, so
+        tightening this filter would change the clean OTU count. Produces:
         - query.fasta: representative sequences for taxonomy search
         - otu_table.csv: abundance matrix (same format as DADA2 seqtab_clean_t.csv)
 
@@ -117,7 +119,7 @@ class OtuTableBuilder:
         query_fasta_path.parent.mkdir(parents=True, exist_ok=True)
         abundance_csv_path.parent.mkdir(parents=True, exist_ok=True)
 
-        # Filter chimeric OTUs
+        # Drop only definite chimeras (Y); keep borderline (?) and unscored (NA).
         non_chimeric = otu_table[otu_table["chimera"] != "Y"].copy()
         logger.info(
             f"Filtered chimeras: {len(otu_table)} → {len(non_chimeric)} OTUs"
@@ -152,7 +154,15 @@ class OtuTableBuilder:
 
     @staticmethod
     def _parse_representatives(fasta_path: Union[str, Path]) -> Dict[str, str]:
-        """Parse representative sequences FASTA: amplicon ID → sequence."""
+        """Parse representative sequences FASTA: amplicon ID → sequence.
+
+        Requires unwrapped (single-line-per-sequence) FASTA: the one line
+        after each header is taken as the full sequence. This holds because
+        the upstream vsearch steps run with ``--fasta_width 0`` (see
+        vsearch_runner.py) and swarm ``--seeds`` output is unwrapped. If that
+        flag is ever dropped, wrapped sequences would be silently truncated
+        to their first line.
+        """
         fasta_path = Path(fasta_path)
         separator = ";size="
         representatives = {}
@@ -172,7 +182,21 @@ class OtuTableBuilder:
         stats_path: Union[str, Path],
     ) -> Tuple[Dict[str, int], List[Tuple[str, int]], Dict[str, Tuple[int, int]]]:
         """
-        Parse SWARM stats file.
+        Parse the SWARM ``-s`` statistics file.
+
+        Reads positional, tab-separated columns from the SWARM ``-s`` output.
+        Only the first four columns are used (column order is SWARM
+        version-sensitive across releases, so verify against the installed swarm):
+            - parts[0]: number of unique amplicons in the OTU (stored as
+              ``cloud_size``; note this is the count of unique amplicons in
+              the cluster, not an OTU-table "cloud" of reads).
+            - parts[1]: total mass (sum of all amplicon abundances), the OTU
+              total used to rank OTUs.
+            - parts[2]: seed amplicon ID (the OTU representative).
+            - parts[3]: seed amplicon abundance.
+        The seed ID carries a ``;size=N`` suffix because swarm is invoked
+        with ``--usearch-abundance`` (see swarm_runner.py); it is stripped so
+        the seed matches IDs from the other parsers.
 
         Returns:
             Tuple of:
@@ -190,7 +214,8 @@ class OtuTableBuilder:
                 if len(parts) < 4:
                     continue
                 cloud, mass, seed_raw, seed_abundance = parts[0], parts[1], parts[2], parts[3]
-                # Strip ;size=N; annotation so seed matches other parsers
+                # Strip the ;size=N suffix (from --usearch-abundance) so the
+                # seed ID matches the other parsers.
                 seed = seed_raw.split(";size=")[0]
                 stats[seed] = int(mass)
                 seeds[seed] = (int(seed_abundance), int(cloud))
@@ -232,16 +257,37 @@ class OtuTableBuilder:
 
     @staticmethod
     def _parse_uchime(uchime_path: Union[str, Path]) -> Dict[str, str]:
-        """Parse UCHIME output: amplicon ID → chimera status (Y/N/?)."""
+        """Parse UCHIME output: amplicon ID → chimera status (Y/N/?).
+
+        Reads the tab-separated ``--uchimeout`` table emitted by vsearch
+        ``--uchime_denovo`` (see vsearch_runner.py). Column positions are
+        version-sensitive and load-bearing, so verify against the installed vsearch:
+            - parts[1]: the query/sequence label (the OTU seed amplicon);
+              its ``;size=N`` annotation is stripped to match other parsers.
+            - parts[17]: the chimera classification flag, one of Y (chimera),
+              N (not a chimera), or ? (borderline).
+        Blank lines are skipped quietly; a non-blank line with no query-label
+        column is logged with a [WARN] and skipped (never dropped silently); a
+        line that has a label but no classification column defaults to "NA".
+        """
         uchime_path = Path(uchime_path)
         uchime = {}
 
         with open(uchime_path) as f:
             for line in f:
+                if not line.strip():
+                    continue  # blank line: skip quietly
                 parts = line.strip().split("\t")
                 try:
                     seed = parts[1].split(";")[0]
                 except IndexError:
+                    # No silent drop: a non-blank line we cannot resolve to a seed label is
+                    # logged, never dropped quietly (the SWARM/BLAST paths shipped a silent
+                    # ID-mismatch zero-fill once; this catches the next one in the log).
+                    logger.warning(
+                        f"[WARN] _parse_uchime: skipping unparseable line in {uchime_path} "
+                        f"(no query-label column): {line.strip()[:80]!r}"
+                    )
                     continue
                 try:
                     status = parts[17]
@@ -258,6 +304,10 @@ class OtuTableBuilder:
     ) -> Tuple[Dict[str, Dict[str, int]], List[str]]:
         """
         Parse per-sample FASTA files to get amplicon → sample → abundance mapping.
+
+        Reads only header lines, taking the amplicon ID and its ``;size=N``
+        abundance (written by vsearch ``--sizeout``); sequence body lines are
+        ignored, so this parser is unaffected by FASTA line wrapping.
 
         Args:
             fasta_paths: List of per-sample dereplicated FASTA files

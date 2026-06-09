@@ -229,7 +229,7 @@ class TagFileGenerator:
 
         Args:
             metadata_csv: Path to metadata CSV file
-            output_dir: Directory for output tag files (default: outputs/00_demultiplex_ligation/cutadapt_tags/)
+            output_dir: Directory for output tag files
             sample_col: Name of sample column (default: 'eventID')
             tag_col: Name of tag column (default: 'tag_demultiplex')
             library_col: Name of library column (default: 'library')

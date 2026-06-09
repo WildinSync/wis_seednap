@@ -36,8 +36,9 @@ def test_reverse_complement_basic() -> None:
 
 def test_reverse_complement_iupac_codes() -> None:
     """All IUPAC ambiguity codes complement to their proper symmetric pair."""
-    # IUPAC: A<->T, C<->G, R(AG)<->Y(CT), M(AC)<->K(GT), S(CG)<->S(CG)? actually S(CG)<->S(CG)
-    # W(AT)<->W(AT) (palindromic), H(ACT)<->D(AGT), B(CGT)<->V(ACG), N<->N
+    # Each IUPAC ambiguity code complements to its symmetric pair:
+    # R(AG)<->Y(CT), M(AC)<->K(GT), H(ACT)<->D(AGT), B(CGT)<->V(ACG), N<->N.
+    # S(CG) and W(AT) are self-complementary (palindromic).
     pairs = [
         ("R", "Y"), ("Y", "R"),  # purine <-> pyrimidine
         ("M", "K"), ("K", "M"),  # amino <-> keto

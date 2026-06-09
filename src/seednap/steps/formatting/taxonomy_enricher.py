@@ -47,7 +47,10 @@ class TaxonomyEnricher:
         1. Collect unique non-NA ``class`` values → query for phylum/kingdom.
         2. Collect unique ``scientificName`` values where class is NA →
            query for class/phylum/kingdom.
-        3. Left-join results back into the DataFrame.
+        3. Fill blanks per row from the query results (two row-wise passes,
+           not a merge). Each assignment only writes when the target cell is
+           empty (NA or ""); existing values are never overwritten, so
+           DADA2/BLAST-supplied taxonomy is preserved.
 
         Args:
             df: Must contain a ``scientificName`` column.  ``class``,

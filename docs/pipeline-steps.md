@@ -306,8 +306,10 @@ outputs/
   04_report/{marker}/            # Read-tracking table + HTML report (configurable dir)
     read_tracking.csv            #   Per-sample counts at each step + % retained
     read_tracking.txt            #   Human-readable table
+    step_summary.csv             #   Run-level reads + feature counts after each step
     report.html                  #   Self-contained HTML run report (when report.html_report)
   {marker}_{method}.csv          # Final taxonomy + abundance table (method = blast/ecotag/decipher/dada2RDP)
+  {marker}_{taxonomy.method}_gbif.csv  # GBIF-formatted long table (if "export" is in pipeline.steps)
   {marker}_{taxonomy.method}_cleaned.csv  # Decontaminated table, token from taxonomy.method = blast/ecotag/decipher/dada2 (if "clean" is in pipeline.steps)
   .{marker}_state.json           # Pipeline state (for resume)
 ```

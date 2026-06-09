@@ -144,7 +144,9 @@ def test_step_summary_dada2(tmp_path):
 
 def test_step_summary_missing_feature_counts_is_na_not_guessed(tmp_path):
     """A DADA2 run without feature_counts.csv yields NA ASV counts (never a guessed value),
-    while reads are still tracked. The absence is logged as a [WARN] (verified at runtime)."""
+    while reads are still tracked. The builder also emits a [WARN] for the absent
+    feature_counts.csv at runtime (see _feature_counts); this test asserts only the
+    NA/reads outcome, not the log line."""
     logs = tmp_path / "logs"; logs.mkdir()
     d2 = tmp_path / "02_dada2"; d2.mkdir()
     _write_trim_logs(logs, "S1", raw=1000, trimmed=900)
@@ -158,7 +160,8 @@ def test_step_summary_missing_feature_counts_is_na_not_guessed(tmp_path):
 def test_step_summary_partial_na_sums_measured_samples(tmp_path):
     """A step measured for some samples but NA for others sums the measured ones (it is not
     blanked to NA, which would discard a usable run total over one dropped sample). The
-    incompleteness is logged as a [WARN] (verified at runtime)."""
+    builder also emits a [WARN] naming the unmeasured samples at runtime (see step_summary);
+    this test asserts only the summed total, not the log line."""
     logs = tmp_path / "logs"; logs.mkdir()
     d2 = tmp_path / "02_dada2"; d2.mkdir()
     _write_trim_logs(logs, "S1", raw=1000, trimmed=900)

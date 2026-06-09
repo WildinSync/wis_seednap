@@ -106,7 +106,9 @@ class PipelineStepsConfig(StrictModel):
         # feature paths need trim earlier
         requires_before("dada2", "trim")
         requires_before("swarm", "trim")
-        # stages that consume the abundance table need a feature path earlier
+        # stages that consume the abundance table need a feature path earlier.
+        # taxonomy/clean accept whichever feature path is present (dada2 OR swarm, which are
+        # mutually exclusive), so they can't use requires_before (which names one prereq).
         feature_steps = [f for f in ("dada2", "swarm") if f in pos]
         for consumer in ("taxonomy", "clean"):
             if consumer in pos:

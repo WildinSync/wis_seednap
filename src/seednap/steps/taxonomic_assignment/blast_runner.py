@@ -300,7 +300,10 @@ class BlastOutputFormatter:
 
         Raises:
             FileNotFoundError: If BLAST TSV file does not exist
-            KeyError: If sequence ID from BLAST output not found in reference database
+            BlastError: If a sequence ID from BLAST output has no lineage among the
+                reference FASTA headers (usually a DB built from a different FASTA)
+            ValueError: If a reference header is malformed or has fewer than the
+                expected number of ;-separated ranks
         """
         blast_tsv = Path(blast_tsv)
         if not blast_tsv.exists():
@@ -816,6 +819,11 @@ class BlastTaxonomicAssigner:
 
         # 1. Format BLAST output (handles empty BLAST gracefully)
         formatted = self.formatter.format_blast_output(blast_tsv)
+        # format_blast_output yields real None for missing ranks in memory, but if the
+        # formatted frame was written to TSV and reloaded, those Nones come back as the
+        # literal string "None". Normalize them back so the LCA agreement/cascade logic
+        # below treats them as genuine missing ranks. Keep even though the in-memory path
+        # has no "None" strings: it is load-bearing for the reload-from-TSV path.
         formatted = formatted.replace("None", None)
 
         # 2. Cascade-filter and 3. LCA-resolve, only if we have any hits

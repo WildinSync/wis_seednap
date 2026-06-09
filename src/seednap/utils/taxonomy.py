@@ -76,10 +76,11 @@ def link_taxonomy_with_abundance(
             to flag in `is_contaminant_candidate`. Rows are flagged, never
             deleted -- downstream decides.
         pident_col: Name of an identity / confidence column in the taxonomy file
-            to copy to the output's `pident` column. If not provided (or
-            absent), the output's pident is NaN. For DECIPHER you can pass
-            `confidence_species`; for ecotag and methods without a single
-            confidence number, leave as None.
+            to copy to the output's `pident` column (for schema parity with the
+            BLAST path). If not provided (or absent), the output's pident is NaN.
+            The DADA2 RDP path wires this as `bootstrap_min` (see
+            _assign_dada2 in assigner.py), exposing the RDP bootstrap as pident;
+            the DECIPHER and ecotag paths do not pass it, so their pident is NaN.
         unassigned_label: Label for missing taxonomy entries.
 
     Returns:
@@ -123,7 +124,12 @@ def link_taxonomy_with_abundance(
     sample_cols = list(abundance_df.columns)
     abundance_df = abundance_df.reset_index().rename(columns={"index": sequence_col})
 
-    # Generate ASV_IDs from row order (matches BLAST/SWARM convention)
+    # Generate feature IDs from row order. The values are OTU_-prefixed, but the
+    # column is deliberately named ASV_ID: BLAST output uses an ASV_ID column for
+    # both ASV_- and OTU_-prefixed IDs, and downstream consumers (GBIF export,
+    # plotting, reporting) key on that one column name. Do not rename the column
+    # to "OTU_ID" to match the prefix; that would break the shared cross-method
+    # schema even though it looks more consistent.
     abundance_df["ASV_ID"] = [f"OTU_{i + 1}" for i in range(len(abundance_df))]
 
     # Load taxonomy. Empty taxonomy file -> empty df with sequence column;

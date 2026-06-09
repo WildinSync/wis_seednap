@@ -155,6 +155,11 @@ class PipelineOrchestrator:
         """
         Determine if a step should be run.
 
+        A completed step is skipped. A previously-failed step is retried. Any
+        other status (pending, or a step left RUNNING because a prior run was
+        killed mid-step before fail_step could record the failure) falls through
+        to True and is run/re-run. So an interrupted step re-runs on --resume.
+
         Args:
             step_name: Name of the step
 
@@ -174,7 +179,18 @@ class PipelineOrchestrator:
         return True
 
     def _get_trimmed_reads_dir(self) -> Path:
-        """Get trimmed reads directory from trim step output or fall back to raw data."""
+        """Get the trimmed-reads directory that dada2/swarm consume.
+
+        Reads only the ``trim`` step's ``trimmed_dir`` output. Config validation
+        forces ``trim`` to run before dada2/swarm, so that step is always present;
+        the fall-back to raw_data is therefore only reached if trim is absent.
+
+        Note: this deliberately does NOT read the demultiplex step's ``trimmed_dir``
+        output. The ligation-demux path returns a ``trimmed_dir`` (see
+        _run_ligation_demux), but nothing consumes it: the ``trim`` step re-runs over
+        raw_data and produces the directory used here. The demux ``trimmed_dir`` is
+        effectively unused in the dada2/swarm data flow.
+        """
         if self.state.is_step_completed("trim"):
             trim_step = self.state.get_step("trim")
             trimmed_reads_dir = trim_step.outputs.get("trimmed_dir") if trim_step else None
@@ -463,7 +479,13 @@ class PipelineOrchestrator:
 
     def _build_library_map(self) -> Optional[Path]:
         """Write a ``sample,library`` CSV for DADA2-by-library, derived from the manifest's
-        seq_run_id grouping (from report.sample_metadata and/or demultiplex.metadata).
+        seq_run_id grouping.
+
+        Grouping source precedence: report.sample_metadata (field CSV) is preferred over
+        demultiplex.metadata (lab CSV) as the primary manifest source (``src``). The lab CSV
+        is passed as the manifest's extra ``lab_csv`` only when it is distinct from ``src``
+        (i.e. when the field CSV was chosen as primary); if both point at the same file, no
+        extra lab CSV is supplied.
 
         Returns the CSV path, or None when per_library is off or no grouping source exists
         (the R script then runs the standard single-batch path). A single-library grouping is
@@ -1043,14 +1065,22 @@ class PipelineOrchestrator:
         """
         Run complete pipeline.
 
+        With stop_on_error=True (default) the first failing step re-raises and the
+        run aborts. With stop_on_error=False (--continue-on-error) a failing step is
+        logged and the loop proceeds to the next step; the run then reaches the end
+        and is marked complete even though one or more steps failed. In that partial-
+        failure case, check the returned state (or the "Failed steps: N" warning) for
+        per-step status rather than relying on the loop finishing.
+
         Args:
             stop_on_error: Whether to stop pipeline on first error (default: True)
 
         Returns:
-            Final pipeline state
+            Final pipeline state (may contain failed steps when stop_on_error=False)
 
         Raises:
-            Exception: If any step fails and stop_on_error=True
+            Exception: If a step fails and stop_on_error=True. When stop_on_error=False,
+                step failures are logged and the run continues; no exception is raised.
         """
         logger.info("=" * 80)
         logger.info(f"Starting seednap pipeline for marker: {self.config.marker.name}")
@@ -1095,7 +1125,11 @@ class PipelineOrchestrator:
                 else:
                     logger.warning(f"Continuing pipeline despite error in '{step_name}'")
 
-        # Mark pipeline as complete
+        # Mark pipeline as complete. NOTE: this point is reached unconditionally once
+        # the step loop finishes. Under stop_on_error=False a failed step does not abort
+        # the loop, so "completed" here means the loop ran to the end, not that every step
+        # succeeded. The "Failed steps: N" warning below is the only signal of partial
+        # failure; per-step status lives in the returned state.
         self.state.complete_pipeline()
         self._save_state()
 

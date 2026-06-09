@@ -144,14 +144,27 @@ class TaxonomicAssigner:
             threshold_family: Percent identity threshold for family (default: 86.5)
             threshold_order: Percent identity threshold for order (default: 80.0)
             threshold_class: Percent identity threshold for class (default: 70.0)
-            top_bitscore_pct: LCA bitscore band as percent of best (default: 10.0)
+            top_bitscore_pct: LCA bitscore band as percent of best, used by the
+                'cascade' resolver (default: 10.0)
+            lca_pident_delta: In-band pident tolerance for the 'cascade' resolver;
+                ignored by 'collapsed_taxonomy' (default: 1.0)
+            lca_algorithm: Which LCA resolver to use: 'cascade' (default) applies
+                the per-rank threshold_* cascade plus top_bitscore_pct/lca_pident_delta;
+                'collapsed_taxonomy' instead uses lca_pid/lca_diff and skips the
+                threshold_* cascade. This switches the entire LCA strategy.
+            lca_pid: Hard percent-identity floor for the 'collapsed_taxonomy'
+                resolver; ignored by 'cascade' (default: 90.0)
+            lca_diff: Top-identity window width for the 'collapsed_taxonomy'
+                resolver; ignored by 'cascade' (default: 1.0)
+            contaminants: Optional list of species to flag as contaminants
             perc_identity: Minimum percent identity for BLAST hits (default: 80.0)
             qcov_hsp_perc: Minimum query coverage per HSP (default: 80.0)
             evalue: Maximum e-value for BLAST hits (default: 1e-25)
             max_target_seqs: Maximum target sequences to keep (default: 5)
+            task: blastn task passed to the runner (default: 'megablast')
 
         Returns:
-            Dictionary with 'final_table' key pointing to output CSV
+            Dictionary with 'blast_output' and 'final_table' keys
         """
         if reference_fasta is None:
             raise ValueError("reference_fasta is required for BLAST method")
@@ -234,6 +247,9 @@ class TaxonomicAssigner:
             rdp_db_path: Path to RDP-formatted database (required)
             species_db_path: Path to species database (required)
             multithread: Use multithreading (default: True)
+            bootstrap_threshold: Minimum RDP bootstrap (%) for a rank to be retained;
+                below it the rank and every finer rank are nulled (default: 80)
+            contaminants: Species names to flag as is_contaminant_candidate (never removed)
 
         Returns:
             Dictionary with 'taxonomy' and 'final_table' keys
@@ -385,13 +401,19 @@ class TaxonomicAssigner:
     @staticmethod
     def get_method_requirements(method: Union[str, TaxonomyMethod]) -> Dict[str, str]:
         """
-        Get required parameters for a taxonomic assignment method.
+        Get the key required parameters for a taxonomic assignment method.
+
+        This is a curated summary for help text, not an exhaustive mirror of the
+        _assign_* signatures: it lists the must-provide databases plus a few common
+        threshold knobs, and intentionally omits optional/advanced parameters
+        (e.g. BLAST's lca_algorithm/lca_pid/lca_diff/contaminants, ecotag's
+        contaminants). Consult the _assign_<method> signature for the full set.
 
         Args:
             method: Assignment method
 
         Returns:
-            Dictionary mapping parameter names to descriptions
+            Dictionary mapping selected parameter names to descriptions
         """
         if isinstance(method, str):
             method = TaxonomyMethod(method.lower())

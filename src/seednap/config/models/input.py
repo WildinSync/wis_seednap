@@ -73,7 +73,11 @@ class DemultiplexConfig(StrictModel):
     @field_validator("metadata")
     @classmethod
     def validate_metadata_path(cls, v: Optional[Path], info: Any) -> Optional[Path]:
-        """Validate that metadata file exists if demultiplexing is enabled."""
+        """Normalize the metadata path (expand ~ and resolve to absolute).
+
+        Does not check that the file exists; existence is verified at runtime
+        since the config may be written before the metadata file is created.
+        """
         if v is not None:
             v = v.expanduser().resolve()
             # Note: we don't check file existence here since config might be created

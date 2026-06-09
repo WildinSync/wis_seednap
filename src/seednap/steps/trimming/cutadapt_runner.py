@@ -172,8 +172,13 @@ class CutadaptRunner:
             r1_output: Output R1 FASTQ file
             r2_input: Input R2 FASTQ file (optional for paired-end)
             r2_output: Output R2 FASTQ file (optional for paired-end)
-            forward_primer: Forward primer sequence (added as -g and -G)
-            reverse_primer: Reverse primer sequence (added as -g and -G)
+            forward_primer: Forward primer sequence. Added as -g on R1; for
+                paired-end, reverse_primer (or forward_primer if reverse is
+                absent) is added as -G on R2.
+            reverse_primer: Reverse primer sequence. Used as the -G adapter on
+                R2 when forward_primer is given. If forward_primer is absent,
+                reverse_primer is used as the fallback -g on R1 (and -G on R2
+                when paired-end).
             adapter_5p_r1: 5' adapter for R1 (-g)
             adapter_3p_r1: 3' adapter for R1 (-a)
             adapter_5p_r2: 5' adapter for R2 (-G)
@@ -389,6 +394,9 @@ class CutadaptRunner:
             str(self.min_length),
             "-g",
             adapter_5p_r1,
+            # R2's 5' adapter is supplied as -G (the paired counterpart of -g).
+            # adapter_5p_r2 is a required, always-populated arg, so the "-A"
+            # branch is never taken; it is only a guard against an empty value.
             "-G" if adapter_5p_r2 else "-A",
             adapter_5p_r2,
             "-o",

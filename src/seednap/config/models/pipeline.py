@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from seednap.config.models.base import StrictModel
 from seednap.config.models.dada2 import Dada2Config
@@ -61,6 +61,27 @@ class PipelineConfig(StrictModel):
     pipeline: PipelineStepsConfig = Field(
         default_factory=PipelineStepsConfig, description="Pipeline steps configuration"
     )
+
+    @model_validator(mode="after")
+    def _validate_demultiplex_protocol(self) -> "PipelineConfig":
+        """Reject an unrunnable demultiplexing protocol at load time, not mid-run.
+
+        Only 'ligation' demultiplexing is implemented. Checked here (cross-field) rather than on
+        DemultiplexConfig because the protocol only matters when demultiplexing actually runs
+        (i.e. 'demultiplex' is listed in pipeline.steps). This catches both protocol='standard'
+        (raises NotImplementedError mid-run) and the default protocol='none' (raises "Unknown
+        protocol" mid-run) -- the latter is the likely slip of adding 'demultiplex' to steps
+        without setting the protocol.
+        """
+        if "demultiplex" in self.pipeline.steps and self.demultiplex.protocol != "ligation":
+            raise ValueError(
+                f"'demultiplex' is in pipeline.steps but demultiplex.protocol is "
+                f"'{self.demultiplex.protocol}'. seednap currently implements only the 'ligation' "
+                f"demultiplexing protocol. Either set demultiplex.protocol to 'ligation', or -- if "
+                f"your reads are already demultiplexed (one sample per FASTQ pair) -- remove "
+                f"'demultiplex' from pipeline.steps so the pipeline starts at trimming."
+            )
+        return self
 
     def model_post_init(self, __context: Any) -> None:
         """Post-initialization validation."""

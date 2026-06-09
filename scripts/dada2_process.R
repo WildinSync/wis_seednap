@@ -1,4 +1,21 @@
-# dada2 code
+# DADA2 ASV pipeline, invoked as a black box from dada2_runner.py.
+#
+# Arguments (15 positional, parsed below): marker, input_dir, output_dir,
+# max_ee, trunc_q, min_overlap, max_n, rm_phix, multithread, chimera_method,
+# max_mismatch, pool, min_len, max_len, library_map.
+#
+# Two execution modes:
+#   - Single batch (default): one error model is learned across all samples,
+#     then samples are denoised and merged (per-sample, or pooled if pool=TRUE).
+#   - DADA2-by-library: when library_map groups samples into >= 2 libraries,
+#     error models are learned per library and the per-library tables merged.
+#
+# Output files written into output_dir/02_dada2/<marker>/:
+#   seqtab.rds, seqtab_clean.csv, seqtab_clean.rds, seqtab_clean_t.csv,
+#   track_reads.csv (per-sample read counts per step),
+#   feature_counts.csv (run-level ASV counts at merge/nonchim stages),
+#   corresp_seq.csv (ASV id -> sequence), query.fasta (for ecotag/blast),
+#   plus per-sample QC PNGs under the QC/ subdir.
 options(bitmapType = "cairo")
 
 suppressMessages(suppressWarnings({
@@ -50,6 +67,9 @@ df_to_fasta <- function(file, output_file_path){
   writeLines(fa, output_file_path)
 }
 
+# Extract the sample name from a ".../<sample>.R[12].fastq" path: strip the
+# directory and everything from the ".R1"/".R2" token onward. Used only to name
+# the QC PNGs; sample-name extraction elsewhere uses strsplit on "." instead.
 extract_pattern_samplename <- function(input_string) {
   sub(".*/([^/]+)\\.[Rr][12].*", "\\1", input_string)
 }
@@ -76,7 +96,8 @@ if(length(fastqFs) != length(fastqRs)) stop("Forward and reverse files do not ma
 # Explore quality 
 fnFs <- sort(list.files(pathFR, pattern="R1.fastq", full.names = TRUE))
 fnRs <- sort(list.files(pathFR, pattern="R2.fastq", full.names = TRUE))
-# Extract sample names, assuming filenames have format: SAMPLENAME_XXX.fastq
+# Extract sample names. The trim step writes "<sample>.R1.fastq" (dot-delimited,
+# uncompressed), so the name is the text before the first "."
 sample.names <- sapply(strsplit(basename(fnFs), "\\."), `[`, 1)
 
 # Check if file is not empty
@@ -137,8 +158,8 @@ invisible(mclapply(seq_along(paste0(filtpathFR, "/", fastqFs)), function(i) {
 # FIltered reads
 filtFs <- list.files(filtpathFR, pattern="R1.fastq", full.names = TRUE)
 filtRs <- list.files(filtpathFR, pattern="R2.fastq", full.names = TRUE)
-sample.names <- sapply(strsplit(basename(filtFs), "\\."), `[`, 1) # Assumes filename = samplename_XXX.fastq.gz
-sample.namesR <- sapply(strsplit(basename(filtRs), "\\."), `[`, 1) # Assumes filename = samplename_XXX.fastq.gz
+sample.names <- sapply(strsplit(basename(filtFs), "\\."), `[`, 1) # Assumes filename = samplename.R1.fastq (dot-delimited)
+sample.namesR <- sapply(strsplit(basename(filtRs), "\\."), `[`, 1) # Assumes filename = samplename.R2.fastq (dot-delimited)
 if(!identical(sample.names, sample.namesR)) stop("Forward and reverse files do not match.")
 names(filtFs) <- sample.names
 names(filtRs) <- sample.names
@@ -236,7 +257,8 @@ if (use_per_library) {
 }
 saveRDS(seqtab, file.path(marker_dir, "seqtab.rds"))
 
-# Merge multiple runs (if necessary)
+# Reload the merged sequence table just written above. (Any per-library merge
+# already happened at the makeSequenceTable/mergeSequenceTables step.)
 st1 <- readRDS(file.path(marker_dir, "seqtab.rds"))
 # Remove chimeras
 if (chimera_method != "none") {
