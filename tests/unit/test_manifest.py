@@ -35,7 +35,7 @@ def test_valid_sample_row():
 
 
 def test_unknown_column_is_rejected():
-    """extra='forbid': a typo'd column is a hard error (CLAUDE.md sec.5)."""
+    """extra='forbid': a typo'd column is a hard error (the strict-validation policy)."""
     with pytest.raises(Exception):
         SampleManifestRow(
             eventID="x", seq_run_id="r", samp_category="sample",

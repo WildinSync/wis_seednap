@@ -12,7 +12,7 @@ survive each step -- from artifacts the pipeline already writes:
 
 The reported chain adapts to the method (``DADA2_STEPS`` vs ``SWARM_STEPS``).
 
-Design rule (CLAUDE.md section 4): a count that cannot be measured is recorded
+Design rule (the no-silent-fallbacks policy): a count that cannot be measured is recorded
 as *absent* (``pandas.NA``), never as a silent ``0``. "Absent" and "genuinely
 zero" are distinguished, and an absent count raises a ``[WARN]`` so a broken
 measurement is never mistaken for real data loss.
@@ -37,6 +37,7 @@ _RE_WRITTEN = re.compile(r"Pairs written \(passing filters\):\s*([\d,]+)")
 
 
 def _parse_int(text: str) -> int:
+    """Parse an integer that may carry thousands separators (e.g. ``705,447``)."""
     return int(text.replace(",", ""))
 
 
@@ -216,7 +217,7 @@ class ReadTrackingBuilder:
         """Data-loss + measurement warnings.
 
         When ``log`` is true (pipeline runs), each is emitted as a ``[WARN]`` to
-        the configured logger so it lands in the run log (CLAUDE.md section 4).
+        the configured logger so it lands in the run log (the no-silent-fallbacks policy).
         The standalone CLI passes ``log=False`` to avoid flooding the console --
         the same messages appear in the HTML report's "Notable events".
         """
@@ -340,7 +341,7 @@ class ReadTrackingBuilder:
 
         If a step is measured for some samples but NA (unmeasured) for others, the total is the
         sum over the measured samples and a ``[WARN]`` names the step and the unmeasured samples,
-        so an incomplete run total is never reported silently (CLAUDE.md section 4).
+        so an incomplete run total is never reported silently (the no-silent-fallbacks policy).
         """
         if tracking_df is None:
             tracking_df = self.build()

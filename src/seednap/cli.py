@@ -122,6 +122,7 @@ def validate(ctx: click.Context, config_file: Path) -> None:
             # path missing on disk (a config can be valid yet point at a file that is not there).
             # Read-only checks; nothing is created.
             def _exists(p: Path) -> str:
+                """Return a colored found/MISSING status string for a path on disk."""
                 return "[green]found[/green]" if Path(p).exists() else "[red]MISSING[/red]"
 
             try:

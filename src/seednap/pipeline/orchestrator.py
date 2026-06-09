@@ -528,7 +528,7 @@ class PipelineOrchestrator:
         clustering step.
 
         Non-fatal: a reporting failure logs a ``[WARN]`` and never fails the
-        run (CLAUDE.md section 4 -- the report is observational only).
+        run (the no-silent-fallbacks policy -- the report is observational only).
         """
         try:
             import pandas as pd
@@ -595,7 +595,7 @@ class PipelineOrchestrator:
 
         When per-sample (field) metadata is configured (``report.sample_metadata``), derive
         a manifest from it and assert its eventID set matches the abundance table's sample
-        columns -- the up-front silent-ID-mismatch guard (CLAUDE.md sec.4), catching e.g. an
+        columns -- the up-front silent-ID-mismatch guard (the no-silent-fallbacks policy), catching e.g. an
         unlabelled ``Blank-PCR-3`` column. Warn-only and non-fatal: it never alters or fails
         the run.
         """
@@ -633,7 +633,7 @@ class PipelineOrchestrator:
 
         Called by the ``report`` step; gated by ``report.html_report`` (default on, set
         ``false`` to write only the read-tracking table). Non-fatal: failures log a ``[WARN]``
-        and never affect the run (CLAUDE.md section 4).
+        and never affect the run (the no-silent-fallbacks policy).
         """
         if not self.config.report.html_report:
             return
@@ -1005,7 +1005,7 @@ class PipelineOrchestrator:
     def run_report(self) -> Dict[str, Path]:
         """Reporting step: write the per-step read/sequence tracking table + step summary, and
         (when ``report.html_report`` is on) the self-contained HTML run report. Observational:
-        a reporting failure logs a ``[WARN]`` and never fails the run (CLAUDE.md section 4)."""
+        a reporting failure logs a ``[WARN]`` and never fails the run (the no-silent-fallbacks policy)."""
         step_name = "report"
         if not self._should_run_step(step_name):
             step = self.state.get_step(step_name)

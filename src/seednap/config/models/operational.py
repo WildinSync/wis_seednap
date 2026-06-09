@@ -88,6 +88,7 @@ class PipelineStepsConfig(StrictModel):
         pos = {s: i for i, s in enumerate(steps)}
 
         def requires_before(stage: str, prereq: str) -> None:
+            """Require ``prereq`` to be present and earlier than ``stage`` when ``stage`` is listed."""
             if stage in pos:
                 if prereq not in pos:
                     raise ValueError(

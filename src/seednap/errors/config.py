@@ -71,6 +71,7 @@ def _model_at(loc: Tuple[Any, ...]) -> Optional[Type[BaseModel]]:
 
 
 def _closest(word: str, options: List[str]) -> Optional[str]:
+    """Return the single closest match to ``word`` among ``options``, or None."""
     matches = difflib.get_close_matches(word, options, n=1, cutoff=0.6)
     return matches[0] if matches else None
 

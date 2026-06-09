@@ -16,7 +16,7 @@ Control identity comes from the FAIRe manifest (``samp_category`` / ``neg_cont_t
 ``extraction_ID``); a control column present in the abundance table but absent from the
 manifest (e.g. an unlabelled ``Blank-PCR-3``) is classified by name via
 :func:`~seednap.config.manifest.classify_control` and warned about. No silent fallbacks
-(CLAUDE.md sec.4): zero controls, an extraction blank matching no sample, and orphan
+(the no-silent-fallbacks policy): zero controls, an extraction blank matching no sample, and orphan
 control columns all emit ``[WARN]``; nothing is removed without being counted and reported.
 
 Statistical modes (decontam / microDecon prevalence) are a documented future option; this
@@ -53,6 +53,7 @@ class CleaningResult(BaseModel):
 
 
 def _is_extraction_neg(neg_cont_type: Optional[str]) -> bool:
+    """Return True if ``neg_cont_type`` names an extraction negative (extraction blank)."""
     return neg_cont_type is not None and "extraction" in neg_cont_type.lower()
 
 

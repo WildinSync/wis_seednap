@@ -1,7 +1,7 @@
 """Structured, user-facing errors for SeeDNAP.
 
 The design follows the consensus of the rustc / Elm compilers and Google's technical-writing
-guidance (and CLAUDE.md section 4): a good error states WHAT failed, WHY, and HOW to fix it,
+guidance (and the no-silent-fallbacks policy): a good error states WHAT failed, WHY, and HOW to fix it,
 never fails silently, and surfaces the root cause. Rather than ad-hoc strings, an error carries
 those parts as fields plus an optional stable code and docs pointer, and renders them
 consistently. The original exception is preserved via ``raise ... from`` so ``-v`` can still

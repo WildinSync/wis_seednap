@@ -17,8 +17,7 @@ CSV, optional ``otu_table_full``, optional state JSON, optional run-log file).
 The optional run-log section embeds the pipeline's console transcript,
 colorized by level via rich's own HTML export so the palette matches the live
 console exactly. Optional sources are ``[WARN]``-guarded -- a missing one
-yields an explanatory sentence rather than vanishing silently (CLAUDE.md
-section 4) -- and matplotlib is imported lazily so the report still renders
+yields an explanatory sentence rather than vanishing silently (the no-silent-fallbacks policy) -- and matplotlib is imported lazily so the report still renders
 (text + tables) if it is absent.
 """
 
@@ -285,6 +284,7 @@ class HTMLReportBuilder:
     # Optional data sources (lazy, [WARN]-guarded)
     # ------------------------------------------------------------------ #
     def _tax(self) -> Optional[pd.DataFrame]:
+        """Load and cache the taxonomy CSV; ``None`` (with a ``[WARN]``) if absent or unreadable."""
         if self._tax_cache is not None:
             return self._tax_cache
         if self.taxonomy_csv is None:
@@ -302,6 +302,7 @@ class HTMLReportBuilder:
         return self._tax_cache
 
     def _otu_full(self) -> Optional[pd.DataFrame]:
+        """Load the full OTU table CSV; ``None`` (with a ``[WARN]``) if absent or unreadable."""
         if self.otu_table_full is None:
             return None
         if not self.otu_table_full.exists():
@@ -316,6 +317,7 @@ class HTMLReportBuilder:
             return None
 
     def _tax_sample_cols(self, tax: pd.DataFrame) -> List[str]:
+        """Return the per-sample read-count columns of a taxonomy table (dropping meta and rank columns)."""
         return [c for c in tax.columns if c not in _TAX_META and c not in _RANKS]
 
     def _richness(self) -> Optional[pd.Series]:
@@ -340,6 +342,7 @@ class HTMLReportBuilder:
         return counts.astype(int)
 
     def _read_meta(self, path: Optional[Path], kind: str) -> Optional[pd.DataFrame]:
+        """Load a metadata CSV as all-string columns; ``None`` (with a ``[WARN]``) if absent or unreadable."""
         if path is None:
             return None
         if not path.exists():
@@ -358,11 +361,13 @@ class HTMLReportBuilder:
     # Numbers / metadata
     # ------------------------------------------------------------------ #
     def _n_controls(self) -> int:
+        """Count negative-control samples (those whose name begins with ``blank``)."""
         if "sample" not in self.df.columns:
             return 0
         return int(self.df["sample"].astype(str).str.lower().str.startswith("blank").sum())
 
     def _run_date(self) -> str:
+        """Return the run date (state completion/start timestamp), falling back to the report build date."""
         for key in ("completed_at", "started_at"):
             v = self.state.get(key) if isinstance(self.state, dict) else None
             if v:
@@ -372,6 +377,7 @@ class HTMLReportBuilder:
         return f"{datetime.now().date().isoformat()} (report build date)"
 
     def _descriptor(self) -> str:
+        """Build the one-line run descriptor (sample/control counts, method, feature count)."""
         n = len(self.df)
         nc = self._n_controls()
         method = "DADA2 ASV path" if self.is_dada2 else "SWARM OTU path"
@@ -383,6 +389,7 @@ class HTMLReportBuilder:
         return ", ".join(bits)
 
     def _abstract(self) -> str:
+        """Compose the prose run abstract (samples, retention, species assignment, warnings)."""
         n = len(self.df)
         if n == 0:
             return "No samples were found for this run; the read-tracking table is empty."
@@ -421,6 +428,7 @@ class HTMLReportBuilder:
     # HTML fragment helpers
     # ------------------------------------------------------------------ #
     def _fig(self, b64: Optional[str], caption: str) -> str:
+        """Wrap a base64 PNG in a numbered ``<figure>``; empty string if no image."""
         if not b64:
             return ""
         self._fig_n += 1
@@ -429,6 +437,7 @@ class HTMLReportBuilder:
 
     def _table(self, caption: str, headers: List[str], rows: List[List[str]],
                scroll: bool = False) -> str:
+        """Build a numbered HTML ``<table>`` (cell contents passed through verbatim), optionally scrollable."""
         self._tbl_n += 1
         head = "".join(f"<th>{_esc(h)}</th>" for h in headers)
         body = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
@@ -445,6 +454,7 @@ class HTMLReportBuilder:
     # Figures (within scoped rc_context; called once)
     # ------------------------------------------------------------------ #
     def _make_figures(self) -> Dict[str, str]:
+        """Render all report figures to base64 PNGs, keyed by name; empty dict if matplotlib is absent."""
         try:
             import matplotlib as mpl
             mpl.use("Agg")
@@ -456,6 +466,7 @@ class HTMLReportBuilder:
         figs: Dict[str, str] = {}
 
         def emit(fig: Any) -> str:
+            """Save a figure to a PNG buffer, close it, and return the base64 encoding."""
             buf = io.BytesIO()
             fig.savefig(buf, format="png")
             plt.close(fig)
@@ -577,6 +588,7 @@ class HTMLReportBuilder:
         rows: List[Tuple[str, str]] = []
 
         def add(label: str, value: object) -> None:
+            """Append a (label, value) row, skipping empty or missing values."""
             if value not in (None, "", "NA", "nan"):
                 rows.append((label, str(value)))
 
@@ -643,6 +655,7 @@ class HTMLReportBuilder:
 
     @staticmethod
     def _proj_val(proj: Optional[pd.DataFrame], col: str) -> Optional[str]:
+        """Read a single trimmed value from the first row of the project metadata; ``None`` if absent or blank."""
         if proj is None or col not in proj.columns or proj.empty:
             return None
         v = str(proj[col].iloc[0]).strip()
@@ -829,6 +842,7 @@ class HTMLReportBuilder:
         return "\n".join(p for p in parts if p) or None
 
     def _section_contamination(self) -> str:
+        """Build the controls/contamination section: features carrying reads in negative controls."""
         tax = self._tax()
         if tax is None:
             return ("<p>No taxonomy table was available, so contamination screening against "
@@ -861,6 +875,7 @@ class HTMLReportBuilder:
                                     ["feature taxon", *ctrl, "total in samples"], rows, scroll=True)
 
     def _section_timeline(self) -> Optional[str]:
+        """Build the run-provenance section: per-step status and duration; ``None`` if no step state."""
         steps = self.state.get("steps") if isinstance(self.state, dict) else None
         if not isinstance(steps, dict) or not steps:
             return None
@@ -901,8 +916,7 @@ class HTMLReportBuilder:
 
         Short logs are shown whole. Long logs keep run start/end context and
         *every* warning/error line; intervening routine lines are collapsed into
-        explicit ``… N omitted …`` markers (never silently dropped, CLAUDE.md
-        section 4). Returns ``(items, truncated, total_lines)`` where ``items`` is
+        explicit ``… N omitted …`` markers (never silently dropped, the no-silent-fallbacks policy). Returns ``(items, truncated, total_lines)`` where ``items`` is
         a list of ``(index, text)`` and a marker has index ``-1``.
         """
         n = len(lines)
@@ -1044,7 +1058,7 @@ class HTMLReportBuilder:
         """Embed the full pipeline run log, colorized by level like the console.
 
         A missing/disabled/unreadable log yields an explanatory sentence rather
-        than vanishing silently (CLAUDE.md section 4)."""
+        than vanishing silently (the no-silent-fallbacks policy)."""
         if self.log_file is None:
             return ("<p>No run-log file was passed to the report (logging to file may have been "
                     "disabled), so the console transcript is not embedded here.</p>")
@@ -1101,6 +1115,7 @@ class HTMLReportBuilder:
         return intro + meta + terminal
 
     def _summary_table_html(self) -> str:
+        """Build Table 1: the run-summary key/value table (counts, retention, assignment, chimeras)."""
         df = self.df
         n = len(df)
         rows = [["samples", f"{n:,}"]]
@@ -1133,6 +1148,7 @@ class HTMLReportBuilder:
         return self._table("Run summary.", ["quantity", "value"], rows)
 
     def _methods(self) -> str:
+        """Build the notes/methods section: control conventions, retention thresholds, footer."""
         s = self.summary
         parts = [
             "<p>Controls are identified by the <code>Blank*</code> sample-name prefix; "

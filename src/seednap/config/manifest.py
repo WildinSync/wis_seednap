@@ -15,7 +15,7 @@ What lives here:
 * :class:`SampleManifest` -- a validated collection of rows plus convenience accessors.
 * :func:`load_manifest` -- read + validate a canonical manifest CSV.
 * :func:`validate_against_abundance` -- the up-front cross-CSV ``eventID`` check (the
-  silent-ID-mismatch guard, CLAUDE.md sec.4).
+  silent-ID-mismatch guard, the no-silent-fallbacks policy).
 * :func:`classify_control` -- the single source of truth for control classification by
   name pattern, a strict superset of the legacy ``blank|CNEG|CMET|CEXT`` regex.
 
@@ -34,7 +34,7 @@ Design notes (corrections from the manifest cross-check, ``03-manifest-verificat
   e.g. ``not applicable: control sample``) all normalize to ``None`` here; a typed,
   ISO-8601 canonical form is enforced for ``eventDate``.
 
-No silent fallbacks (CLAUDE.md sec.4): a missing required field raises with the offending
+No silent fallbacks (the no-silent-fallbacks policy): a missing required field raises with the offending
 ``eventID``/file named; ambiguity is surfaced by the migrator as ``[WARN]``, never guessed.
 """
 
@@ -107,7 +107,7 @@ class ControlClass(BaseModel):
     warn_reason: Optional[str] = Field(
         default=None,
         description="Set when the classification is an inference or an ambiguous "
-        "control-looking name; the caller must emit a [WARN] (CLAUDE.md sec.4)",
+        "control-looking name; the caller must emit a [WARN] (the no-silent-fallbacks policy)",
     )
 
     @property
@@ -198,7 +198,7 @@ class SampleManifestRow(BaseModel):
     """One canonical manifest row: a single sample in a single sequencing run/library.
 
     FAIRe-anchored, strict (``extra="forbid"``): an unknown column name is a typo and
-    errors at load (CLAUDE.md sec.5). The same biological sample sequenced in two runs is
+    errors at load (the strict-validation policy). The same biological sample sequenced in two runs is
     two rows (FAIRe ``experimentRunMetadata`` granularity), which is what enables
     DADA2-by-library and per-run control association.
     """
@@ -414,7 +414,7 @@ class SampleManifest:
             logger.warning(
                 "[WARN] manifest: expected=at least one negative/positive control sample, "
                 "got=none detected, fallback=proceeding (contamination cannot be assessed "
-                "for this run; CLAUDE.md sec.4)"
+                "for this run; the no-silent-fallbacks policy)"
             )
 
     def check_completeness(self) -> None:
@@ -562,7 +562,7 @@ def validate_against_abundance(
 ) -> AbundanceValidationResult:
     """Cross-check the manifest's ``eventID`` set against an abundance table's sample columns.
 
-    This is the up-front silent-ID-mismatch guard (CLAUDE.md sec.4): an abundance column
+    This is the up-front silent-ID-mismatch guard (the no-silent-fallbacks policy): an abundance column
     with no manifest row (an *orphan*, e.g. a ``Blank-PCR-3`` present in the OTU table but
     absent from the field metadata) would otherwise be silently treated as an unknown
     field sample. Orphans are reported and ``[WARN]``-logged (or raised if

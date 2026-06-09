@@ -18,7 +18,7 @@ owns the stable canonical schema) because all the era-specific heuristics live h
   including the legacy ``tag_demltiplex`` typo) from a legacy demux ``metadata_lab_*.csv``.
 
 Every dropped column, ambiguous control, missing/orphan ``extraction_ID``, defaulted
-``seq_run_id`` and zero-control dataset is surfaced as a ``[WARN]`` (CLAUDE.md sec.4); a
+``seq_run_id`` and zero-control dataset is surfaced as a ``[WARN]`` (the no-silent-fallbacks policy); a
 missing sample key or an unresolvable date order raises naming the file.
 
 Environmental measurement columns with no FAIRe slot (pH, conductivity, weather, lab codes
@@ -142,7 +142,7 @@ def _build_header_map(
     A ``pcr_code_*`` column is recognised (carried in ``dropped_known``) regardless of its
     marker token. If two raw columns canonicalise to the same field the first wins and the
     second is recorded in ``collisions`` (as ``(dropped_raw, kept_raw, canonical)``) so the
-    caller can ``[WARN]`` -- never a silent discard (CLAUDE.md sec.4).
+    caller can ``[WARN]`` -- never a silent discard (the no-silent-fallbacks policy).
     """
     field_to_raw: Dict[str, str] = {}
     dropped_known: List[str] = []
@@ -283,6 +283,7 @@ def normalise_event_dates(
 
     # The two non-year fields, in positional order (a, b).
     def _nonyear(f0: int, f1: int, f2: int) -> Tuple[int, int]:
+        """Return the two non-year positional fields (a, b), dropping whichever holds the year."""
         return (f1, f2) if year_pos == 0 else (f0, f1)
 
     day_first_evidence = any(_nonyear(f0, f1, f2)[0] > 12 for _, f0, f1, f2 in three)   # a is day

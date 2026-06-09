@@ -358,7 +358,7 @@ class BlastOutputFormatter:
             # Assign to columns. The CRABS missing-rank sentinel ("NA") is normalized to None
             # here, at the single point where the DB-format lineage is parsed, so every
             # downstream consumer (both LCA resolvers, the threshold cascade, the export) sees a
-            # genuine missing rank rather than a taxon literally named "NA" (CLAUDE.md sec.4).
+            # genuine missing rank rather than a taxon literally named "NA" (the no-silent-fallbacks policy).
             phylo = dict(zip(self.TAXONOMIC_RANKS, phylo_values))
             for rank in self.TAXONOMIC_RANKS:
                 value = phylo[rank]
@@ -547,6 +547,7 @@ class BlastLCAResolver:
 
         # Helper: keep exactly one row by label
         def _keep_one(group_df: pd.DataFrame, keep_label: int) -> pd.DataFrame:
+            """Set keep_for_analysis True on the single row at keep_label, False elsewhere."""
             keep_mask = pd.Series(False, index=group_df.index)
             keep_mask.loc[keep_label] = True
             group_df["keep_for_analysis"] = keep_mask
@@ -843,7 +844,7 @@ class BlastTaxonomicAssigner:
             # D1 guard: an OTU whose best hit is well above the genus identity threshold
             # but which still collapsed below genus (an LCA across disagreeing in-band
             # hits) is surfaced loudly, so a confident call is never silently lost to an
-            # over-broad band (CLAUDE.md sec.4).
+            # over-broad band (the no-silent-fallbacks policy).
             genus_thr = getattr(self.filter, "threshold_genus", 96.0)
             res_pident = pd.to_numeric(result["pident"], errors="coerce")
             collapsed = result[(res_pident >= genus_thr) & (result["genus"].isna())]
@@ -862,7 +863,7 @@ class BlastTaxonomicAssigner:
             # lca_pid is marked Unassigned (all ranks null) yet retains its best below-floor
             # pident -- it would otherwise be indistinguishable from a genuine no-hit OTU,
             # which IS warned below (n_unassigned). Surface the dropped-by-floor count so the
-            # two cases are distinguishable and no hit is discarded silently (CLAUDE.md sec.4).
+            # two cases are distinguishable and no hit is discarded silently (the no-silent-fallbacks policy).
             if self.lca_algorithm == "collapsed_taxonomy":
                 all_null = result[phylo_cols].isna().all(axis=1)
                 below_floor = result[all_null & res_pident.notna()]

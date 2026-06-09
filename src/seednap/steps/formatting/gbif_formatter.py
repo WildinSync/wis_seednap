@@ -43,6 +43,7 @@ class GBIFFormatter:
         df = df.copy()
 
         def determine_rank(row: pd.Series) -> str:
+            """Return the lowest taxonomic rank with a valid assignment for one row."""
             # Check if species is valid (no "/" and not NA)
             species_valid = pd.notna(row.get("species")) and "/" not in str(
                 row.get("species")
@@ -87,6 +88,7 @@ class GBIFFormatter:
         df = df.copy()
 
         def get_taxon(row: pd.Series) -> Optional[str]:
+            """Return the taxon name at the row's rank, or the lowest filled higher rank."""
             rank = row.get("rank")
 
             if rank == "species":

@@ -126,6 +126,7 @@ class TaxonomyEnricher:
         # 3. Apply lookups
         # By class → fill phylum/kingdom
         def _fill_from_class(row: pd.Series) -> pd.Series:
+            """Fill empty phylum/kingdom from the row's class lookup."""
             cls = row.get("class")
             if pd.notna(cls) and cls != "" and cls in lookup_by_class:
                 phylum, kingdom = lookup_by_class[cls]
@@ -139,6 +140,7 @@ class TaxonomyEnricher:
 
         # By scientificName → fill class/phylum/kingdom where class was missing
         def _fill_from_sci(row: pd.Series) -> pd.Series:
+            """Fill empty class/phylum/kingdom from the scientificName lookup."""
             if pd.notna(row.get("class")) and row["class"] != "":
                 return row
             sci = row.get("scientificName")
