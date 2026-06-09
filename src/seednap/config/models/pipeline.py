@@ -67,4 +67,14 @@ class PipelineConfig(StrictModel):
         # Create output directories if they don't exist
         for path_name in ["output", "logs"]:
             path = getattr(self.paths, path_name)
-            path.mkdir(parents=True, exist_ok=True)
+            try:
+                path.mkdir(parents=True, exist_ok=True)
+            except OSError as e:
+                raise ValueError(
+                    f"Cannot create the paths.{path_name} directory '{path}': {e}. "
+                    f"seednap creates paths.output and paths.logs when the config loads, and this "
+                    f"location is not writable -- often a read-only mount, or a directory owned by "
+                    f"another user (a common cause on the shared server is a config copied from a "
+                    f"colleague that still points at their home). Set paths.{path_name} to a "
+                    f"directory you own and can write to."
+                ) from e

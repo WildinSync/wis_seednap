@@ -118,6 +118,19 @@ class DarwinCoreBuilder:
         self._validate_sample_metadata(sample_meta)
         self._validate_project_metadata(project_meta)
 
+        # The taxonomy results table (format-gbif output) must carry the long-format columns we
+        # read directly below; validate up-front so a missing one is a clear error rather than a
+        # raw pandas KeyError mid-build.
+        results_required = ("eventID", "taxon", "nb_reads")
+        missing_results = [c for c in results_required if c not in results.columns]
+        if missing_results:
+            raise ValueError(
+                f"Taxonomy results table (TAXONOMY_RESULTS) is missing required column(s) "
+                f"{missing_results}. create-gbif expects the long-format output of "
+                f"`seednap format-gbif` (eventID, taxon, nb_reads, plus class/order/family/"
+                f"genus/species). Run format-gbif first and pass its output here."
+            )
+
         # PCR replicate summarisation
         if self.summarise_pcr_replicates:
             results = self._summarise_pcr_replicates(results)
@@ -386,7 +399,9 @@ class DarwinCoreBuilder:
         missing = [c for c in required if c not in sample_meta.columns]
         if missing:
             raise ValueError(
-                f"Sample metadata missing required columns: {missing}"
+                f"Sample metadata (the create-gbif SAMPLE_METADATA CSV) is missing required "
+                f"column(s): {missing}. Each sample needs at least an eventID and an eventDate; "
+                f"add these columns to the CSV."
             )
 
         # Latitude / longitude range checks
@@ -424,7 +439,8 @@ class DarwinCoreBuilder:
         missing = [c for c in required if c not in project_meta.columns]
         if missing:
             raise ValueError(
-                f"Project metadata missing required columns: {missing}"
+                f"Project metadata (the create-gbif PROJECT_METADATA CSV) is missing required "
+                f"column(s): {missing}. add these columns (one project row) to the CSV."
             )
         empty = [
             c for c in required

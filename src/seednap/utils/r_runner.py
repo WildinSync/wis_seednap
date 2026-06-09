@@ -7,7 +7,7 @@ and DECIPHER runners.
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Type, Union
 
 from seednap.utils.subprocess import run_subprocess
 
@@ -39,7 +39,7 @@ class RScriptRunner:
     and call `super().__init__(timeout)` in their constructor.
     """
 
-    _error_class: type = RScriptError
+    _error_class: Type[Exception] = RScriptError
 
     def __init__(self, timeout: int = 7200):
         """
@@ -58,11 +58,20 @@ class RScriptRunner:
         Raises:
             RScriptError (or subclass): If Rscript is not found
         """
-        run_subprocess(
-            ["Rscript", "--version"],
-            timeout=10,
-            error_class=self._error_class,
-        )
+        try:
+            run_subprocess(
+                ["Rscript", "--version"],
+                timeout=10,
+                error_class=self._error_class,
+            )
+        except self._error_class as e:
+            raise self._error_class(
+                f"{e}\n"
+                f"  R (Rscript) drives seednap's DADA2 ASV inference and the DADA2-RDP / DECIPHER "
+                f"taxonomy steps, so the environment also needs the 'dada2' and 'DECIPHER' R "
+                f"packages. Once R is on PATH, verify the packages with: "
+                f"Rscript -e 'packageVersion(\"dada2\")'"
+            ) from e
 
     def _run_r_script(
         self,
@@ -86,7 +95,11 @@ class RScriptRunner:
         """
         script_path = Path(script_path)
         if not script_path.exists():
-            raise FileNotFoundError(f"R script not found: {script_path}")
+            raise FileNotFoundError(
+                f"Bundled R script not found: {script_path}. The scripts/ directory that ships "
+                f"with seednap is missing or incomplete -- this is a broken installation, not a "
+                f"config problem. Reinstall from a complete checkout (pip install -e .)."
+            )
 
         cmd = ["Rscript", str(script_path)] + [str(arg) for arg in args]
 

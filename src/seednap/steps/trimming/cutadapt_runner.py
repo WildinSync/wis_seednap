@@ -106,17 +106,32 @@ class CutadaptRunner:
             return result.stdout
 
         except subprocess.CalledProcessError as e:
-            error_msg = f"cutadapt failed: {e.stderr}"
+            stderr = (e.stderr or "").strip() or "(no stderr captured)"
+            error_msg = (
+                f"cutadapt exited with an error (status {e.returncode}); its own output is below.\n"
+                f"  --- cutadapt stderr ---\n{stderr}\n  --- end stderr ---\n"
+                f"  Common causes: an invalid primer (only IUPAC codes ABCDGHIKMNRSTUVWXY are "
+                f"allowed in the forward/reverse primer), or a malformed/empty input FASTQ."
+            )
             logger.error(error_msg)
             raise CutadaptError(error_msg) from e
 
         except subprocess.TimeoutExpired as e:
-            error_msg = f"cutadapt timed out after {self.timeout} seconds"
+            error_msg = (
+                f"cutadapt did not finish within {self.timeout}s and was killed. This usually "
+                f"means a very large input or a heavily loaded machine; re-run on a quieter "
+                f"machine or raise the timeout."
+            )
             logger.error(error_msg)
             raise CutadaptError(error_msg) from e
 
         except FileNotFoundError as e:
-            error_msg = "cutadapt command not found. Is cutadapt installed?"
+            error_msg = (
+                "Required tool 'cutadapt' is not installed or not on PATH (seednap uses it for "
+                "primer trimming). Activate the environment that has it and verify:\n"
+                "  conda activate /home/shared/edna/envs/seednap   # ETH ELE eDNA server\n"
+                "  cutadapt --version"
+            )
             logger.error(error_msg)
             raise CutadaptError(error_msg) from e
 

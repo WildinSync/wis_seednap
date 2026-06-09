@@ -177,7 +177,13 @@ class SwarmProcessor:
             )
 
         if not sample_fastas:
-            raise ValueError("All samples produced empty output after merging")
+            raise ValueError(
+                "All samples produced empty output after read merging, so the SWARM path has no "
+                "sequences to cluster. Usually the paired reads do not overlap (the amplicon is "
+                "longer than read1 + read2) or the primers were not trimmed. Check the trim-step "
+                "output is non-empty, and the swarm.merge settings (fastq_minovlen, "
+                "fastq_maxdiffs) for your amplicon length."
+            )
 
         # Step 4: Combine and globally dereplicate (with --sizein to sum abundances)
         combined_path = self.output_dir / "combined.fasta"

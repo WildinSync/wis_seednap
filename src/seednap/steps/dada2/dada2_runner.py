@@ -110,27 +110,41 @@ class Dada2Runner(RScriptRunner):
         if script_path is None:
             script_path = r_script_path("dada2_process.R")
 
-        self._run_r_script(
-            script_path=script_path,
-            args=[
-                marker,
-                str(trimmed_reads_dir),
-                str(output_dir),
-                str(max_ee),
-                str(trunc_q),
-                str(min_overlap),
-                str(max_n),
-                str(rm_phix).upper(),
-                str(multithread).upper(),
-                chimera_method,
-                str(max_mismatch),
-                str(pool).upper(),
-                str(min_len if min_len is not None else 0),
-                str(max_len if max_len is not None else 0),
-                str(library_map) if library_map is not None else "",
-            ],
-            log_file=log_file,
-        )
+        try:
+            self._run_r_script(
+                script_path=script_path,
+                args=[
+                    marker,
+                    str(trimmed_reads_dir),
+                    str(output_dir),
+                    str(max_ee),
+                    str(trunc_q),
+                    str(min_overlap),
+                    str(max_n),
+                    str(rm_phix).upper(),
+                    str(multithread).upper(),
+                    chimera_method,
+                    str(max_mismatch),
+                    str(pool).upper(),
+                    str(min_len if min_len is not None else 0),
+                    str(max_len if max_len is not None else 0),
+                    str(library_map) if library_map is not None else "",
+                ],
+                log_file=log_file,
+            )
+        except Dada2Error as e:
+            raise Dada2Error(
+                f"{e}\n\n"
+                f"DADA2 ASV inference failed for marker '{marker}'. The R stderr above is the "
+                f"primary clue; the usual fixable causes are:\n"
+                f"  - filtering removed all reads -> relax dada2.filter.max_ee (e.g. 3-5) or "
+                f"lower dada2.filter.trunc_q in the marker YAML;\n"
+                f"  - too few read pairs merged -> lower dada2.merge.min_overlap (or raise "
+                f"dada2.merge.max_mismatch) for short amplicons;\n"
+                f"  - missing R packages -> Rscript -e 'packageVersion(\"dada2\")'.\n"
+                f"  The full R output for this run is in the dada2 log under "
+                f"{Path(output_dir) / '02_dada2' / marker}/."
+            ) from e
 
         # Construct output paths
         output_dir = Path(output_dir)
@@ -187,7 +201,11 @@ class Dada2Runner(RScriptRunner):
             missing = [pkg for pkg, ver in versions.items() if ver == "NOT_INSTALLED"]
             if missing:
                 raise Dada2Error(
-                    f"Required R packages not installed: {', '.join(missing)}"
+                    f"Required R packages not installed: {', '.join(missing)}. "
+                    f"DADA2 and DECIPHER need these in the active R environment "
+                    f"(Bioconductor: dada2, Biostrings, DECIPHER; CRAN: dplyr, ggplot2, patchwork). "
+                    f"Activate the conda env that provides them "
+                    f"(conda activate /home/shared/edna/envs/seednap) or install the missing ones there."
                 )
 
             logger.info(f"Found R packages: {versions}")

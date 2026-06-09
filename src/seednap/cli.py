@@ -14,6 +14,19 @@ from seednap.utils.logging import setup_logging
 
 console = Console()
 
+# Set by main() from the -v/--verbose flag. Command error handlers use it to show a full
+# Python traceback only when the user asked for verbose output; otherwise the actionable
+# message (often the external tool's own stderr) is what they see, not a buried stack trace.
+_VERBOSE = False
+
+
+def _maybe_traceback() -> None:
+    """Print the current exception's traceback only in verbose (-v) mode."""
+    if _VERBOSE:
+        import traceback
+
+        console.print(traceback.format_exc())
+
 
 def print_error(message: str) -> None:
     """Print error message in red."""
@@ -56,6 +69,8 @@ def main(ctx: click.Context, verbose: bool, quiet: bool) -> None:
     ctx.ensure_object(dict)
     ctx.obj["verbose"] = verbose
     ctx.obj["quiet"] = quiet
+    global _VERBOSE
+    _VERBOSE = verbose
 
     # Setup basic logging (subcommands may reconfigure)
     level = "DEBUG" if verbose else "WARNING" if quiet else "INFO"
@@ -852,9 +867,7 @@ def dada2(
         sys.exit(1)
     except Exception as e:
         print_error(f"DADA2 processing failed: {e}")
-        import traceback
-
-        console.print(traceback.format_exc())
+        _maybe_traceback()
         sys.exit(1)
 
 
@@ -952,9 +965,7 @@ def swarm(
         sys.exit(1)
     except Exception as e:
         print_error(f"SWARM processing failed: {e}")
-        import traceback
-
-        console.print(traceback.format_exc())
+        _maybe_traceback()
         sys.exit(1)
 
 
@@ -1203,10 +1214,18 @@ def assign_taxonomy(
         print_error(str(e))
         sys.exit(1)
     except Exception as e:
-        print_error(f"Taxonomic assignment failed: {e}")
-        import traceback
+        from seednap.steps.taxonomic_assignment.blast_runner import BlastError
+        from seednap.steps.taxonomic_assignment.dada2_taxonomy_runner import Dada2TaxonomyError
+        from seednap.steps.taxonomic_assignment.decipher_runner import DecipherError
+        from seednap.steps.taxonomic_assignment.ecotag_runner import EcotagError
 
-        console.print(traceback.format_exc())
+        if isinstance(e, (EcotagError, BlastError, DecipherError, Dada2TaxonomyError)):
+            # These carry self-contained, actionable messages (e.g. the OBITools-missing
+            # what/why/fix block); print verbatim rather than mislabeling them as a crash.
+            print_error(str(e))
+        else:
+            print_error(f"Taxonomic assignment failed unexpectedly: {e}")
+        _maybe_traceback()
         sys.exit(1)
 
 
@@ -1318,6 +1337,10 @@ def run_pipeline(
         console.print(f"[bold]Log directory:[/bold] {config_obj.paths.logs}")
         console.print()
 
+    except ConfigError as e:
+        # Already a self-contained, actionable config message; print verbatim, not as a crash.
+        print_error(str(e))
+        sys.exit(1)
     except ValueError as e:
         print_error(str(e))
         sys.exit(1)
@@ -1325,10 +1348,8 @@ def run_pipeline(
         print_error(str(e))
         sys.exit(1)
     except Exception as e:
-        print_error(f"Pipeline failed: {e}")
-        import traceback
-
-        console.print(traceback.format_exc())
+        print_error(f"Pipeline failed unexpectedly: {e}")
+        _maybe_traceback()
         sys.exit(1)
 
 

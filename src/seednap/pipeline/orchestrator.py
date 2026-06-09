@@ -1071,7 +1071,12 @@ class PipelineOrchestrator:
 
         raw_dir = self.config.paths.raw_data
         if not raw_dir.exists():
-            raise FileNotFoundError(f"Raw data directory not found: {raw_dir}")
+            raise FileNotFoundError(
+                f"Raw data directory not found: {raw_dir}. This is paths.raw_data in your config; "
+                f"point it at the directory holding your paired-end FASTQ files (named like "
+                f"<sample>_R1.fastq.gz / <sample>_R2.fastq.gz). Confirm the path exists and is "
+                f"readable (ls '{raw_dir}'); a common cause is a config copied from another dataset."
+            )
 
         # Find all R1 files (support both _R1 and .R1 naming)
         r1_patterns = [
@@ -1125,5 +1130,9 @@ class PipelineOrchestrator:
                 return read_file
 
         raise FileNotFoundError(
-            f"Could not find {read} file for sample '{sample_name}' in {raw_dir}"
+            f"Could not find the {read} file for sample '{sample_name}' in {raw_dir}. seednap "
+            f"expects paired files named like {sample_name}_{read}.fastq.gz (also accepts "
+            f"{sample_name}.{read}.fastq.gz and {sample_name}_{read}_001.fastq.gz). One mate of "
+            f"the pair is missing or named inconsistently; confirm both R1 and R2 exist with "
+            f"matching sample names."
         )

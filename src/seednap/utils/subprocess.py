@@ -58,16 +58,40 @@ def run_subprocess(
         return result.stdout
 
     except subprocess.CalledProcessError as e:
-        error_msg = f"Command failed: {cmd_str}\n{e.stderr}"
+        stderr = (e.stderr or "").strip() or "(no stderr captured)"
+        error_msg = (
+            f"External tool '{cmd[0]}' exited with status {e.returncode} (it ran but returned "
+            f"an error). The text below is {cmd[0]}'s own output, not a seednap bug; read it "
+            f"first.\n"
+            f"  command: {cmd_str}\n"
+            f"  --- {cmd[0]} stderr ---\n{stderr}\n"
+            f"  --- end stderr ---\n"
+            f"  Common causes: a malformed or empty input file, a wrong reference/database path, "
+            f"or a tool-version mismatch."
+        )
         logger.error(error_msg)
         raise error_class(error_msg) from e
 
     except subprocess.TimeoutExpired as e:
-        error_msg = f"Command timed out after {timeout}s: {cmd_str}"
+        error_msg = (
+            f"External tool '{cmd[0]}' did not finish within {timeout}s and was killed.\n"
+            f"  command: {cmd_str}\n"
+            f"  This usually means the dataset is large or the machine is heavily loaded. "
+            f"Re-run on a quieter machine, or raise the step timeout."
+        )
         logger.error(error_msg)
         raise error_class(error_msg) from e
 
     except FileNotFoundError as e:
-        error_msg = f"Command not found: {cmd[0]}"
+        error_msg = (
+            f"Required tool '{cmd[0]}' is not installed or not on PATH: seednap tried to launch "
+            f"it and the OS could not find it. Usually the wrong (or no) conda environment is "
+            f"active.\n"
+            f"  Fix: activate the environment that has seednap's tools, then confirm it is there:\n"
+            f"    conda activate /home/shared/edna/envs/seednap   # ETH ELE eDNA server\n"
+            f"    {cmd[0]} --version\n"
+            f"  seednap's external tools (cutadapt, vsearch, swarm, blastn/makeblastdb, Rscript) "
+            f"live in that environment; if '{cmd[0]}' is genuinely missing, install it there."
+        )
         logger.error(error_msg)
         raise error_class(error_msg) from e

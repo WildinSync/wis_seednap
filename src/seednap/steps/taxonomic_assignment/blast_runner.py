@@ -318,7 +318,15 @@ class BlastOutputFormatter:
             seq_id = row["sseqid"]
 
             if seq_id not in self._phylo_dict:
-                raise KeyError(f"Sequence ID '{seq_id}' not found in reference database")
+                raise BlastError(
+                    f"A BLAST hit references reference sequence '{seq_id}', but that ID has no "
+                    f"lineage among the reference FASTA headers seednap parsed. Taxonomy is read "
+                    f"from headers of the form "
+                    f"'>seq_id<TAB>kingdom;phylum;class;order;family;genus;species'. This almost "
+                    f"always means the BLAST database was built from a different (or differently "
+                    f"formatted) FASTA than the REF_FASTA seednap was given. Rebuild the BLAST DB "
+                    f"with makeblastdb from the exact reference FASTA passed to seednap."
+                )
 
             # Parse header: >seq_id<TAB>kingdom;phylum;class;order;family;genus;species
             header = self._phylo_dict[seq_id]
