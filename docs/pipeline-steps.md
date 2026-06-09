@@ -27,12 +27,12 @@ its error is logged and the run continues. If more than
 step aborts so an actually-broken library does not silently emit a
 mostly-empty output.
 
-**Pre-demultiplexed inputs.** When the raw inputs already arrive as one
-FASTQ per sample (most external collaborators), set
-`demultiplex.skip: true` in the YAML. The orchestrator records the step
-as skipped instead of running the protocol against pre-demultiplexed
-data. The `standard` protocol is reserved for future work and currently
-raises a `NotImplementedError` with a pointer to the ligation path.
+**When it runs.** Demultiplexing runs only if `demultiplex` is listed in
+`pipeline.steps` (before `trim`). When the raw inputs already arrive as
+one FASTQ per sample (most external collaborators), simply omit
+`demultiplex` from `steps`. The `standard` protocol is reserved for
+future work and currently raises a `NotImplementedError` with a pointer
+to the ligation path.
 
 ---
 
@@ -211,8 +211,8 @@ See [taxonomy-methods.md](taxonomy-methods.md) for detailed method descriptions.
 **Output:** Cleaned table `outputs/{marker}_{method}_cleaned.csv` and a
 per-sample `cleaning_report.csv` in the report directory
 
-Off by default. When `cleaning.enabled: true`, this step runs between taxonomy
-and export and decontaminates the table against its negative controls. Control
+Runs only when `clean` is listed in `pipeline.steps` (after a feature step, typically
+between `taxonomy` and `export`), decontaminating the table against its negative controls. Control
 identity (extraction blanks vs PCR blanks, and the extraction batch each sample
 belongs to) is derived from the FAIRe manifest, so controls do not need to be
 named by convention.
@@ -263,9 +263,9 @@ See [gbif-export.md](gbif-export.md) for the full DarwinCore publishing workflow
 **Output:** `outputs/04_report/{marker}/read_tracking.{csv,txt}` and
 `report.html` (the report directory is configurable via `report.output_dir`).
 
-This step runs automatically at the end of every pipeline run; both the
-read-tracking table and the HTML report are on by default and can be turned off
-with `report.read_tracking: false` / `report.html_report: false`.
+This step runs when `report` is listed in `pipeline.steps` (it is in the default
+steps, so it runs unless you remove it). It always writes the read-tracking table +
+step summary; set `report.html_report: false` to skip just the HTML document.
 
 The read-tracking table records per-sample read/sequence counts at each step
 (`raw → trimmed → clustered` for SWARM, `raw → trimmed → filtered → denoised →
@@ -307,7 +307,7 @@ outputs/
     read_tracking.txt            #   Human-readable table
     report.html                  #   Self-contained HTML run report (on by default)
   {marker}_{method}.csv          # Final taxonomy + abundance table (method = blast/ecotag/decipher/dada2RDP)
-  {marker}_{method}_cleaned.csv  # Decontaminated table (if cleaning.enabled)
+  {marker}_{method}_cleaned.csv  # Decontaminated table (if "clean" is in pipeline.steps)
   .{marker}_state.json           # Pipeline state (for resume)
 ```
 

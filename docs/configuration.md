@@ -33,17 +33,16 @@ block is actually used, and flags any referenced database or `raw_data` path tha
 PipelineConfig
   marker        (REQUIRED)  name + primers.{forward, reverse}
   paths         set raw_data; output/logs default
-  demultiplex   off by default
+  demultiplex   params for the demultiplex stage (runs iff "demultiplex" in steps)
   trimming      Cutadapt 2-pass (defaults)
-  dada2         [ASV path only]   filter / merge / chimera / per_library
-  swarm         [OTU path only]   merge / clustering / chimera
+  dada2         [ASV path]   filter / merge / chimera / per_library / collect_metrics
+  swarm         [OTU path]   merge / clustering / chimera
   taxonomy      (REQUIRED)  method + ONLY the matching databases.<method> block
-  export        GBIF / DarwinCore (defaults)
-  metrics       QC metrics (defaults)
-  report        read-tracking + HTML report (on by default)
-  cleaning      control decontamination (off by default)
+  export        GBIF / DarwinCore params (runs iff "export" in steps)
+  report        read-tracking + HTML params (runs iff "report" in steps)
+  cleaning      control-decontamination params (runs iff "clean" in steps)
   logging       (defaults)
-  pipeline      steps: pick the dada2 OR the swarm path
+  pipeline      steps: the ordered list of stages to run -- the single source of truth
 ```
 
 The **dada2** and **swarm** sections are the two mutually-exclusive clustering paths; you fill
@@ -93,16 +92,14 @@ Relative paths are resolved to absolute paths. `~` is expanded. Output and log d
 
 ### `demultiplex`
 
+Demultiplexing runs **only if `demultiplex` is listed in `pipeline.steps`** (before
+`trim`); for pre-demultiplexed inputs (one FASTQ per sample) simply omit it. There is no
+`enabled`/`skip` flag. The fields below are the demultiplex parameters.
+
 ```yaml
 demultiplex:
-  enabled: false                             # Enable/disable demultiplexing
   protocol: "none"                           # "ligation", "standard", or "none"
-  metadata: "/path/to/metadata.csv"          # Required if enabled
-  skip: false                                # True if raw inputs are already
-                                             #   demultiplexed (one FASTQ per
-                                             #   sample); the orchestrator
-                                             #   records the step as skipped
-                                             #   instead of running it.
+  metadata: "/path/to/metadata.csv"          # required when the demultiplex step runs
   max_sample_failure_rate: 0.5               # Abort the demultiplex step if
                                              #   more than this fraction of
                                              #   samples fail; otherwise log
@@ -166,6 +163,7 @@ dada2:
                                              #   library (grouped from the manifest seq_run_id),
                                              #   then merge + collapse. Default false = one
                                              #   pooled model. Use for multi-run datasets.
+  collect_metrics: true                      # ASV summary stats -> metrics.json/csv + console
 ```
 
 ### `taxonomy`
@@ -257,30 +255,25 @@ genuine missing rank at the BLAST formatter, so neither LCA resolver treats
 ### `export`
 
 ```yaml
-export:
+export:                                      # runs only if "export" is in pipeline.steps (after taxonomy)
   gbif:
-    enabled: true                            # Generate GBIF-format output
     add_rank: true                           # Add taxonomic rank column
     add_taxon: true                          # Add lowest taxon column
 ```
 
-### `metrics`
-
-```yaml
-metrics:
-  collect_asv_metrics: true                  # Collect DADA2 ASV summary stats (metrics.json/csv + console; DADA2 path only)
-```
+> [!NOTE]
+> ASV summary stats are collected by the DADA2 step via `dada2.collect_metrics` (see the
+> `dada2` section). There is no separate `metrics` section.
 
 ### `report`
 
-Per-step read/sequence tracking and the HTML run report. **Both are generated
-on every `run-pipeline` by default** (the report is built automatically at the
-end of the run). See [reporting.md](reporting.md) for full details.
+The reporting step runs **only if `report` is listed in `pipeline.steps`**. When it runs it
+always writes the per-step read/sequence tracking table + step summary; `html_report`
+additionally builds the self-contained HTML run report. See [reporting.md](reporting.md).
 
 ```yaml
 report:
-  read_tracking: true                        # read_tracking.{csv,txt} + warnings (default: true)
-  html_report: true                          # self-contained HTML report (default: true; set false to disable)
+  html_report: true                          # also build the HTML report (default: true; false = table only)
   output_dir: null                           # base dir for report artifacts; null -> "<output>/04_report"
   warn_below_retention_pct: 30.0             # warn for samples retaining < this % of raw reads
   warn_step_loss_pct: 70.0                   # warn when a single step drops more than this %
@@ -297,13 +290,12 @@ whole section is optional; defaults apply when omitted.
 
 ### `cleaning`
 
-Control decontamination of the abundance table. **Off by default.** Control
-identity (which samples are negative controls, and how they associate to
-extraction/PCR batches) comes from the FAIRe manifest.
+Control decontamination of the abundance table. Runs **only if `clean` is listed in
+`pipeline.steps`** (after a feature step). Control identity (which samples are negative
+controls, and how they associate to extraction/PCR batches) comes from the FAIRe manifest.
 
 ```yaml
-cleaning:
-  enabled: false                             # Run the cleaning step (default: false)
+cleaning:                                    # runs only if "clean" is in pipeline.steps
   mode: "flag"                               # "flag" or "subtract" (default: "flag")
 ```
 
@@ -327,16 +319,19 @@ logging:
 
 ```yaml
 pipeline:
-  steps:
+  steps:                                     # the stages to run, in order
     - "trim"
-    - "swarm"                                # or "dada2"
+    - "swarm"                                # or "dada2" (mutually exclusive)
     - "taxonomy"
-  skip: []                                   # Steps to skip (e.g., ["trim"])
+    - "report"
 ```
 
-Valid step names: `demultiplex`, `trim`, `dada2`, `swarm`, `taxonomy`, `export`. A `clean` step
-is inserted automatically after `taxonomy` when `cleaning.enabled: true`, so you do not list it
-here.
+`pipeline.steps` is the **single source of truth** for what runs and in what order: a stage
+runs iff it is listed, and each stage reads its own section for parameters (defaults if the
+section is omitted). Valid stages: `demultiplex` (before `trim`), `trim`, `dada2` | `swarm`
+(mutually exclusive feature paths), `taxonomy`, `clean` (after a feature step), `export`
+(after `taxonomy`), `report`. The order is validated against these dependencies at load time,
+so an invalid order (e.g. `taxonomy` before `dada2`) is rejected with a message naming the fix.
 
 ## Example Configs
 

@@ -12,11 +12,10 @@ SeeDNAP produces three reporting artifacts for every run:
    scientific-paper-style document with dataset provenance, a taxonomy
    headline, QC figures, and a contamination check.
 
-**Both are generated automatically on every `run-pipeline`** (the HTML report is
-built at the end of the run). Set `report.html_report: false` in the marker YAML
-to disable just the HTML report; set `report.read_tracking: false` to disable the
-read-tracking table, the step summary, and the HTML report together (the HTML
-report is built only when `read_tracking` is also on). By default
+**The `report` step runs when it is listed in `pipeline.steps`** (it is in the default
+steps, so it runs unless you remove it). When it runs it always writes the read-tracking
+table + step summary; set `report.html_report: false` in the marker YAML to skip just the
+HTML document. To skip reporting entirely, omit `report` from `pipeline.steps`. By default
 they are written under `<paths.output>/04_report/<marker>/`; set
 `report.output_dir` to store them elsewhere. Reporting only reads artifacts the
 pipeline already produced, it never alters the run, and a reporting failure is
@@ -153,12 +152,12 @@ than omitting silently.
 
 ## Configuration
 
-Reporting is controlled by the `report:` block in the marker YAML:
+Reporting runs when `report` is in `pipeline.steps`; its parameters live in the `report:`
+block in the marker YAML:
 
 ```yaml
 report:
-  read_tracking: true              # read_tracking.{csv,txt} + warnings (default: true)
-  html_report: true                # write report.html (default: true; set false to disable)
+  html_report: true                # also write report.html (default: true; false = table only)
   output_dir: null                 # base dir for artifacts; null -> "<output>/04_report"
   warn_below_retention_pct: 30.0   # per-sample retention floor (raw -> final)
   warn_step_loss_pct: 70.0         # single-step loss ceiling

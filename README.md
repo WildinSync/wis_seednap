@@ -91,13 +91,15 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 
 | Step | Tool | Description |
 |---|---|---|
-| **Demultiplex** *(optional)* | Built-in | Ligation-tag demultiplexing; `skip: true` for pre-demultiplexed inputs |
+| **Demultiplex** *(optional)* | Built-in | Ligation-tag demultiplexing; list `demultiplex` in `pipeline.steps` to run it, omit it for pre-demultiplexed inputs |
 | **Trim** | Cutadapt | Two-pass primer removal (5' then 3') |
 | **Cluster** | SWARM or DADA2 | OTU clustering or ASV denoising (DADA2 can learn error models per sequencing library, then merge, via `dada2.per_library`) |
 | **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Taxonomic assignment with cascade-null per-rank thresholds and MEGAN-LR top-bitscore LCA (BLAST, default), an optional eDNAFlow/OceanOmics collapsed-taxonomy LCA (`lca_algorithm: collapsed_taxonomy`), or RDP bootstrap (DADA2) |
-| **Decontaminate** *(optional)* | Built-in | Flag or subtract reads found in negative controls, identified from the FAIRe manifest (`cleaning.enabled: true`; off by default) |
+| **Decontaminate** *(optional)* | Built-in | Flag or subtract reads found in negative controls, identified from the FAIRe manifest (add `clean` to `pipeline.steps`) |
 | **Export** | Built-in | GBIF long format and DarwinCore occurrence CSV with deterministic `occurrenceID` and `contamination_flag` |
-| **Report** | Built-in | Generated automatically every run: a per-step read/sequence tracking table + data-loss warnings, and a self-contained HTML run report (dataset provenance, taxonomy headline, QC charts, and the colorized console run log). Configurable via the `report:` block; on by default |
+| **Report** | Built-in | A per-step read/sequence tracking table + data-loss warnings, and a self-contained HTML run report (dataset provenance, taxonomy headline, QC charts, and the colorized console run log). Runs when `report` is in `pipeline.steps` (it is by default); `report.html_report: false` writes the table only |
+
+> Each stage runs **only if listed in `pipeline.steps`** (the single ordered source of truth); the order is validated against stage dependencies at config load. `dada2` and `swarm` are mutually exclusive.
 
 ## CLI Commands
 
