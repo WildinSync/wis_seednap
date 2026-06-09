@@ -155,12 +155,12 @@ class TagFileGenerator:
         if not metadata_csv.exists():
             raise FileNotFoundError(
                 f"Metadata CSV not found: {metadata_csv}\n\n"
-                "Ligation demultiplexing needs the sample/tag/library metadata "
+                "Standard demultiplexing needs the sample/tag/run metadata "
                 "file. Check the path you set: either demultiplex.metadata in "
                 "your marker config (for `seednap run-pipeline`) or the "
                 "METADATA_CSV argument to `seednap demultiplex`. It must point "
-                "at an existing CSV containing the eventID, tag_demultiplex, "
-                "and library columns."
+                "at an existing CSV containing the sample id, tag sequence, "
+                "and run/library columns."
             )
 
         df = pd.read_csv(metadata_csv)

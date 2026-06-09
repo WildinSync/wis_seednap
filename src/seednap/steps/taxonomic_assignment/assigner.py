@@ -229,7 +229,7 @@ class TaxonomicAssigner:
         It's typically called as part of the DADA2 workflow.
 
         Args:
-            query_fasta: Query FASTA file (not used directly - uses seqtab_clean.rds)
+            query_fasta: Query FASTA file; the sequences to classify, read directly by the R script
             asv_count_csv: ASV count table
             rdp_db_path: Path to RDP-formatted database (required)
             species_db_path: Path to species database (required)
@@ -341,7 +341,7 @@ class TaxonomicAssigner:
         Assign taxonomy using DECIPHER.
 
         Args:
-            query_fasta: Query FASTA file (not used directly - uses seqtab_clean.rds)
+            query_fasta: Query FASTA file; the sequences to classify, read directly by the R script
             asv_count_csv: ASV count table
             trained_classifier_path: Path to trained DECIPHER classifier (.rds, required)
             threshold: Confidence threshold (0-100, default: 60)

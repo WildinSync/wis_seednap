@@ -447,7 +447,7 @@ def test_summary_is_its_own_tab_not_repeated(tmp_path):
 
 
 def test_report_has_no_em_or_curly_punctuation(tmp_path):
-    """No em/en dashes or curly quotes in the rendered report (de-AI house style)."""
+    """No em/en dashes or curly quotes in the rendered report (plain-ASCII house style)."""
     from seednap.steps.report import HTMLReportBuilder
     logs = tmp_path / "logs"; logs.mkdir()
     _write_trim_logs(logs, "Blank-PCR-1", raw=10000, trimmed=50)  # triggers warnings prose
