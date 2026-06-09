@@ -115,8 +115,8 @@ class DarwinCoreBuilder:
             sample_meta = sample_meta.rename(columns={"volume": "samp_size"})
 
         # G3: validate input metadata BEFORE doing any work
-        self._validate_sample_metadata(sample_meta)
-        self._validate_project_metadata(project_meta)
+        self._validate_sample_metadata(sample_meta, self.sample_metadata_path)
+        self._validate_project_metadata(project_meta, self.project_metadata_path)
 
         # The taxonomy results table (format-gbif output) must carry the long-format columns we
         # read directly below; validate up-front so a missing one is a clear error rather than a
@@ -236,7 +236,16 @@ class DarwinCoreBuilder:
         out["TaxonRank"] = merged.get("rank", "")
 
         # Sequence
-        out["DNA_sequence"] = merged.get("sequence", "").str.upper()
+        if "sequence" not in merged.columns:
+            raise ValueError(
+                f"Taxonomy results CSV '{self.taxonomy_results_path}' has no 'sequence' "
+                f"column, which is required to fill the DarwinCore 'DNA_sequence' field. "
+                f"Provide the long-format taxonomy table from the 'format-gbif' step, which "
+                f"always emits a lowercase 'sequence' column (it renames a capital-S "
+                f"'Sequence' if needed); a table that lacks it cannot be turned into a GBIF "
+                f"occurrence record."
+            )
+        out["DNA_sequence"] = merged["sequence"].str.upper()
 
         # Primer / marker columns
         if not info_marker.empty:
@@ -390,7 +399,9 @@ class DarwinCoreBuilder:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _validate_sample_metadata(sample_meta: pd.DataFrame) -> None:
+    def _validate_sample_metadata(
+        sample_meta: pd.DataFrame, sample_metadata_path: Path
+    ) -> None:
         """Sanity-check sample metadata before merging.
 
         Raises ValueError on out-of-range coordinates or unknown env_medium.
@@ -399,9 +410,13 @@ class DarwinCoreBuilder:
         missing = [c for c in required if c not in sample_meta.columns]
         if missing:
             raise ValueError(
-                f"Sample metadata (the create-gbif SAMPLE_METADATA CSV) is missing required "
-                f"column(s): {missing}. Each sample needs at least an eventID and an eventDate; "
-                f"add these columns to the CSV."
+                f"Sample metadata CSV '{sample_metadata_path}' is missing required "
+                f"columns: {missing}. GBIF needs at least 'eventID' (must match the "
+                f"per-sample column names carried in the taxonomy table) and 'eventDate' "
+                f"(format yyyy, yyyy.mm, or yyyy.mm.dd). Rename your headers to these exact "
+                f"names. Recognized optional columns: decimalLatitude, decimalLongitude, "
+                f"depth, size_frac, samp_size (legacy 'volume' is auto-renamed to samp_size), "
+                f"and env_medium (must be one of the known ENVO terms when present)."
             )
 
         # Latitude / longitude range checks
@@ -433,14 +448,29 @@ class DarwinCoreBuilder:
                 )
 
     @staticmethod
-    def _validate_project_metadata(project_meta: pd.DataFrame) -> None:
+    def _validate_project_metadata(
+        project_meta: pd.DataFrame, project_metadata_path: Path
+    ) -> None:
         """Sanity-check project metadata before building the GBIF output."""
         required = ("marker", "recordedby", "identificationRemarks", "identificationReferences")
         missing = [c for c in required if c not in project_meta.columns]
         if missing:
             raise ValueError(
-                f"Project metadata (the create-gbif PROJECT_METADATA CSV) is missing required "
-                f"column(s): {missing}. add these columns (one project row) to the CSV."
+                f"Project metadata CSV '{project_metadata_path}' is missing required "
+                f"column(s): {missing}. The project-metadata CSV needs all of (exact "
+                f"lowercase headers): marker, recordedby, identificationRemarks, "
+                f"identificationReferences. Optional columns: seqmet, otu_seq_comp_appr, "
+                f"otu_db, chimera_check. It is a single-row table: one header row, one data "
+                f"row describing the run. Note headers are case-sensitive (e.g. "
+                f"'identificationReferences', not 'IdentificationReferences')."
+            )
+        if len(project_meta) == 0:
+            raise ValueError(
+                f"Project metadata CSV '{project_metadata_path}' has the required column "
+                f"headers (marker, recordedby, identificationRemarks, "
+                f"identificationReferences) but no data rows. GBIF needs exactly one "
+                f"project-metadata row. Add a data row describing this project beneath the "
+                f"header line."
             )
         empty = [
             c for c in required
@@ -448,7 +478,10 @@ class DarwinCoreBuilder:
         ]
         if empty:
             raise ValueError(
-                f"Project metadata fields are empty (required for GBIF): {empty}"
+                f"Project metadata fields are empty (required for GBIF): {empty}. Fill in a "
+                f"value for each of these columns in the data row of the project metadata CSV "
+                f"'{project_metadata_path}' (recordedby = the data contributor / recorder; "
+                f"identificationReferences = the reference-DB or method citation), then re-run."
             )
 
     @staticmethod
@@ -464,6 +497,13 @@ class DarwinCoreBuilder:
                 empty_fields.append(col)
         if empty_fields:
             raise ValueError(
-                f"GBIF output is missing required DarwinCore fields "
-                f"(all rows empty): {empty_fields}"
+                f"GBIF output has these required DarwinCore fields blank in every row: "
+                f"{empty_fields}. GBIF rejects submissions with empty required fields. The "
+                f"usual cause is 'otu_db' missing or left blank in your project-metadata CSV "
+                f"(the third create-gbif argument) -- it is an optional input column but a "
+                f"required output field, and it is not checked at load time. Add an 'otu_db' "
+                f"value (e.g. the reference database name, like 'CRABS MitoFish 2025') to that "
+                f"CSV. If a primer field is listed (target_gene/pcr_primer_forward/"
+                f"pcr_primer_reverse), the marker's row in the bundled primers_list.csv has a "
+                f"blank cell for it -- fix that template entry."
             )

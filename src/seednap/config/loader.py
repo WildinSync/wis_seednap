@@ -32,19 +32,47 @@ def load_yaml(file_path: Path) -> Dict[str, Any]:
             config_dict = yaml.safe_load(f)
 
         if config_dict is None:
-            raise ConfigError(f"Config file is empty: {file_path}")
+            raise ConfigError(
+                f"Config file is empty: {file_path}. A marker config must at minimum "
+                f"define marker.name, marker.primers.forward/reverse, taxonomy.method, "
+                f"and the selected method's databases.<method> block (you will also "
+                f"normally set paths.raw_data to your FASTQ directory). Generate a "
+                f"minimal starting template with: seednap init -o {file_path} --force"
+            )
 
         if not isinstance(config_dict, dict):
-            raise ConfigError(f"Config file must contain a YAML dictionary: {file_path}")
+            raise ConfigError(
+                f"Config file {file_path} is not a YAML mapping: its top level parsed "
+                f"as a {type(config_dict).__name__}, not key/value pairs. A SeeDNAP "
+                f"config must be a mapping with top-level keys like marker:, paths:, "
+                f"taxonomy:. Make sure this is a marker config (not a CSV, metadata, or "
+                f"sequence file) and that the first non-comment line is a key "
+                f"(e.g. 'marker:'), not a '-' list item or a bare value."
+            )
 
         return config_dict
 
+    except ConfigError:
+        # Already an actionable message (empty / not-a-mapping); do not re-wrap it
+        # into the generic 'Error reading config file' string below.
+        raise
     except FileNotFoundError as e:
-        raise ConfigError(f"Config file not found: {file_path}") from e
+        raise ConfigError(
+            f"Config file not found: {file_path}. Check the path is correct (it is "
+            f"resolved relative to the current directory unless absolute). Marker "
+            f"configs live under config/markers/; create a new one with "
+            f"`seednap init -o {file_path}`."
+        ) from e
     except yaml.YAMLError as e:
         raise ConfigError(f"Invalid YAML in config file {file_path}: {e}") from e
     except Exception as e:
-        raise ConfigError(f"Error reading config file {file_path}: {e}") from e
+        raise ConfigError(
+            f"Could not read config file {file_path}: {e}. Expected a single YAML "
+            f"file; if you passed a directory (a common mistake, e.g. "
+            f"`config/markers/` instead of `config/markers/teleo.yaml`), point at the "
+            f"specific .yaml file instead. Otherwise this is a filesystem error "
+            f"reading the path; check `ls -l {file_path}`."
+        ) from e
 
 
 def merge_configs(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
@@ -116,17 +144,11 @@ def load_config(
             config = PipelineConfig(**config_dict)
             return config
         except ValidationError as e:
-            # Format validation errors in a user-friendly way
-            error_messages = []
-            for error in e.errors():
-                location = " -> ".join(str(loc) for loc in error["loc"])
-                message = error["msg"]
-                error_messages.append(f"  • {location}: {message}")
+            # Humanize into what/why/fix messages (closest-match suggestions, migration hints
+            # for removed keys, valid-key listings). See seednap.errors.config.
+            from seednap.errors import humanize_validation_error
 
-            error_text = "\n".join(error_messages)
-            raise ConfigError(
-                f"Configuration validation failed for {config_path}:\n{error_text}"
-            ) from e
+            raise ConfigError(humanize_validation_error(e, Path(config_path))) from e
     else:
         # Return unvalidated dict (for debugging or special cases)
         return config_dict  # type: ignore
@@ -151,6 +173,19 @@ def validate_config_file(config_path: Path) -> tuple[bool, Optional[str]]:
         return True, None
     except ConfigError as e:
         return False, str(e)
+    except OSError as e:
+        # PipelineConfig.model_post_init calls mkdir on paths.output and paths.logs
+        # while loading; a raw PermissionError/OSError here means those paths point
+        # somewhere the user cannot create or write.
+        return False, (
+            f"Could not create the output/log directories declared in the config: "
+            f"{e}. SeeDNAP creates paths.output and paths.logs when it loads a config "
+            f"(it calls mkdir on both). Check that those two paths point at a location "
+            f"you can create and write to: not a read-only mount, not another user's "
+            f"directory, and not a path whose parent is missing or is a file rather "
+            f"than a directory. On the eDNA server, set paths.output/paths.logs under "
+            f"a directory you own (e.g. your home or a run directory you created)."
+        )
     except Exception as e:
         return False, f"Unexpected error: {e}"
 
@@ -307,4 +342,11 @@ pipeline:
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(example_config)
     except Exception as e:
-        raise ConfigError(f"Failed to write example config to {output_path}: {e}") from e
+        raise ConfigError(
+            f"Failed to write example config to {output_path}: {e}. SeeDNAP could not "
+            f"create or write that file; its parent directory is likely not writable "
+            f"by you (owned by another user, or on a read-only mount). Re-run with an "
+            f"output path under a directory you own, e.g. `seednap init -o "
+            f"~/myconfig.yaml`, and make sure its parent directory exists and is "
+            f"writable."
+        ) from e

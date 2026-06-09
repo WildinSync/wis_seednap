@@ -94,10 +94,32 @@ def link_taxonomy_with_abundance(
     output_path = Path(output_path)
 
     if not abundance_path.exists():
-        raise FileNotFoundError(f"Abundance file not found: {abundance_path}")
+        raise FileNotFoundError(
+            f"Abundance table not found: {abundance_path}. Taxonomy linking needs "
+            f"the feature-count table written by the clustering step (DADA2 writes "
+            f"02_dada2/<marker>/seqtab_clean_t.csv; SWARM writes "
+            f"02_swarm/<marker>/otu_table.csv). The clustering step is marked "
+            f"complete in the run state but its output file is missing from disk "
+            f"(deleted or moved). Re-run the dada2 or swarm step to regenerate it "
+            f"before re-running taxonomy; a plain --resume will not help because it "
+            f"skips steps already marked complete in the state JSON without checking "
+            f"that their outputs still exist."
+        )
 
     # Load abundance: sequences as index, samples as columns
-    abundance_df = pd.read_csv(abundance_path, index_col=0)
+    try:
+        abundance_df = pd.read_csv(abundance_path, index_col=0)
+    except (pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
+        raise ValueError(
+            f"Could not read the abundance/count table: {abundance_path} ({exc}). "
+            f"The file exists but is empty or not valid CSV. If you passed it to "
+            f"`seednap assign-taxonomy` by hand, check you pointed at the right "
+            f"seqtab_clean_t.csv / otu_table.csv and that it is not a stale or "
+            f"truncated file; otherwise the dada2/swarm step that wrote it may have "
+            f"been interrupted -- re-run that step (e.g. `--resume`) or delete the "
+            f"file and regenerate it. Expected layout: sequences in the first "
+            f"(index) column, one column per sample."
+        ) from exc
     sample_cols = list(abundance_df.columns)
     abundance_df = abundance_df.reset_index().rename(columns={"index": sequence_col})
 

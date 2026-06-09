@@ -49,7 +49,14 @@ class DecipherRunner(RScriptRunner):
         """
         r_code = """
         if (!requireNamespace("DECIPHER", quietly = TRUE)) {
-            stop("DECIPHER package not installed")
+            stop("DECIPHER R package not found in the active environment. ",
+                 "The 'decipher' taxonomy method needs the DECIPHER Bioconductor ",
+                 "package under the same R interpreter the pipeline calls. ",
+                 "Fix: activate the project env (conda activate metabarcoding), ",
+                 "install it the way this repo pins it ",
+                 "(conda install -c bioconda bioconductor-decipher; ",
+                 "it is also in environment.yml), ",
+                 "then verify with Rscript -e 'packageVersion(\\"DECIPHER\\")'.")
         }
         cat(as.character(packageVersion("DECIPHER")))
         """
@@ -113,7 +120,16 @@ class DecipherRunner(RScriptRunner):
 
         if not trained_classifier_path.exists():
             raise FileNotFoundError(
-                f"Trained classifier not found: {trained_classifier_path}"
+                f"Trained DECIPHER classifier not found: {trained_classifier_path}. "
+                f"DECIPHER IdTaxa needs a trained classifier .rds (built with "
+                f"DECIPHER::LearnTaxa), set via taxonomy.databases.decipher.trained in "
+                f"the marker YAML (or --trained-classifier for the standalone "
+                f"assign-taxonomy command), but that path is missing or wrong for this "
+                f"host. Config load and `seednap validate` resolve but do not require "
+                f"this path to exist, so a typo or a config copied from another server "
+                f"reaches this point. Fix: point taxonomy.databases.decipher.trained "
+                f"(or --trained-classifier) at the trained .rds for this marker and "
+                f"confirm the file exists on this machine."
             )
         if not query_fasta.exists():
             raise FileNotFoundError(f"Query FASTA not found: {query_fasta}")

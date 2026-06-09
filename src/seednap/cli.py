@@ -97,9 +97,10 @@ def validate(ctx: click.Context, config_file: Path) -> None:
     is_valid, error_message = validate_config_file(config_file)
 
     if is_valid:
-        print_success("Configuration is valid!")
-
-        # Load and display config summary
+        # Schema is well-formed; now show the summary and run preflight (referenced files /
+        # database block) so a config that loads but points at missing inputs FAILS here rather
+        # than mid-run. The success banner is deferred until preflight also passes.
+        preflight_problems: list = []
         try:
             config = load_config(config_file)
 
@@ -139,9 +140,24 @@ def validate(ctx: click.Context, config_file: Path) -> None:
             console.print(table)
             console.print()
 
+            from seednap.errors import preflight_checks
+
+            preflight_problems = preflight_checks(config)
+
         except Exception as e:
             print_warning(f"Could not load config for summary: {e}")
 
+        if preflight_problems:
+            print_error(
+                "The config is well-formed, but referenced inputs are not usable "
+                "(this would fail mid-run):\n"
+            )
+            for problem in preflight_problems:
+                console.print(problem.render())
+                console.print()
+            sys.exit(1)
+
+        print_success("Configuration is valid!")
         sys.exit(0)
     else:
         print_error("Configuration validation failed!\n")
@@ -253,7 +269,14 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
         print_error(str(e))
         sys.exit(1)
     except ValueError as e:
-        print_error(f"Invalid input file: {e}")
+        print_error(
+            f"Invalid input for format '{format_type}': {e}. The CSV does not have the "
+            f"columns this format expects. -f dada2/blast/decipher all expect a wide "
+            f"taxonomy table with columns kingdom,phylum,class,order,family,genus,species,"
+            f"sequence plus one numeric column per sample; -f ecotag expects an "
+            f"ecotag-derived CSV with *_name columns. Re-check that the file came from the "
+            f"matching `assign-taxonomy` run and that -f matches the producing method."
+        )
         sys.exit(1)
     except Exception as e:
         print_error(f"Failed to convert file: {e}")
@@ -961,7 +984,13 @@ def swarm(
         console.print()
 
     except FileNotFoundError as e:
-        print_error(str(e))
+        print_error(
+            f"SWARM found no R1/R2 FASTQ pairs to process: {e}. Confirm that "
+            f"{trimmed_reads_dir} is the trim step's output for marker '{marker}' (not the "
+            f"raw/untrimmed reads), that the trim step completed, and that the files use a "
+            f"recognized naming pattern: *_R1.fastq[.gz], *.R1.fastq[.gz], or "
+            f"*_R1_001.fastq[.gz] with matching R2 files."
+        )
         sys.exit(1)
     except Exception as e:
         print_error(f"SWARM processing failed: {e}")
@@ -1289,6 +1318,19 @@ def run_pipeline(
         from seednap.config.loader import load_config
 
         config_obj = load_config(config)
+
+        # Preflight: fail before trimming/clustering if referenced inputs are missing, rather
+        # than wasting compute and failing mid-run.
+        from seednap.errors import preflight_checks
+
+        problems = preflight_checks(config_obj)
+        if problems:
+            print_error("Cannot start the pipeline -- referenced inputs are not usable:\n")
+            for problem in problems:
+                console.print(problem.render())
+                console.print()
+            sys.exit(1)
+
         console.print(f"[bold]Marker:[/bold] {config_obj.marker.name}")
         console.print(f"[bold]Description:[/bold] {config_obj.marker.description}")
         console.print(f"[bold]Taxonomy method:[/bold] {config_obj.taxonomy.method}")
@@ -1342,10 +1384,24 @@ def run_pipeline(
         print_error(str(e))
         sys.exit(1)
     except ValueError as e:
-        print_error(str(e))
+        # Config errors are caught above (ConfigError), so a ValueError here comes from a
+        # pipeline step; config_obj is bound by now. Point the user at the run's state file
+        # (default <paths.output>/.<marker>_state.json) and log directory.
+        state_loc = config_obj.paths.output / f".{config_obj.marker.name}_state.json"
+        print_error(
+            f"Pipeline aborted: {e}\n"
+            f"If a step failed, its status and error are recorded in the state file "
+            f"({state_loc}) and the run log under {config_obj.paths.logs}; fix the cause and "
+            f"re-run with --resume to continue from the failed step."
+        )
         sys.exit(1)
     except FileNotFoundError as e:
-        print_error(str(e))
+        print_error(
+            f"Pipeline could not find a required file: {e}. A path configured in your YAML "
+            f"(raw_data, or a taxonomy database under taxonomy.databases.<method>) points at "
+            f"something that is not on disk. Run `seednap validate {config}` to see each "
+            f"configured path flagged found/MISSING, fix the offending entry, then re-run."
+        )
         sys.exit(1)
     except Exception as e:
         print_error(f"Pipeline failed unexpectedly: {e}")
@@ -1416,7 +1472,17 @@ def report(
         builder = ReadTrackingBuilder(**kwargs)
         df = builder.build()
         if df.empty:
-            print_error(f"No samples found under {out} (need logs/ and a cluster output).")
+            print_error(
+                f"No samples found for marker '{marker}' under {out}. This report is built "
+                f"from the per-sample Cutadapt trim logs in {out}/logs/ "
+                f"(<sample>_trim_pass1.txt), and none were found there. Most likely "
+                f"--output-dir does not point at the directory used for `run-pipeline` "
+                f"(default: outputs/), or trimming has not run yet. For the per-step ASV/OTU "
+                f"columns the report also reads {out}/02_dada2/{marker}/track_reads.csv "
+                f"(DADA2) or {out}/02_swarm/{marker}/otu_table.csv (SWARM); if those are "
+                f"missing only raw/trimmed are reported. Check --output-dir, then that "
+                f"'{marker}' matches the subdirectory name under 02_dada2/ or 02_swarm/."
+            )
             sys.exit(1)
 
         report_dir = out / "04_report" / marker
@@ -1530,7 +1596,18 @@ def report(
         console.print()
 
     except Exception as e:
-        print_error(f"Report failed: {e}")
+        print_error(
+            f"Report failed for marker '{marker}': {e}. This command only reads existing run "
+            f"outputs under {out} and never modifies the pipeline, so it is safe to retry. "
+            f"Check that --output-dir points at a completed run and that its inputs are intact: "
+            f"the Cutadapt logs under {out}/logs/, the DADA2 "
+            f"{out}/02_dada2/{marker}/track_reads.csv or SWARM "
+            f"{out}/02_swarm/{marker}/otu_table.csv, and (with --html) the auto-located "
+            f"taxonomy CSV {out}/{marker}_*.csv; the report writes to {out}/04_report/{marker}/, "
+            f"which must be writable. Most failures here mean a prior step did not finish or its "
+            f"output was moved or truncated; re-run the pipeline step that produces the missing "
+            f"input, or confirm --output-dir points at a completed run."
+        )
         sys.exit(1)
 
 
@@ -1540,6 +1617,32 @@ def version() -> None:
     console.print(f"\n[bold]seednap[/bold] version [cyan]{__version__}[/cyan]\n")
     console.print("eDNA metabarcoding pipeline with DADA2")
     console.print("Repository: https://github.com/WildinSync/wis_seednap\n")
+
+
+@main.command()
+@click.argument("code", required=False)
+def explain(code: Optional[str]) -> None:
+    """Explain a seednap error code in depth.
+
+    CODE: a code shown in an error message, e.g. SDN-CFG-001. With no CODE, lists all codes.
+    """
+    from seednap.errors import all_codes
+    from seednap.errors.catalog import explain as explain_code
+
+    if not code:
+        console.print("\n[bold]seednap error codes[/bold] (run `seednap explain <CODE>`):\n")
+        for c, title in all_codes().items():
+            console.print(f"  [cyan]{c}[/cyan]  {title}")
+        console.print()
+        return
+
+    detail = explain_code(code)
+    if detail is None:
+        print_error(
+            f"Unknown error code '{code}'. Run `seednap explain` (no argument) to list all codes."
+        )
+        sys.exit(1)
+    console.print(f"\n{detail}\n")
 
 
 @main.command()
@@ -1617,7 +1720,14 @@ def manifest(
         print_error(str(e))
         sys.exit(1)
     except ValueError as e:
-        print_error(f"Manifest build failed: {e}")
+        print_error(
+            f"Manifest build failed: {e}. If this names an ambiguous eventDate (day and month "
+            f"both <=12), re-run with --date-order ymd|dmy|mdy to force the field order instead "
+            f"of editing the CSV. If it reports no eventID/samp_name column, add one of those "
+            f"two columns to the field-metadata CSV ({field_metadata}). This build only reads "
+            f"on-disk inputs and never runs or alters the pipeline, so fix the file or flag and "
+            f"re-run."
+        )
         sys.exit(1)
     except Exception as e:
         print_error(f"Failed to build manifest: {e}")
@@ -1716,7 +1826,14 @@ def clean(
         print_error(str(e))
         sys.exit(1)
     except ValueError as e:
-        print_error(f"Cleaning failed: {e}")
+        print_error(
+            f"Cleaning failed: {e}. Most often the OTU/ASV id column was not found: by default "
+            f"`clean` uses the first column of {abundance_csv} as the id, so pass "
+            f"--id-col <name> if the identifier is elsewhere. If the error names the field "
+            f"metadata, fix {field_metadata} (it needs an eventID/samp_name column and ISO-8601 "
+            f"dates). This command is read-only on its inputs; correct the named file or flag "
+            f"and re-run."
+        )
         sys.exit(1)
     except Exception as e:
         print_error(f"Failed to clean: {e}")
@@ -1763,12 +1880,24 @@ def monitor(ctx: click.Context, marker: str, output_dir: Path, state_file: Optio
 
     sf = Path(state_file) if state_file else (output_dir / f".{marker}_state.json")
     if not sf.exists():
-        print_error(f"State file not found: {sf}")
+        print_error(
+            f"State file not found: {sf}. `monitor` reads the run-state JSON written by "
+            f"`run-pipeline`, expected at <output-dir>/.<marker>_state.json (output-dir "
+            f"default: outputs). Note the run writes it under its config's paths.output, so "
+            f"for the shipped configs that is outputs_test/<marker>/ (e.g. outputs_test/mam07). "
+            f"Check the MARKER spelling ('{marker}'), pass --output-dir matching the run's "
+            f"paths.output, or pass --state-file pointing straight at the JSON."
+        )
         sys.exit(1)
     try:
         state = PipelineState.load(sf)
     except Exception as e:
-        print_error(f"Could not load state file {sf}: {e}")
+        print_error(
+            f"Could not load state file {sf}: {e}. It is likely truncated (the run was "
+            f"interrupted mid-write) or from an incompatible older schema version. Re-run the "
+            f"pipeline to regenerate it; deleting the file removes monitor's input and the "
+            f"--resume checkpoint, so only delete it if you do not need to resume."
+        )
         sys.exit(1)
 
     console.print(f"\n[bold]Run monitor:[/bold] [cyan]{state.marker}[/cyan]")

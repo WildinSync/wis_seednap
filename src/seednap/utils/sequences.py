@@ -121,7 +121,16 @@ def fasta_to_df(fasta_path: Union[str, Path], include_description: bool = False)
     try:
         records = list(SeqIO.parse(fasta_path, "fasta"))
     except Exception as e:
-        raise ValueError(f"Failed to parse FASTA file {fasta_path}: {e}") from e
+        raise ValueError(
+            f"Failed to parse FASTA file {fasta_path}: {e}. "
+            f"This file is not valid FASTA: a FASTA file has records that begin "
+            f"with a '>' header line followed by sequence lines. The path most "
+            f"likely points at the wrong file (e.g. a CSV, a plain-text or HTML "
+            f"file, or a still-compressed .fasta.gz), or at a non-FASTA artifact "
+            f"produced by an earlier pipeline step. Confirm this path is the "
+            f"ASV/OTU sequence FASTA from the DADA2/SWARM step (decompress it "
+            f"first if it is gzipped), then re-run."
+        ) from e
 
     # Check file not empty
     if len(records) == 0:

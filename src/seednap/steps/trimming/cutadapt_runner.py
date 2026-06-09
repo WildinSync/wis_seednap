@@ -118,9 +118,18 @@ class CutadaptRunner:
 
         except subprocess.TimeoutExpired as e:
             error_msg = (
-                f"cutadapt did not finish within {self.timeout}s and was killed. This usually "
-                f"means a very large input or a heavily loaded machine; re-run on a quieter "
-                f"machine or raise the timeout."
+                f"cutadapt did not finish within the {self.timeout}s timeout and was killed. "
+                f"The trim/demultiplex step was aborted, not completed.\n"
+                f"  This usually means the input library is large and cutadapt was given too few "
+                f"cores to parallelize. The most common case is ligation demultiplexing, where a "
+                f"whole multiplexed library is processed in a single cutadapt run.\n"
+                f"  To fix: raise the core count via the YAML key trimming.cores (cutadapt "
+                f"parallelizes with -j), or run on a machine with more CPUs. If the library is "
+                f"legitimately huge, the per-command cap can be increased by constructing "
+                f"CutadaptRunner(timeout=...) (currently {self.timeout}s, set only in code).\n"
+                f"  Note: re-running with --resume will not skip the timed-out work; resume tracks "
+                f"whole steps, not individual samples, so the demultiplex step restarts from the "
+                f"beginning."
             )
             logger.error(error_msg)
             raise CutadaptError(error_msg) from e

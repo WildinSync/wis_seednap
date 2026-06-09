@@ -76,7 +76,14 @@ class PipelineOrchestrator:
         if resume:
             if not self.state_file.exists():
                 raise ValueError(
-                    f"Cannot resume: state file not found at {self.state_file}"
+                    f"Cannot resume: no pipeline state file at {self.state_file}. "
+                    f"--resume re-reads the state JSON that a previous run of this "
+                    f"marker wrote, and none exists at that path. Likely causes: this "
+                    f"marker was never run, the output directory was cleared, or "
+                    f"paths.output in the config points somewhere different than the "
+                    f"original run. Fix: drop --resume to start a fresh run, or pass "
+                    f"--state-file pointing at the existing state JSON (default "
+                    f"location is <paths.output>/.<marker>_state.json)."
                 )
             self.state = PipelineState.load(self.state_file)
             logger.info(f"Resuming pipeline from {self.state_file}")
@@ -224,7 +231,16 @@ class PipelineOrchestrator:
     def _run_ligation_demux(self) -> Dict[str, Path]:
         """Run ligation-based demultiplexing."""
         if self.config.demultiplex.metadata is None:
-            raise ValueError("Metadata file required for ligation demultiplexing")
+            raise ValueError(
+                "Ligation demultiplexing requires a sample-tag metadata CSV, but "
+                "demultiplex.metadata is not set in the config. The ligation protocol "
+                "splits one multiplexed library FASTQ into per-sample files using the "
+                "tag-to-sample mapping in that CSV (columns: eventID/sample, "
+                "tag_demultiplex, library). Fix: add "
+                "`demultiplex.metadata: /path/to/metadata.csv` to the marker YAML, or, "
+                "if your reads are already demultiplexed (one FASTQ pair per sample), "
+                "remove 'demultiplex' from pipeline.steps."
+            )
 
         trimmer = LigationTrimmer(
             cores=self.config.trimming.cores,
@@ -715,7 +731,19 @@ class PipelineOrchestrator:
                     break
 
             if clustering_step is None:
-                raise ValueError("DADA2 or SWARM step must be completed before taxonomy")
+                raise ValueError(
+                    "Cannot run taxonomy: it needs ASVs/OTUs from a completed feature "
+                    "step, but neither 'dada2' nor 'swarm' is marked completed in this "
+                    "run's state. (pipeline.steps ordering is validated at config load, "
+                    "so the feature step IS configured; it simply did not finish.) This "
+                    "usually means the earlier dada2/swarm step failed or was "
+                    "interrupted, and you reached taxonomy via --continue-on-error or "
+                    "--resume. Fix: open <paths.output>/.<marker>_state.json and check "
+                    "the 'dada2' (or 'swarm') step; if status is 'failed' or missing, "
+                    "re-run that step to completion first (re-run with --resume, or "
+                    "without --continue-on-error so a feature-step failure stops the "
+                    "pipeline) before running taxonomy."
+                )
 
             query_fasta = clustering_step.outputs.get("query_fasta")
             asv_count_csv = clustering_step.outputs.get("seqtab_clean_t")
@@ -903,7 +931,18 @@ class PipelineOrchestrator:
 
             # Get taxonomy outputs
             if not self.state.is_step_completed("taxonomy"):
-                raise ValueError("Taxonomy step must be completed before export")
+                raise ValueError(
+                    "Cannot run export: GBIF formatting needs the assigned-taxonomy "
+                    "table, but the 'taxonomy' step did not complete in this run (it "
+                    "failed earlier and the run continued past it under "
+                    "--continue-on-error). Fix the taxonomy failure first: read its "
+                    "error in the run log or in the 'taxonomy' step's status/error "
+                    "fields in <paths.output>/.<marker>_state.json, resolve the cause, "
+                    "then re-run (use --resume to retry from the failed step). Note: a "
+                    "missing or mis-ordered 'taxonomy' stage is not the cause here -- "
+                    "pipeline.steps ordering is validated at config load and would have "
+                    "been rejected before the run started."
+                )
 
             taxo_step = self.state.get_step("taxonomy")
             if taxo_step is None:
@@ -911,7 +950,20 @@ class PipelineOrchestrator:
             taxonomy_csv = taxo_step.outputs.get("final_table")
 
             if taxonomy_csv is None:
-                raise ValueError("No taxonomy output file found")
+                raise ValueError(
+                    "Export cannot start: the completed taxonomy step recorded no "
+                    "'final_table' output, so there is no merged taxonomy+abundance CSV "
+                    "to format for GBIF. In a normal single-version run every method "
+                    "(blast/dada2/ecotag/decipher) writes final_table, so the usual "
+                    "cause is resuming export against a state JSON "
+                    "(<paths.output>/.<marker>_state.json) written by an older seednap "
+                    "that used a different output key. Fix: look for the merged table at "
+                    "<paths.output>/<marker>_<method>.csv (e.g. <marker>_dada2RDP.csv, "
+                    "<marker>_blast.csv) and the taxonomy log; if it is missing or the "
+                    "state is stale, re-run the 'taxonomy' step (or delete the "
+                    "taxonomy/export entries from the state JSON and re-run) so it "
+                    "regenerates final_table before export."
+                )
             taxonomy_csv = Path(taxonomy_csv)
 
             # Prefer the decontaminated table when the cleaning step produced one.

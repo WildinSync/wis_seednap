@@ -62,7 +62,20 @@ class VsearchRunner:
             logger.info(f"Detected vsearch version: {'.'.join(str(v) for v in version)}")
             return version
         except FileNotFoundError:
-            raise VsearchError("vsearch is not installed or not on PATH")
+            raise VsearchError(
+                "vsearch not found on PATH.\n"
+                "  Why: the SWARM pipeline needs vsearch for read merging, dereplication, "
+                "abundance sorting and chimera detection, but the OS could not find a 'vsearch' "
+                "executable. Usually the wrong (or no) conda environment is active. vsearch lives "
+                "in the project's conda env (the 'metabarcoding' env on the ETH ELE eDNA server, "
+                "or the local 'seednap' env).\n"
+                "  Fix: activate the env before running seednap, then re-run:\n"
+                "    conda activate metabarcoding   # ETH ELE eDNA server\n"
+                "    conda activate /home/shared/edna/envs/seednap   # or the shared seednap env\n"
+                "  If vsearch is still missing, install the pinned version:\n"
+                "    conda install -c bioconda vsearch=2.30.5\n"
+                "  Verify with `vsearch --version`."
+            )
 
     def merge_pairs(
         self,

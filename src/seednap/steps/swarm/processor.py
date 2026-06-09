@@ -46,7 +46,17 @@ class SwarmProcessor:
 
         if not self.trimmed_reads_dir.exists():
             raise FileNotFoundError(
-                f"Trimmed reads directory not found: {self.trimmed_reads_dir}"
+                f"Trimmed reads directory not found: {self.trimmed_reads_dir}. "
+                "SWARM clustering reads its input FASTQs from this directory. When the "
+                "pipeline runs SWARM without a preceding trim step, this path comes from "
+                "paths.raw_data in the marker YAML; otherwise it is the trim step's output. "
+                "The likely cause is a wrong/typo'd paths.raw_data, or the directory was "
+                "never created because the trim step did not run for this marker. Fix: "
+                "confirm paths.raw_data points at an existing directory of R1/R2 FASTQ "
+                "pairs, or add the trim step before swarm in pipeline.steps (it writes "
+                "trimmed pairs to outputs/01_trim/<marker>/). If invoking the swarm CLI "
+                "directly, pass an existing directory as the TRIMMED_READS_DIR positional "
+                "argument."
             )
 
         self.vsearch = VsearchRunner(timeout=timeout)
@@ -112,7 +122,18 @@ class SwarmProcessor:
 
         if not sample_pairs:
             raise FileNotFoundError(
-                f"No R1/R2 FASTQ pairs found in {self.trimmed_reads_dir}"
+                f"No R1/R2 FASTQ pairs found in {self.trimmed_reads_dir}. SWARM needs "
+                "paired-end FASTQ files named so each R1 has a matching R2. No filenames "
+                "in this directory match a supported pattern, or R1 files are present "
+                "without a matching R2. Supported patterns: {sample}.R1.fastq, "
+                "{sample}_R1.fastq, {sample}_R1_001.fastq and their .gz variants, each "
+                "with the same name using R2. Note: the .fq / .fq.gz extension and "
+                "SRA-style _1/_2 naming are NOT matched here. Fix: point this at the "
+                "directory that holds the paired reads (the trim step's 01_trim/<marker>/ "
+                "output, or your pre-trimmed reads), and rename files to one of the "
+                "patterns above if needed. If you expected pairs to be here, check the run "
+                "log for per-sample 'No R2 found for ... skipping' warnings, which flag "
+                "orphaned R1 files."
             )
 
         # Step 2 & 3: Merge and dereplicate per sample

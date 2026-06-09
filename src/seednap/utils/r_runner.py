@@ -96,9 +96,18 @@ class RScriptRunner:
         script_path = Path(script_path)
         if not script_path.exists():
             raise FileNotFoundError(
-                f"Bundled R script not found: {script_path}. The scripts/ directory that ships "
-                f"with seednap is missing or incomplete -- this is a broken installation, not a "
-                f"config problem. Reinstall from a complete checkout (pip install -e .)."
+                f"Bundled R script not found: {script_path}. seednap resolves its R scripts "
+                f"relative to the installed package: they live in scripts/ at the repo root, a "
+                f"sibling of src/ rather than inside the seednap package. That scripts/ directory "
+                f"is NOT shipped in a built wheel, so it is only present when seednap is installed "
+                f"editable (pip install -e .) from a complete checkout, or run from the repo. A "
+                f"missing file here means seednap was pip-installed non-editably, or you are "
+                f"running against a stale/partial checkout whose scripts/ was never pulled or was "
+                f"deleted -- this is a broken installation, not a config problem. Fix: reinstall "
+                f"editable from a complete checkout with `pip install -e .` from the seednap repo "
+                f"root inside the active conda environment (e.g. metabarcoding), then confirm the "
+                f"scripts are present with `ls {SCRIPTS_DIR}` (expect dada2_process.R, "
+                f"taxo_dada2_marker.R, taxo_decipher_marker.R)."
             )
 
         cmd = ["Rscript", str(script_path)] + [str(arg) for arg in args]

@@ -97,9 +97,28 @@ class Dada2TaxonomyRunner(RScriptRunner):
         output_dir = Path(output_dir)
 
         if not rdp_db_path.exists():
-            raise FileNotFoundError(f"RDP database not found: {rdp_db_path}")
+            raise FileNotFoundError(
+                f"RDP training database not found: {rdp_db_path}. "
+                f"DADA2's naive-Bayes classifier needs an RDP-formatted training "
+                f"FASTA (kingdom..genus ranks) for this marker; this is the 'all' "
+                f"database, separate from the species-level DB. For run-pipeline, "
+                f"set taxonomy.databases.dada2.all in the marker YAML; for the "
+                f"standalone `dada2 --assign-taxonomy` command, pass --rdp-db. "
+                f"Confirm the file actually exists on this host -- DB paths differ "
+                f"between the eDNA server and local checkouts, and `seednap validate` "
+                f"flags a MISSING path but does not block the run."
+            )
         if not species_db_path.exists():
-            raise FileNotFoundError(f"Species database not found: {species_db_path}")
+            raise FileNotFoundError(
+                f"Species-level database not found: {species_db_path}. "
+                f"DADA2 addSpecies needs the exact-match species-assignment training "
+                f"FASTA, configured under taxonomy.databases.dada2.species in the "
+                f"marker YAML, but that path does not exist on this host (config "
+                f"validation checks the path string, not its presence on disk). Point "
+                f"taxonomy.databases.dada2.species at the species-assignment FASTA for "
+                f"this marker and confirm the file exists on this server, or remove "
+                f"the species key to skip species-level assignment."
+            )
         if not query_fasta.exists():
             raise FileNotFoundError(f"Query FASTA not found: {query_fasta}")
 

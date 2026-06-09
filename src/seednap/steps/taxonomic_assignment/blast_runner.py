@@ -107,7 +107,18 @@ class BlastRunner:
         fasta_path = Path(fasta_path)
 
         if not fasta_path.exists():
-            raise FileNotFoundError(f"FASTA file not found: {fasta_path}")
+            raise FileNotFoundError(
+                f"Reference FASTA not found, cannot build BLAST database: {fasta_path}\n"
+                f"  Why: no prebuilt BLAST database exists at this location (.nhr/.nin/.nsq are "
+                f"absent), so seednap must build one with makeblastdb from this reference FASTA, "
+                f"but the file is missing on this host. This path comes from "
+                f"taxonomy.databases.blast.fasta in the marker YAML; it is resolved but NOT "
+                f"existence-checked at config load, so a wrong path passes `seednap validate` with "
+                f"only an advisory MISSING flag and fails here at run time.\n"
+                f"  Fix: point taxonomy.databases.blast.fasta at the CRABS-formatted reference "
+                f"FASTA for this marker and confirm the file exists on this host, then re-run; "
+                f"`seednap validate <config>` shows the resolved path and whether it was found."
+            )
 
         logger.info(f"Creating BLAST database for {fasta_path}")
 
@@ -867,7 +878,20 @@ class BlastTaxonomicAssigner:
                     )
 
         # 4. Load ASV count table (sequences as rows, samples as columns)
-        asv_count = pd.read_csv(asv_count_csv, sep=",", index_col=0)
+        try:
+            asv_count = pd.read_csv(asv_count_csv, sep=",", index_col=0)
+        except (pd.errors.ParserError, pd.errors.EmptyDataError) as e:
+            raise BlastError(
+                f"Could not read the ASV/OTU count table {asv_count_csv}\n"
+                f"  Why: the file is empty, truncated, or not the expected comma-separated table "
+                f"(one row per representative sequence as the index, one column per sample). This "
+                f"is commonly a partially written file from a clustering step (DADA2 or SWARM) that "
+                f"was interrupted (kill/OOM/disk-full) before the count table finished writing, or "
+                f"the wrong file was passed to `assign-taxonomy`.\n"
+                f"  Fix: confirm this is the clustering step's count table, then re-run the "
+                f"clustering step with `--resume` to regenerate it and re-run taxonomy.\n"
+                f"  (original error: {e})"
+            ) from e
         sample_cols = list(asv_count.columns)
 
         # Attach ASV_ID via the FASTA

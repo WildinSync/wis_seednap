@@ -49,6 +49,57 @@ class TagFileGenerator:
 
         return f"{tag};min_overlap={self.min_overlap}...{tag_rc};min_overlap={self.min_overlap}"
 
+    # IUPAC nucleotide alphabet accepted in tag sequences.
+    _IUPAC_DNA = set("ACGTRYSWKMBDHVN")
+
+    def _format_validated_tag(
+        self,
+        value: object,
+        metadata_csv: Union[str, Path],
+        sample_name: object,
+        group_label: object,
+        group_field: str,
+        tag_col: str,
+    ) -> str:
+        """
+        Validate one tag cell and format it for cutadapt.
+
+        Raises a row-context error instead of letting an empty/NaN/non-DNA tag
+        surface as a bare ``AttributeError`` (e.g. ``float`` has no ``upper``)
+        or get silently turned into a corrupt cutadapt adapter.
+
+        Args:
+            value: Raw tag value from the metadata cell.
+            metadata_csv: Source metadata CSV path (for the error message).
+            sample_name: Sample identifier for the offending row.
+            group_label: Run/library identifier for the offending row.
+            group_field: Name of the grouping field ('run' or 'library').
+            tag_col: Original tag column header (for the error message).
+
+        Returns:
+            Formatted cutadapt tag string.
+
+        Raises:
+            ValueError: If the tag is empty/NaN or contains non-DNA characters.
+        """
+        # Treat NaN/None and non-string cells as invalid (a NaN float would
+        # otherwise raise a context-free AttributeError on .upper()).
+        if not isinstance(value, str) or pd.isna(value):
+            tag = ""
+        else:
+            tag = value.strip()
+        if not tag or not set(tag.upper()) <= self._IUPAC_DNA:
+            raise ValueError(
+                f"Invalid tag in {metadata_csv} for sample '{sample_name}' "
+                f"({group_field} '{group_label}'): the '{tag_col}' column value "
+                f"is {value!r}, which is not a valid DNA/IUPAC sequence. Every "
+                f"tag must be a non-empty string of ACGT/IUPAC characters; empty "
+                f"cells, whitespace, and non-ACGT characters are not allowed "
+                f"(they would otherwise produce a corrupt or degenerate cutadapt "
+                f"adapter). Fix this row in the metadata CSV and re-run."
+            )
+        return self._format_tag_sequence(tag)
+
     def _write_fasta(self, df: pd.DataFrame, output_path: Union[str, Path]) -> None:
         """
         Write DataFrame to FASTA file for cutadapt.
@@ -102,7 +153,15 @@ class TagFileGenerator:
         # Read metadata
         metadata_csv = Path(metadata_csv)
         if not metadata_csv.exists():
-            raise FileNotFoundError(f"Metadata CSV not found: {metadata_csv}")
+            raise FileNotFoundError(
+                f"Metadata CSV not found: {metadata_csv}\n\n"
+                "Ligation demultiplexing needs the sample/tag/library metadata "
+                "file. Check the path you set: either demultiplex.metadata in "
+                "your marker config (for `seednap run-pipeline`) or the "
+                "METADATA_CSV argument to `seednap demultiplex`. It must point "
+                "at an existing CSV containing the eventID, tag_demultiplex, "
+                "and library columns."
+            )
 
         df = pd.read_csv(metadata_csv)
 
@@ -110,7 +169,13 @@ class TagFileGenerator:
         required_cols = [sample_col, tag_col, run_col]
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
-            raise ValueError(f"Missing required columns: {missing_cols}")
+            raise ValueError(
+                f"Metadata CSV {metadata_csv} is missing required column(s): "
+                f"{missing_cols}. Standard demultiplexing needs columns: "
+                f"{required_cols} (sample id, tag sequence, run/library). "
+                f"Found columns: {list(df.columns)}. "
+                f"Rename your CSV headers to match."
+            )
 
         logger.info(f"Loaded metadata with {len(df)} samples from {metadata_csv}")
 
@@ -120,7 +185,17 @@ class TagFileGenerator:
         )
 
         # Format tags
-        df["tag_formatted"] = df["tag"].apply(self._format_tag_sequence)
+        df["tag_formatted"] = df.apply(
+            lambda row: self._format_validated_tag(
+                row["tag"],
+                metadata_csv,
+                row["sample_name"],
+                row["run"],
+                "run",
+                tag_col,
+            ),
+            axis=1,
+        )
 
         # Split by run/library
         output_dir = Path(output_dir)
@@ -169,7 +244,15 @@ class TagFileGenerator:
         # Read metadata
         metadata_csv = Path(metadata_csv)
         if not metadata_csv.exists():
-            raise FileNotFoundError(f"Metadata CSV not found: {metadata_csv}")
+            raise FileNotFoundError(
+                f"Metadata CSV not found: {metadata_csv}\n\n"
+                "Ligation demultiplexing needs the sample/tag/library metadata "
+                "file. Check the path you set: either demultiplex.metadata in "
+                "your marker config (for `seednap run-pipeline`) or the "
+                "METADATA_CSV argument to `seednap demultiplex`. It must point "
+                "at an existing CSV containing the eventID, tag_demultiplex, "
+                "and library columns."
+            )
 
         df = pd.read_csv(metadata_csv)
 
@@ -177,7 +260,13 @@ class TagFileGenerator:
         required_cols = [sample_col, tag_col, library_col]
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
-            raise ValueError(f"Missing required columns: {missing_cols}")
+            raise ValueError(
+                f"Metadata CSV {metadata_csv} is missing required column(s): "
+                f"{missing_cols}. Ligation demultiplexing needs columns: "
+                f"{required_cols} (sample id, tag sequence, library). "
+                f"Found columns: {list(df.columns)}. "
+                f"Rename your CSV headers to match."
+            )
 
         logger.info(f"Loaded ligation metadata with {len(df)} samples from {metadata_csv}")
 
@@ -191,7 +280,17 @@ class TagFileGenerator:
         )
 
         # Format tags
-        df["tag_formatted"] = df["tag"].apply(self._format_tag_sequence)
+        df["tag_formatted"] = df.apply(
+            lambda row: self._format_validated_tag(
+                row["tag"],
+                metadata_csv,
+                row["sample_name"],
+                row["library"],
+                "library",
+                tag_col,
+            ),
+            axis=1,
+        )
 
         # Split by library
         output_dir = Path(output_dir)

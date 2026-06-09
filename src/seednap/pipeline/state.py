@@ -14,7 +14,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
+
+from seednap.errors import SeednapError
 
 logger = logging.getLogger(__name__)
 
@@ -370,17 +372,34 @@ class PipelineState(BaseModel):
 
         Raises:
             FileNotFoundError: If state file doesn't exist
-            ValueError: If state file is invalid
+            SeednapError: If the state file is unreadable, corrupted, or schema-incompatible
         """
         state_file = Path(state_file)
         if not state_file.exists():
             raise FileNotFoundError(f"State file not found: {state_file}")
 
-        with open(state_file) as f:
-            state_dict = json.load(f)
+        try:
+            with open(state_file) as f:
+                state_dict = json.load(f)
+            state = cls(**state_dict)
+        except (json.JSONDecodeError, ValidationError) as exc:
+            raise SeednapError(
+                f"Could not parse pipeline state file {state_file}: {exc}",
+                why=(
+                    "The file exists but is not a valid seednap state JSON. It may be "
+                    "truncated (a run killed mid-save), corrupted, or written by an "
+                    "incompatible seednap version or for a different marker."
+                ),
+                fix=(
+                    "Delete or move it and start a fresh run WITHOUT --resume (a new "
+                    "state file is created automatically), or restore a known-good "
+                    "copy. The default state file is "
+                    "<config.paths.output>/.<marker>_state.json."
+                ),
+            ) from exc
 
         logger.info(f"Loaded pipeline state from {state_file}")
-        return cls(**state_dict)
+        return state
 
     @classmethod
     def from_config(

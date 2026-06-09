@@ -30,6 +30,7 @@ class TaxonomyEnricher:
     def __init__(self, email: str = "seednap@ethz.ch") -> None:
         load_dotenv()
         self._cache: Dict[str, Tuple[Optional[str], Optional[str], Optional[str]]] = {}
+        self._last_worms_error: Optional[str] = None
         self._api_key: Optional[str] = os.environ.get("NCBI_API_KEY")
         self._email = email
         self._delay = _NCBI_DELAY_WITH_KEY if self._api_key else _NCBI_DELAY_NO_KEY
@@ -97,6 +98,19 @@ class TaxonomyEnricher:
         for query in all_queries:
             self._fetch(query)
 
+        # kingdom/phylum are not in darwincore_builder._DWC_REQUIRED_FIELDS, so
+        # the pre-write guard cannot catch a wholly-unenriched name. Surface the
+        # count here so missing taxonomy is visible before GBIF submission.
+        n_unenriched = sum(
+            1 for q in all_queries if self._cache.get(q) == (None, None, None)
+        )
+        if n_unenriched:
+            logger.warning(
+                f"[WARN] taxonomy enrichment: expected=kingdom/phylum for "
+                f"{len(all_queries)} name(s), got={n_unenriched} unenriched, "
+                f"fallback=those rows ship to GBIF with empty kingdom/phylum"
+            )
+
         # Build lookup tables
         lookup_by_class: Dict[str, Tuple[Optional[str], Optional[str]]] = {}
         for q in class_queries:
@@ -155,6 +169,13 @@ class TaxonomyEnricher:
         if result is None:
             result = self._query_worms(name)
         if result is None:
+            worms_err = self._last_worms_error or "no record found"
+            logger.warning(
+                f"[WARN] taxonomy enrichment: expected=kingdom/phylum for "
+                f"'{name}' from NCBI or WORMS, got=both lookups returned no "
+                f"result (last WORMS error: {worms_err}), fallback=DarwinCore "
+                f"row exported with blank kingdom/phylum"
+            )
             result = (None, None, None)
 
         self._cache[name] = result
@@ -197,7 +218,10 @@ class TaxonomyEnricher:
             return (cls, phylum, kingdom)
 
         except Exception as exc:
-            logger.debug(f"NCBI query failed for '{name}': {exc}")
+            logger.warning(
+                f"[WARN] taxonomy enrichment: expected=NCBI Taxonomy lineage "
+                f"for '{name}', got=error ({exc}), fallback=trying WORMS next"
+            )
             return None
 
     def _query_worms(
@@ -208,6 +232,7 @@ class TaxonomyEnricher:
             f"https://www.marinespecies.org/rest/AphiaRecordsByName/"
             f"{urllib.parse.quote(name)}?like=false&marine_only=false"
         )
+        self._last_worms_error = None
         try:
             time.sleep(0.5)  # be polite to WORMS
             req = urllib.request.Request(url, headers={"Accept": "application/json"})
@@ -225,5 +250,6 @@ class TaxonomyEnricher:
             )
 
         except Exception as exc:
+            self._last_worms_error = str(exc)
             logger.debug(f"WORMS query failed for '{name}': {exc}")
             return None

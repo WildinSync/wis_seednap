@@ -196,9 +196,37 @@ class EcotagRunner:
         if not query_fasta.exists():
             raise FileNotFoundError(f"Query FASTA not found: {query_fasta}")
         if not taxonomy_db.exists():
-            raise FileNotFoundError(f"Taxonomy database not found: {taxonomy_db}")
+            raise FileNotFoundError(
+                f"Taxonomy database not found: {taxonomy_db}\n"
+                "Why: the ecotag taxonomy database configured under "
+                "taxonomy.databases.ecotag.tree in the marker YAML is missing "
+                "or its path is wrong on this server (e.g. a typo, or a stale "
+                "reference_database version directory). This is the OBITools "
+                "NCBI taxonomy directory passed to `ecotag -t`, not the "
+                "reference FASTA (taxonomy.databases.ecotag.fasta).\n"
+                "Fix: point taxonomy.databases.ecotag.tree at an existing "
+                "OBITools/NCBI taxonomy directory (on the ETH ELE eDNA server "
+                "these live under /home/shared/edna/reference_database/"
+                "<version>/.../customtaxonomy/), or build one from an NCBI "
+                "taxdump with the OBITools v1 `obitaxonomy` tool and point the "
+                "key at that directory."
+            )
         if not reference_db.exists():
-            raise FileNotFoundError(f"Reference database not found: {reference_db}")
+            raise FileNotFoundError(
+                f"Reference database not found: {reference_db}\n"
+                "Why: this path is the ecotag reference sequence DB taken from "
+                "taxonomy.databases.ecotag.fasta in the marker YAML; it is "
+                "missing or wrong for this host (Pydantic only path-expands it "
+                "at load time, it does not check existence, so a bad path "
+                "passes `seednap validate`'s model check and only fails here at "
+                "run time).\n"
+                "Fix: point taxonomy.databases.ecotag.fasta at the "
+                "OBITools/ecoPCR-formatted reference FASTA for this marker and "
+                "confirm the file exists on this machine (DB paths differ "
+                "between the eDNA server and local checkouts); "
+                "`seednap validate <config>` flags the path as MISSING in its "
+                "summary table."
+            )
 
         output_fasta.parent.mkdir(parents=True, exist_ok=True)
 

@@ -305,7 +305,16 @@ class LigationTrimmer:
 
         if not r1_matches or not r2_matches:
             raise FileNotFoundError(
-                f"Could not find R1/R2 files for library {library_name} in {raw_reads_dir}"
+                f"No FASTQ files found for library '{library_name}' in {raw_reads_dir}. "
+                f"The ligation demultiplex step globs for "
+                f"'{library_name}*_R1.fastq.gz' and '{library_name}*_R2.fastq.gz'; "
+                f"nothing matched. Either the prefix is wrong (the LIBRARY_NAME CLI "
+                f"argument, or marker.name in the config, which the pipeline uses as "
+                f"the library-file prefix), or the raw files use a different naming "
+                f"scheme. The suffix must be exactly '_R1.fastq.gz' / '_R2.fastq.gz' "
+                f"(underscore, not '.R1' / '.R2'). List {raw_reads_dir} and confirm at "
+                f"least one file begins with '{library_name}' and ends in "
+                f"'_R1.fastq.gz' (and its matching '_R2.fastq.gz')."
             )
 
         r1_file = r1_matches[0]
@@ -319,7 +328,16 @@ class LigationTrimmer:
         )
 
         if library_name not in tag_files:
-            raise ValueError(f"Library {library_name} not found in metadata")
+            raise ValueError(
+                f"Library '{library_name}' was not found in the 'library' column of "
+                f"the metadata CSV ({metadata_csv}). Tag files were generated per "
+                f"library from that column; the libraries found were: "
+                f"{sorted(tag_files)}. The match is exact and case-sensitive. When "
+                f"running the full pipeline this name comes from marker.name in your "
+                f"YAML, not from anything you typed -- make marker.name (or, for the "
+                f"standalone 'demultiplex' command, the LIBRARY_NAME argument) equal to "
+                f"one of the library values listed above."
+            )
 
         tag_file = tag_files[library_name]
 

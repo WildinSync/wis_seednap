@@ -133,7 +133,24 @@ class GBIFFormatter:
         ]
 
         if len(sample_cols) == 0:
-            raise ValueError("No sample columns found in input file")
+            non_numeric_cols = [
+                col for col in df.columns
+                if col not in non_sample_known
+                and not pd.api.types.is_numeric_dtype(df[col])
+            ]
+            raise ValueError(
+                "No per-sample read-count columns found in the input table. GBIF "
+                "export expects a wide-format CSV where each sample is its own "
+                "numeric column (one column per eventID, holding integer read "
+                "counts) alongside the taxonomy columns (kingdom, phylum, class, "
+                "order, family, genus, species, sequence). After excluding the "
+                "taxonomy and per-OTU annotation columns (ASV_ID, pident, "
+                "is_contaminant_candidate), none of the remaining columns were "
+                f"numeric. Remaining columns were: {non_numeric_cols}. Check that "
+                "you passed the wide abundance/taxonomy table from the taxonomy "
+                "step (e.g. <marker>_<method>.csv), and that sample columns contain "
+                "numeric read counts rather than text."
+            )
 
         # Carry annotation columns through the melt as id_vars so they survive
         # to the long-format output (per-OTU info should appear on every sample row).
@@ -226,12 +243,28 @@ class GBIFFormatter:
         input_path = Path(input_path)
 
         if not input_path.exists():
-            raise FileNotFoundError(f"Input file not found: {input_path}")
+            raise FileNotFoundError(
+                f"Taxonomy results file not found: {input_path}. This is the "
+                f"per-marker taxonomy CSV produced by the taxonomy step (e.g. "
+                f"outputs/03_taxonomy/<marker>/<marker>_<method>.csv). Check the "
+                f"path is correct; if you are resuming a pipeline, the file may "
+                f"have been moved or deleted -- re-run the taxonomy step, or point "
+                f"--input at the existing taxonomy CSV."
+            )
 
         logger.info(f"Converting DADA2 output to GBIF format: {input_path}")
 
         # Read CSV
-        df = pd.read_csv(input_path)
+        try:
+            df = pd.read_csv(input_path)
+        except (pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+            raise ValueError(
+                f"Could not read the taxonomy CSV '{input_path}': the file is "
+                f"empty or is not valid CSV ({e}). Confirm the path points at the "
+                f"taxonomy-step output CSV (not a FASTA, log, or binary), and that "
+                f"the file is not truncated or zero-length -- a failed or "
+                f"interrupted upstream taxonomy step can leave an empty file behind."
+            ) from e
 
         # Remove X column if present (R index column)
         if "X" in df.columns:
@@ -262,7 +295,16 @@ class GBIFFormatter:
         # Check required columns exist
         missing_cols = [col for col in taxonomic_cols if col not in df.columns]
         if missing_cols:
-            raise ValueError(f"Missing required columns: {missing_cols}")
+            raise ValueError(
+                f"Taxonomy CSV '{input_path}' is missing required columns: "
+                f"{missing_cols}. GBIF formatting needs all of: kingdom, phylum, "
+                f"class, order, family, genus, species, sequence (a capital-S "
+                f"'Sequence' is auto-mapped to 'sequence'). The usual cause is "
+                f"pointing at the wrong file (e.g. the raw ASV count table instead "
+                f"of the taxonomy-merged table) or a taxonomy method whose column "
+                f"names were not normalised. Pass the taxonomy-step output for this "
+                f"marker, or rename the columns to match the standard schema."
+            )
 
         # Transform to long format
         df_long = self._transform_to_long_format(df, taxonomic_cols)
@@ -343,12 +385,29 @@ class GBIFFormatter:
         input_path = Path(input_path)
 
         if not input_path.exists():
-            raise FileNotFoundError(f"Input file not found: {input_path}")
+            raise FileNotFoundError(
+                f"Ecotag results file not found: {input_path}. This is the "
+                f"per-marker ecotag taxonomy CSV produced by the taxonomy step "
+                f"(e.g. outputs/03_taxonomy/<marker>/<marker>_ecotag.csv). Check "
+                f"the path is correct; if you are resuming a pipeline, the file may "
+                f"have been moved or deleted -- re-run the ecotag taxonomy step, or "
+                f"point --input at the existing ecotag CSV."
+            )
 
         logger.info(f"Converting ecotag output to GBIF format: {input_path}")
 
         # Read CSV
-        df = pd.read_csv(input_path)
+        try:
+            df = pd.read_csv(input_path)
+        except (pd.errors.EmptyDataError, pd.errors.ParserError) as e:
+            raise ValueError(
+                f"Could not read the ecotag taxonomy CSV '{input_path}': the file "
+                f"is empty or is not valid CSV ({e}). Confirm the path points at "
+                f"the ecotag taxonomy-step output CSV (not a FASTA, log, or "
+                f"binary), and that the file is not truncated or zero-length -- a "
+                f"failed or interrupted upstream taxonomy step can leave an empty "
+                f"file behind."
+            ) from e
 
         # Remove X column if present
         if "X" in df.columns:
@@ -383,7 +442,17 @@ class GBIFFormatter:
         # Check required columns exist
         missing_cols = [col for col in taxonomic_cols if col not in df.columns]
         if missing_cols:
-            raise ValueError(f"Missing required columns after renaming: {missing_cols}")
+            raise ValueError(
+                f"Ecotag CSV '{input_path}' is missing required GBIF columns after "
+                f"renaming: {missing_cols}. from_ecotag maps "
+                f"family_name/genus_name/species_name/order_name to "
+                f"family/genus/species/order and auto-adds kingdom/phylum/class, so "
+                f"the real gap is among: order, family, genus, species, sequence. A "
+                f"missing 'sequence' usually means this is the raw obitab/ecotag "
+                f"table that was not yet linked with the abundance table; run the "
+                f"ecotag link-with-abundance step first, then format with "
+                f"--format ecotag."
+            )
 
         # Drop ecotag-specific metadata columns
         cols_to_drop = ["id", "definition", "count", "scientific_name"]

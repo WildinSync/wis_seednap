@@ -3,9 +3,47 @@
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationError, field_validator
 
 from seednap.config.models.base import StrictModel
+
+# Each taxonomy method's required database path(s), surfaced in error text so a user
+# whose block fails validation is told exactly which key(s) the method needs.
+_REQUIRED_DB_PATHS: Dict[str, str] = {
+    "blast": "fasta",
+    "dada2": "all",
+    "ecotag": "tree + fasta",
+    "decipher": "trained",
+}
+
+
+def _flatten_db_errors(exc: ValidationError) -> List[str]:
+    """Turn a per-method DB-block ValidationError into one readable bullet per problem.
+
+    Replaces dumping Pydantic's raw nested repr (which carries internal ``[type=...]``
+    noise) with a flat, declarative list keyed by the offending field.
+    """
+    bullets: List[str] = []
+    for err in exc.errors():
+        loc = err.get("loc", ())
+        field = ".".join(str(p) for p in loc) if loc else "(block)"
+        etype = err.get("type", "")
+        ctx = err.get("ctx") or {}
+        if etype == "missing":
+            problem = "required path is missing"
+        elif etype == "extra_forbidden":
+            problem = "unknown key (typo? SeeDNAP rejects unrecognised keys)"
+        elif etype in ("greater_than_equal", "less_than_equal", "greater_than", "less_than"):
+            lo = ctx.get("ge", ctx.get("gt"))
+            hi = ctx.get("le", ctx.get("lt"))
+            if lo is not None and hi is not None:
+                problem = f"out of range (must be between {lo} and {hi})"
+            else:
+                problem = err.get("msg", "value is out of range")
+        else:
+            problem = err.get("msg", "invalid value")
+        bullets.append(f"  - {field}: {problem}")
+    return bullets
 
 
 # ===========================================================================
@@ -181,8 +219,26 @@ class TaxonomicAssignmentConfig(StrictModel):
                 continue  # not a recognised method block; left untouched
             try:
                 model(**block)
-            except Exception as exc:
-                raise ValueError(f"Invalid taxonomy.databases.{name}: {exc}") from exc
+            except ValidationError as exc:
+                bullets = "\n".join(_flatten_db_errors(exc))
+                required = _REQUIRED_DB_PATHS.get(name, "its method-specific path(s)")
+                raise ValueError(
+                    f"Invalid taxonomy.databases.{name} block:\n{bullets}\n"
+                    f"The '{name}' database block must list its required path(s) ({required}) "
+                    f"and use only recognised keys. For a fully-annotated reference template run: "
+                    f"seednap init --full. Note: SeeDNAP validates EVERY database block present, "
+                    f"not just the one named by taxonomy.method, so a leftover block for an unused "
+                    f"method ('{name}' here) must also be valid -- delete it if it is not needed."
+                ) from exc
+            except TypeError as exc:
+                # model(**block) needs a mapping; a non-dict value (e.g. a bare path or list)
+                # cannot be unpacked. Name the offending block and what it must be.
+                raise ValueError(
+                    f"Invalid taxonomy.databases.{name}: expected a block of key/value settings, "
+                    f"got {type(block).__name__}. Make taxonomy.databases.{name} a mapping that "
+                    f"lists its required path(s) ({_REQUIRED_DB_PATHS.get(name, 'its paths')}); "
+                    f"run `seednap init --full` for a reference template."
+                ) from exc
         return v
 
     def get_database_config(self) -> Any:

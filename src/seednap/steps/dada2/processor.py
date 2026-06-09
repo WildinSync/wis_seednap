@@ -46,7 +46,17 @@ class Dada2Processor:
         self.output_base_dir = Path(output_base_dir)
 
         if not self.trimmed_reads_dir.exists():
-            raise FileNotFoundError(f"Trimmed reads directory not found: {self.trimmed_reads_dir}")
+            raise FileNotFoundError(
+                f"Trimmed reads directory not found: {self.trimmed_reads_dir}. "
+                f"DADA2 needs primer-trimmed paired-end FASTQ files as input. "
+                f"If you ran `run-pipeline`, this points at the trim step's output "
+                f"(when trim ran) or falls back to paths.raw_data (when trim was "
+                f"skipped), so either include \"trim\" before \"dada2\" in "
+                f"pipeline.steps, or fix paths.raw_data in the marker YAML to a "
+                f"directory that exists. If you invoked the `dada2` subcommand "
+                f"directly, pass the directory holding the already-trimmed FASTQs "
+                f"as the TRIMMED_READS_DIR argument."
+            )
 
         self.runner = Dada2Runner(timeout=timeout)
         self.metrics = MetricsCollector(marker=self.marker, output_dir=self.output_base_dir)

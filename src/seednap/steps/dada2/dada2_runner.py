@@ -212,4 +212,11 @@ class Dada2Runner(RScriptRunner):
             return versions
 
         except subprocess.CalledProcessError as e:
-            raise Dada2Error(f"Failed to check R packages: {e.stderr}") from e
+            raise Dada2Error(
+                f"Failed to check DADA2 R packages: the `Rscript` package-version probe "
+                f"exited with an error. R is installed but the R environment looks broken "
+                f"(a failing .Rprofile/.Renviron, a bad R_LIBS path, or a partial install) "
+                f"rather than DADA2 itself failing. Activate the intended environment "
+                f"(e.g. `conda activate metabarcoding`) and confirm R works: "
+                f"`Rscript -e 'cat(R.version.string)'`. Underlying R error:\n{e.stderr}"
+            ) from e

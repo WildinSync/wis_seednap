@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Dict, List, Optional, Union
 
 import pandas as pd
+from pandas.errors import EmptyDataError
+
+from seednap.errors import SeednapError
 
 logger = logging.getLogger(__name__)
 
@@ -73,8 +76,52 @@ class MetricsCollector:
             logger.warning(f"Sequence table not found: {seqtab_path}")
             return
 
-        # Read sequence table
-        seqtab = pd.read_csv(seqtab_path, index_col=0)
+        dada2_dir = self.output_dir / "02_dada2" / self.marker
+        processing_log = dada2_dir / "dada2_processing.log"
+        track_reads = dada2_dir / "track_reads.csv"
+
+        # Read sequence table. A header-only or empty file (0 ASVs surviving
+        # filtering/merging/chimera removal) is the realistic failure here; turn the
+        # raw pandas error into a DADA2-context message rather than a bare traceback.
+        try:
+            seqtab = pd.read_csv(seqtab_path, index_col=0)
+        except EmptyDataError as exc:
+            raise SeednapError(
+                f"Could not compute ASV metrics for marker '{self.marker}': the DADA2 "
+                f"sequence table {seqtab_path} is empty (0 bytes / no columns)",
+                why=(
+                    "The DADA2 R step completed and this metrics summary ran afterwards, but the "
+                    "sequence table has no content. If the file is truncated rather than "
+                    "header-only, the R run was interrupted mid-write; otherwise every sequence "
+                    "was dropped during filtering, failed to merge, or was removed as a chimera, "
+                    "leaving zero ASVs."
+                ),
+                fix=(
+                    f"Inspect {processing_log} and the per-sample read-tracking table "
+                    f"({track_reads}) to see where reads were lost, then either re-run the dada2 "
+                    f"step (if the table was truncated) or loosen dada2.filter (max_ee, trunc_q, "
+                    f"min_len/max_len), dada2.merge (min_overlap), or dada2.chimera in the marker "
+                    f"YAML."
+                ),
+            ) from exc
+
+        if len(seqtab) == 0:
+            raise SeednapError(
+                f"Could not compute ASV metrics for marker '{self.marker}': the DADA2 run "
+                f"produced zero ASVs (the sequence table {seqtab_path} has no rows)",
+                why=(
+                    "The DADA2 R step itself completed successfully and wrote its tables; only "
+                    "this metrics summary failed. Zero ASVs usually means every sequence was "
+                    "dropped during filtering, failed to merge, or was removed as a chimera."
+                ),
+                fix=(
+                    f"Inspect {processing_log} and the per-sample read-tracking table "
+                    f"({track_reads}) to see where reads were lost, then consider loosening "
+                    f"dada2.filter (max_ee, trunc_q, min_len/max_len), dada2.merge (min_overlap), "
+                    f"or dada2.chimera in the marker YAML. If {seqtab_path} is truncated rather "
+                    f"than header-only, the R run was interrupted mid-write; re-run the dada2 step."
+                ),
+            )
 
         # Calculate metrics
         self.asv_metrics.num_asvs = len(seqtab)
