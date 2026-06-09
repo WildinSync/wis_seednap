@@ -22,4 +22,4 @@ taxonomy:
 
 # Pick the clustering path with `pipeline.steps` (defaults to the DADA2 ASV path):
 #   pipeline:
-#     steps: ["trim", "swarm", "taxonomy"]   # OTU path  (or "dada2" for the ASV path)
+#     steps: ["trim", "swarm", "taxonomy", "export"]   # OTU path  (or "dada2" for the ASV path)

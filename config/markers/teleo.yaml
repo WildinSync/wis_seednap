@@ -176,4 +176,5 @@ pipeline:
     - "trim"
     - "swarm"
     - "taxonomy"
+    - "export"
     - "report"
