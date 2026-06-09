@@ -11,14 +11,15 @@ SELECTED database block (``blast.fasta``; ``dada2.all``; ``ecotag.tree`` + ``fas
 
 Section -> consumer map (which pipeline step reads each top-level section):
     marker, paths        -> all steps
-    demultiplex          -> run_demultiplex (off by default)
+    demultiplex          -> run_demultiplex   [runs iff "demultiplex" in pipeline.steps]
     trimming             -> run_trim
-    dada2                -> run_dada2          [ASV path; chosen via pipeline.steps]
-    swarm                -> run_swarm          [OTU path; chosen via pipeline.steps]
+    dada2                -> run_dada2          [ASV path; listed in pipeline.steps]
+    swarm                -> run_swarm          [OTU path; listed in pipeline.steps]
     taxonomy             -> run_taxonomy / get_database_config
-    cleaning             -> run_clean (auto-inserted after taxonomy when cleaning.enabled)
-    export, metrics, report, logging -> their respective steps (all default-on/safe)
-    pipeline             -> run() step ordering (pick the dada2 OR the swarm path)
+    cleaning             -> run_clean          [runs iff "clean" in pipeline.steps]
+    export, report, logging -> their respective steps
+    pipeline.steps       -> the single source of truth for what runs and in what order
+                            (a stage runs iff listed; dada2 and swarm are mutually exclusive)
 """
 
 from seednap.config.models.base import StrictModel
@@ -42,7 +43,6 @@ from seednap.config.models.operational import (
 from seednap.config.models.outputs import (
     ExportConfig,
     GbifExportConfig,
-    MetricsConfig,
     ReportConfig,
 )
 from seednap.config.models.pipeline import PipelineConfig
@@ -84,7 +84,6 @@ __all__ = [
     "TaxonomicAssignmentConfig",
     "GbifExportConfig",
     "ExportConfig",
-    "MetricsConfig",
     "ReportConfig",
     "CleaningConfig",
     "LoggingConfig",

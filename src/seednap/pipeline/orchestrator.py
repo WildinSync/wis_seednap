@@ -94,11 +94,6 @@ class PipelineOrchestrator:
                 f"Starting new pipeline run for marker: {self.config.marker.name}"
             )
 
-        # Track the cleaning step when enabled (auto-inserted into the run order in run());
-        # added here so --resume sees it even if it was enabled after the first run.
-        if self.config.cleaning.enabled and self.state.get_step("clean") is None:
-            self.state.add_step("clean")
-
     def _setup_logging(self) -> None:
         """Configure logging using existing logging utilities."""
         log_config = self.config.logging
@@ -159,10 +154,6 @@ class PipelineOrchestrator:
         Returns:
             True if step should be run, False if it should be skipped
         """
-        # Check if step is in the skip list
-        if step_name in self.config.pipeline.skip:
-            return False
-
         # Check if step is already completed
         if self.state.is_step_completed(step_name):
             logger.info(f"Step '{step_name}' already completed, skipping")
@@ -197,19 +188,8 @@ class PipelineOrchestrator:
         """
         step_name = "demultiplex"
 
-        # D3: explicit skip flag for pre-demultiplexed inputs (one FASTQ per sample
-        # already in raw_data). Distinguishes "I don't want to demultiplex" from
-        # "demultiplexing isn't applicable to this data".
-        if self.config.demultiplex.skip:
-            self.state.skip_step(
-                step_name, reason="Demultiplexing skipped (raw inputs already demultiplexed)"
-            )
-            return {}
-
-        if not self.config.demultiplex.enabled:
-            self.state.skip_step(step_name, reason="Demultiplexing disabled in config")
-            return {}
-
+        # This step runs iff "demultiplex" is listed in pipeline.steps. If your raw inputs are
+        # already demultiplexed (one FASTQ per sample), simply omit "demultiplex" from steps.
         if not self._should_run_step(step_name):
             step = self.state.get_step(step_name)
             return step.outputs if step else {}
@@ -272,8 +252,8 @@ class PipelineOrchestrator:
         """Run standard (tag-based) demultiplexing.
 
         Note: this protocol is not yet implemented end-to-end. Use
-        protocol='ligation' or pre-demultiplex your data and set
-        demultiplex.skip=true.
+        protocol='ligation', or pre-demultiplex your data and omit
+        "demultiplex" from pipeline.steps.
 
         Raises:
             NotImplementedError: Always; the standard protocol is not wired in.
@@ -281,7 +261,7 @@ class PipelineOrchestrator:
         raise NotImplementedError(
             "Standard demultiplex protocol is not yet wired end-to-end. "
             "Use protocol='ligation' for ligation-based libraries, or "
-            "set demultiplex.skip=true if your input is already demultiplexed."
+            "omit 'demultiplex' from pipeline.steps if your input is already demultiplexed."
         )
 
         # TODO: Implement standard demultiplexing workflow
@@ -398,11 +378,10 @@ class PipelineOrchestrator:
                 min_len=self.config.dada2.filter.min_len,
                 max_len=self.config.dada2.filter.max_len,
                 library_map=self._build_library_map(),
-                collect_metrics=self.config.metrics.collect_asv_metrics,
+                collect_metrics=self.config.dada2.collect_metrics,
             )
 
             self.state.complete_step(step_name, outputs)
-            self._build_read_tracking_report("dada2")
             self._validate_manifest_against_abundance("dada2")
             self._save_state()
             log_pipeline_step(step_name, "complete", logger)
@@ -455,7 +434,6 @@ class PipelineOrchestrator:
             )
 
             self.state.complete_step(step_name, outputs)
-            self._build_read_tracking_report("swarm")
             self._validate_manifest_against_abundance("swarm")
             self._save_state()
             log_pipeline_step(step_name, "complete", logger)
@@ -536,8 +514,6 @@ class PipelineOrchestrator:
         Non-fatal: a reporting failure logs a ``[WARN]`` and never fails the
         run (CLAUDE.md section 4 -- the report is observational only).
         """
-        if not self.config.report.read_tracking:
-            return
         try:
             import pandas as pd
 
@@ -637,13 +613,13 @@ class PipelineOrchestrator:
             )
 
     def _build_html_report(self) -> None:
-        """Build the full HTML run report at run end (needs taxonomy + clustering).
+        """Build the full HTML run report (needs taxonomy + clustering).
 
-        On by default (``report.html_report``, set ``false`` to disable).
-        Non-fatal: failures log a ``[WARN]`` and never affect the run
-        (CLAUDE.md section 4).
+        Called by the ``report`` step; gated by ``report.html_report`` (default on, set
+        ``false`` to write only the read-tracking table). Non-fatal: failures log a ``[WARN]``
+        and never affect the run (CLAUDE.md section 4).
         """
-        if not (self.config.report.read_tracking and self.config.report.html_report):
+        if not self.config.report.html_report:
             return
         try:
             from seednap.steps.report import HTMLReportBuilder, ReadTrackingBuilder
@@ -823,7 +799,7 @@ class PipelineOrchestrator:
 
     def run_clean(self) -> Dict[str, Path]:
         """Control-decontamination step: clean the taxonomy table against its negative
-        controls, between taxonomy and export. Gated on ``cleaning.enabled`` and on
+        controls (list ``clean`` in pipeline.steps, after a feature step). Needs
         ``report.sample_metadata`` (the control-identity source). Non-fatal: a problem skips
         cleaning with a ``[WARN]`` rather than failing the run (export falls back to the
         uncleaned table)."""
@@ -831,10 +807,6 @@ class PipelineOrchestrator:
         if not self._should_run_step(step_name):
             step = self.state.get_step(step_name)
             return step.outputs if step else {}
-
-        if not self.config.cleaning.enabled:
-            self.state.skip_step(step_name, reason="Cleaning disabled in config")
-            return {}
 
         field_csv = self.config.report.sample_metadata
         if field_csv is None:
@@ -929,10 +901,6 @@ class PipelineOrchestrator:
         try:
             logger.info("Running export to GBIF format")
 
-            if not self.config.export.gbif.enabled:
-                self.state.skip_step(step_name, reason="GBIF export disabled in config")
-                return {}
-
             # Get taxonomy outputs
             if not self.state.is_step_completed("taxonomy"):
                 raise ValueError("Taxonomy step must be completed before export")
@@ -982,6 +950,43 @@ class PipelineOrchestrator:
             log_pipeline_step(step_name, "error", logger)
             raise
 
+    def run_report(self) -> Dict[str, Path]:
+        """Reporting step: write the per-step read/sequence tracking table + step summary, and
+        (when ``report.html_report`` is on) the self-contained HTML run report. Observational:
+        a reporting failure logs a ``[WARN]`` and never fails the run (CLAUDE.md section 4)."""
+        step_name = "report"
+        if not self._should_run_step(step_name):
+            step = self.state.get_step(step_name)
+            return step.outputs if step else {}
+
+        log_pipeline_step(step_name, "start", logger)
+        self.state.start_step(step_name)
+        self._save_state()
+
+        # The read-tracking table is keyed off the feature path that produced the table.
+        method = (
+            "dada2" if self.state.is_step_completed("dada2")
+            else "swarm" if self.state.is_step_completed("swarm")
+            else None
+        )
+        if method is None:
+            self.state.skip_step(
+                step_name, reason="No completed dada2/swarm step to report on"
+            )
+            logger.warning(
+                "[WARN] report: expected=a completed feature step (dada2 or swarm), "
+                "got=none, fallback=report skipped"
+            )
+            self._save_state()
+            return {}
+
+        self._build_read_tracking_report(method)
+        self._build_html_report()
+        self.state.complete_step(step_name, {})
+        self._save_state()
+        log_pipeline_step(step_name, "complete", logger)
+        return {}
+
     def run(self, stop_on_error: bool = True) -> PipelineState:
         """
         Run complete pipeline.
@@ -999,16 +1004,9 @@ class PipelineOrchestrator:
         logger.info(f"Starting seednap pipeline for marker: {self.config.marker.name}")
         logger.info("=" * 80)
 
-        active_steps = [s for s in self.config.pipeline.steps if s not in self.config.pipeline.skip]
-        # Cleaning is not a user-listed step: auto-insert it after taxonomy (before export)
-        # when enabled, so it runs without a config edit and is --resume-safe.
-        if self.config.cleaning.enabled and "clean" not in active_steps:
-            if "taxonomy" in active_steps:
-                active_steps.insert(active_steps.index("taxonomy") + 1, "clean")
-            elif "export" in active_steps:
-                active_steps.insert(active_steps.index("export"), "clean")
-            else:
-                active_steps.append("clean")
+        # pipeline.steps is the single source of truth: a stage runs iff listed, in order.
+        # The order was already validated against the dependency DAG at config load.
+        active_steps = list(self.config.pipeline.steps)
         logger.info(f"Pipeline steps: {' → '.join(active_steps)}")
 
         # Map step names to methods
@@ -1020,6 +1018,7 @@ class PipelineOrchestrator:
             "taxonomy": self.run_taxonomy,
             "clean": self.run_clean,
             "export": self.run_export,
+            "report": self.run_report,
         }
 
         # Execute steps
@@ -1047,9 +1046,6 @@ class PipelineOrchestrator:
         # Mark pipeline as complete
         self.state.complete_pipeline()
         self._save_state()
-
-        # Full HTML run report (opt-in) -- after all steps so taxonomy is available.
-        self._build_html_report()
 
         logger.info("=" * 80)
         logger.info("Pipeline completed successfully!")

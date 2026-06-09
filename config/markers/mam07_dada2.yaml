@@ -12,7 +12,6 @@ paths:
   logs: "logs"
 
 demultiplex:
-  enabled: false
   protocol: "none"
 
 trimming:
@@ -50,6 +49,7 @@ dada2:
   pool: false
   multithread: true
   per_library: false      # learn DADA2 errors per library/run then merge (only matters when >=2 libraries are pooled)
+  collect_metrics: false  # ASV summary stats to metrics.json/csv + console (DADA2 path only)
 
 taxonomy:
   method: "dada2"
@@ -88,15 +88,10 @@ taxonomy:
 
 export:
   gbif:
-    enabled: false
     add_rank: true
     add_taxon: true
 
-metrics:
-  collect_asv_metrics: false
-
 report:
-  read_tracking: true        # per-step read/sequence tracking table + data-loss warnings (default: on)
   html_report: true          # self-contained HTML run report with charts (default: on; set false to disable)
   warn_below_retention_pct: 30.0   # warn for samples retaining < this % of raw reads (raw -> final)
   warn_step_loss_pct: 70.0         # warn when a single step drops more than this % of a sample's reads
@@ -109,7 +104,6 @@ report:
   # project_metadata: "/path/to/metadata_proj_<dataset>.csv"
 
 cleaning:
-  enabled: false             # control decontamination of the abundance table (default: off)
   mode: "flag"               # "flag" annotates OTUs/ASVs found in negative controls without
                              # changing counts; "subtract" removes those control reads (extraction
                              # blanks clean their extraction batch, PCR blanks the whole dataset).
@@ -126,4 +120,4 @@ pipeline:
     - "trim"
     - "dada2"
     - "taxonomy"
-  skip: []
+    - "report"

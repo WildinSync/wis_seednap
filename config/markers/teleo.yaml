@@ -22,11 +22,11 @@ paths:
   output: "outputs"
   logs: "logs"
 
-# Demultiplexing configuration
+# Demultiplexing configuration. Runs ONLY if you add "demultiplex" to pipeline.steps
+# (before "trim"); the params below are then used. Omit it from steps for pre-demultiplexed data.
 demultiplex:
-  enabled: true
   protocol: "ligation"  # Options: "ligation", "standard", "none"
-  metadata: "/home/shared/edna/raw/fw_na_namibia/metadata/metadata_lab_fw_na_namibia_2023.csv"  # Uncomment if using demultiplexing
+  metadata: "/home/shared/edna/raw/fw_na_namibia/metadata/metadata_lab_fw_na_namibia_2023.csv"
 
 # Primer trimming configuration (cutadapt)
 trimming:
@@ -69,6 +69,7 @@ dada2:
   pool: false
   multithread: true
   per_library: false      # learn DADA2 errors per library/run then merge (only matters when >=2 libraries are pooled)
+  collect_metrics: true   # ASV summary stats to metrics.json/csv + console (DADA2 path only)
 
 # Taxonomic assignment configuration
 taxonomy:
@@ -133,20 +134,15 @@ taxonomy:
     decipher:
       trained: "/home/shared/edna/reference_database/decipher/teleo_trained.rds"
 
-# Export configuration
+# Export configuration. Runs ONLY if you add "export" to pipeline.steps (after "taxonomy").
 export:
   gbif:
-    enabled: true
     add_rank: true
     add_taxon: true
 
-# Quality control metrics configuration
-metrics:
-  collect_asv_metrics: true
-
-# Run reporting: per-step read/sequence tracking + HTML report (both on by default)
+# Run reporting (runs iff "report" is in pipeline.steps): always writes the per-step
+# read/sequence tracking table + step summary; html_report toggles the HTML document.
 report:
-  read_tracking: true        # per-step read/sequence tracking table + data-loss warnings (default: on)
   html_report: true          # self-contained HTML run report with charts (default: on; set false to disable)
   warn_below_retention_pct: 30.0   # warn for samples retaining < this % of raw reads (raw -> final)
   warn_step_loss_pct: 70.0         # warn when a single step drops more than this % of a sample's reads
@@ -158,9 +154,8 @@ report:
   # sample_metadata: "/path/to/metadata_field_<dataset>.csv"
   # project_metadata: "/path/to/metadata_proj_<dataset>.csv"
 
-# Logging configuration
+# Control decontamination (runs iff "clean" is in pipeline.steps, after a feature step)
 cleaning:
-  enabled: false             # control decontamination of the abundance table (default: off)
   mode: "flag"               # "flag" annotates OTUs/ASVs found in negative controls without
                              # changing counts; "subtract" removes those control reads (extraction
                              # blanks clean their extraction batch, PCR blanks the whole dataset).
@@ -172,10 +167,13 @@ logging:
   file: true
   console: true
 
-# Pipeline execution steps
+# Pipeline execution stages, in order. A stage runs iff listed; the order is validated
+# against stage dependencies at load. dada2 and swarm are mutually exclusive. Available
+# stages: demultiplex (before trim), trim, dada2|swarm, taxonomy, clean (after a feature
+# step), export (after taxonomy), report.
 pipeline:
   steps:
     - "trim"
     - "swarm"
     - "taxonomy"
-  skip: []  # List steps to skip, e.g., ["trim"] if data is already trimmed
+    - "report"

@@ -465,10 +465,13 @@ def test_report_has_no_em_or_curly_punctuation(tmp_path):
 
 def test_report_config_defaults_and_strictness():
     c = ReportConfig()
-    # Reporting (read-tracking + HTML) is on by default for every run.
-    assert c.read_tracking is True and c.html_report is True
+    # The report step (listed in pipeline.steps) always writes the read-tracking table;
+    # html_report toggles the HTML document and is on by default.
+    assert c.html_report is True
     assert c.output_dir is None  # defaults to <paths.output>/04_report
     assert c.warn_below_retention_pct == 30.0 and c.warn_step_loss_pct == 70.0
+    with pytest.raises(Exception):
+        ReportConfig(read_tracking=True)  # removed: the report step is gated via pipeline.steps
     with pytest.raises(Exception):
         ReportConfig(unknown_field=1)  # extra="forbid"
 

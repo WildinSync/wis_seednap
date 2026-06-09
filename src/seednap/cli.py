@@ -97,7 +97,7 @@ def validate(ctx: click.Context, config_file: Path) -> None:
             table.add_row("Output Directory", str(config.paths.output))
             table.add_row("Trimming Cores", str(config.trimming.cores))
 
-            if config.demultiplex.enabled:
+            if "demultiplex" in config.pipeline.steps:
                 table.add_row("Demultiplexing", f"Enabled ({config.demultiplex.protocol})")
             else:
                 table.add_row("Demultiplexing", "Disabled")
@@ -1791,7 +1791,7 @@ def monitor(ctx: click.Context, marker: str, output_dir: Path, state_file: Optio
     else:
         print_warning(
             "No per-sample read-tracking counts in the state JSON "
-            "(run the pipeline with report.read_tracking enabled to populate them)."
+            "(include the 'report' step in pipeline.steps to populate them)."
         )
 
 

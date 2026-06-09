@@ -47,6 +47,10 @@ class Dada2Config(StrictModel):
     chimera: Dada2ChimeraConfig = Field(default_factory=Dada2ChimeraConfig)
     pool: bool = Field(default=False, description="Pool samples for denoising")
     multithread: bool = Field(default=True, description="Use multithreading")
+    collect_metrics: bool = Field(
+        default=True,
+        description="Collect ASV summary stats to metrics.json/csv + console (DADA2 path only)",
+    )
     # DADA2-by-library: learn error models per sequencing run/library, then merge. Off by
     # default (and a no-op for single-library datasets, which is every current run). Only
     # matters when >= 2 libraries are combined into one DADA2 invocation. Requires a

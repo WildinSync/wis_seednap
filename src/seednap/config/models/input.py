@@ -59,18 +59,10 @@ class PathsConfig(StrictModel):
 class DemultiplexConfig(StrictModel):
     """Demultiplexing configuration."""
 
-    enabled: bool = Field(default=False, description="Whether demultiplexing is enabled")
     protocol: Literal["ligation", "standard", "none"] = Field(
         default="none", description="Demultiplexing protocol type"
     )
     metadata: Optional[Path] = Field(default=None, description="Path to metadata CSV file")
-    # When raw inputs are already demultiplexed (one FASTQ per sample),
-    # set skip=true so the orchestrator records the step as skipped rather
-    # than running the demultiplex protocol against pre-demultiplexed data.
-    skip: bool = Field(
-        default=False,
-        description="Skip the demultiplex step (use when raw inputs are pre-demultiplexed)",
-    )
     # If more than this fraction of samples fail during demultiplexing, abort.
     # Otherwise log the failures and continue. Default 0.5 = abort if >50% fail.
     max_sample_failure_rate: float = Field(

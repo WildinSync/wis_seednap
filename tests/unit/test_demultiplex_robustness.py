@@ -1,8 +1,8 @@
-"""Unit tests for the demultiplex skip flag and per-sample failure handling (Commit I).
+"""Unit tests for DemultiplexConfig and per-sample failure handling.
 
-These tests don't run cutadapt — they exercise the configuration plumbing
-and the orchestrator's skip behaviour using mock state, so they're fast and
-don't require any external tools.
+These tests don't run cutadapt -- they exercise the configuration plumbing only.
+Demultiplexing now runs iff "demultiplex" is listed in pipeline.steps (there is no
+separate enabled/skip flag); these tests cover the remaining demultiplex params.
 """
 
 from __future__ import annotations
@@ -14,15 +14,10 @@ import pytest
 from seednap.config.models import DemultiplexConfig
 
 
-def test_skip_flag_default_is_false() -> None:
+def test_demultiplex_defaults() -> None:
     cfg = DemultiplexConfig()
-    assert cfg.skip is False
+    assert cfg.protocol == "none"
     assert cfg.max_sample_failure_rate == 0.5
-
-
-def test_skip_flag_can_be_set() -> None:
-    cfg = DemultiplexConfig(skip=True)
-    assert cfg.skip is True
 
 
 def test_max_sample_failure_rate_validates_range() -> None:
@@ -33,22 +28,22 @@ def test_max_sample_failure_rate_validates_range() -> None:
     with pytest.raises(Exception):
         DemultiplexConfig(max_sample_failure_rate=1.5)
     # Edges allowed
-    cfg = DemultiplexConfig(max_sample_failure_rate=0.0)
-    assert cfg.max_sample_failure_rate == 0.0
-    cfg = DemultiplexConfig(max_sample_failure_rate=1.0)
-    assert cfg.max_sample_failure_rate == 1.0
+    assert DemultiplexConfig(max_sample_failure_rate=0.0).max_sample_failure_rate == 0.0
+    assert DemultiplexConfig(max_sample_failure_rate=1.0).max_sample_failure_rate == 1.0
 
 
-def test_strict_validation_rejects_unknown_keys() -> None:
-    """Demultiplex config still rejects typos (StrictModel inheritance)."""
+def test_strict_validation_rejects_removed_and_unknown_keys() -> None:
+    """The removed enable/skip gates are now rejected, as are typos (StrictModel)."""
     with pytest.raises(Exception):
-        DemultiplexConfig(skipp=True)  # typo
+        DemultiplexConfig(enabled=True)  # removed: opt in via pipeline.steps instead
+    with pytest.raises(Exception):
+        DemultiplexConfig(skip=True)  # removed: omit "demultiplex" from steps instead
+    with pytest.raises(Exception):
+        DemultiplexConfig(protocoll="ligation")  # typo
 
 
-def test_orchestrator_skip_message_in_config() -> None:
-    """skip=True in YAML must round-trip cleanly through load_config."""
-    import yaml
-
+def test_demultiplex_section_round_trips() -> None:
+    """A demultiplex section round-trips; the step runs only when listed in pipeline.steps."""
     from seednap.config.loader import load_config
 
     yaml_text = """
@@ -58,8 +53,7 @@ marker:
     forward: "ACACCGCCCGTCACTCT"
     reverse: "CTTCCGGTACACTTACCATG"
 demultiplex:
-  enabled: false
-  skip: true
+  protocol: "ligation"
 paths:
   raw_data: "/tmp/raw"
   output: "/tmp/output"
@@ -70,8 +64,9 @@ taxonomy:
     blast:
       fasta: "/tmp/ref.fasta"
 """
-    p = Path("/tmp/test_skip_demux.yaml")
+    p = Path("/tmp/test_demux_roundtrip.yaml")
     p.write_text(yaml_text)
     cfg = load_config(p)
-    assert cfg.demultiplex.skip is True
-    assert cfg.demultiplex.enabled is False
+    assert cfg.demultiplex.protocol == "ligation"
+    # Not run unless explicitly listed in pipeline.steps.
+    assert "demultiplex" not in cfg.pipeline.steps

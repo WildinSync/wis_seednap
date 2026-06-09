@@ -18,7 +18,6 @@ from seednap.config.models.operational import (
 )
 from seednap.config.models.outputs import (
     ExportConfig,
-    MetricsConfig,
     ReportConfig,
 )
 from seednap.config.models.swarm import SwarmConfig
@@ -49,9 +48,6 @@ class PipelineConfig(StrictModel):
     )
     export: ExportConfig = Field(
         default_factory=ExportConfig, description="Export configuration"
-    )
-    metrics: MetricsConfig = Field(
-        default_factory=MetricsConfig, description="Metrics configuration"
     )
     report: ReportConfig = Field(
         default_factory=ReportConfig, description="Run reporting configuration"

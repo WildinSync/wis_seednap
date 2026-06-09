@@ -204,8 +204,7 @@ paths:
   output: "outputs"
   logs: "logs"
 
-demultiplex:
-  enabled: false
+demultiplex:                 # runs only if "demultiplex" is added to pipeline.steps (before trim)
   protocol: "none"
 
 trimming:
@@ -228,6 +227,7 @@ dada2:
     method: "consensus"
   pool: false
   multithread: true
+  collect_metrics: true      # ASV summary stats to metrics.json/csv + console (DADA2 path only)
 
 # SWARM OTU clustering configuration (alternative to DADA2)
 swarm:
@@ -265,17 +265,13 @@ taxonomy:
     decipher:
       trained: "references/{marker}/decipher_trained.rds"
 
-export:
+export:                      # runs only if "export" is in pipeline.steps (after taxonomy)
   gbif:
-    enabled: true
     add_rank: true
     add_taxon: true
 
-metrics:
-  collect_asv_metrics: true
-
-report:
-  read_tracking: true        # per-step read/sequence tracking table + data-loss warnings (default: on)
+report:                      # runs only if "report" is in pipeline.steps; always writes the
+                             # read-tracking table + step summary, html_report adds the HTML doc
   html_report: true          # self-contained HTML run report with charts (default: on; set false to disable)
   warn_below_retention_pct: 30.0   # warn for samples retaining < this % of raw reads (raw -> final)
   warn_step_loss_pct: 70.0         # warn when a single step drops more than this % of a sample's reads
@@ -283,8 +279,7 @@ report:
   # sample_metadata: "/path/to/metadata_field_<dataset>.csv"   # dataset/provenance section (optional)
   # project_metadata: "/path/to/metadata_proj_<dataset>.csv"   # sequencing/reference-DB provenance (optional)
 
-cleaning:
-  enabled: false             # control decontamination of the abundance table (default: off)
+cleaning:                    # runs only if "clean" is in pipeline.steps (after a feature step)
   mode: "flag"               # "flag" annotates control OTUs without changing counts; "subtract"
                              # removes control reads. Control identity comes from the FAIRe manifest.
 
@@ -294,13 +289,17 @@ logging:
   file: true
   console: true
 
+# Stages to run, in order. A stage runs iff listed; the order is validated against stage
+# dependencies at load. dada2 and swarm are mutually exclusive. Available stages:
+# demultiplex (before trim), trim, dada2|swarm, taxonomy, clean (after a feature step),
+# export (after taxonomy), report.
 pipeline:
   steps:
     - "trim"
-    - "swarm"            # recommended OTU path; use "dada2" instead for the ASV path
+    - "swarm"            # OTU path; use "dada2" instead for the ASV path
     - "taxonomy"
     - "export"
-  skip: []
+    - "report"
 """
 
     try:

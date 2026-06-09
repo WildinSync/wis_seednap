@@ -14,9 +14,8 @@ from seednap.config.models.base import StrictModel
 
 
 class GbifExportConfig(StrictModel):
-    """GBIF export configuration."""
+    """GBIF export configuration (the 'export' step runs iff listed in pipeline.steps)."""
 
-    enabled: bool = Field(default=True, description="Whether to generate GBIF format output")
     add_rank: bool = Field(default=True, description="Add taxonomic rank column")
     add_taxon: bool = Field(default=True, description="Add lowest available taxon column")
 
@@ -29,22 +28,13 @@ class ExportConfig(StrictModel):
     )
 
 
-class MetricsConfig(StrictModel):
-    """Quality control metrics configuration."""
-
-    collect_asv_metrics: bool = Field(
-        default=True,
-        description="Collect DADA2 ASV summary stats to metrics.json/csv + console (DADA2 path only)",
-    )
-
-
 class ReportConfig(StrictModel):
-    """Run reporting: per-step read/sequence tracking and an optional HTML report."""
+    """Run reporting parameters (the 'report' step runs iff listed in pipeline.steps).
 
-    read_tracking: bool = Field(
-        default=True,
-        description="Generate the per-step read/sequence tracking table and data-loss warnings",
-    )
+    When the 'report' step runs it always writes the per-step read/sequence tracking table and
+    step summary; ``html_report`` additionally toggles the self-contained HTML document.
+    """
+
     html_report: bool = Field(
         default=True,
         description="Generate a self-contained HTML run report with charts (on by default)",
