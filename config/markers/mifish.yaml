@@ -1,4 +1,3 @@
-version: "0.1.0"
 
 marker:
   name: "mifish"
@@ -90,7 +89,7 @@ export:
     add_taxon: true
 
 metrics:
-  generate_plots: false
+  collect_asv_metrics: false
 
 report:
   read_tracking: true        # per-step read/sequence tracking table + data-loss warnings (default: on)

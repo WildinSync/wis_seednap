@@ -398,7 +398,7 @@ class PipelineOrchestrator:
                 min_len=self.config.dada2.filter.min_len,
                 max_len=self.config.dada2.filter.max_len,
                 library_map=self._build_library_map(),
-                collect_metrics=self.config.metrics.generate_plots,
+                collect_metrics=self.config.metrics.collect_asv_metrics,
             )
 
             self.state.complete_step(step_name, outputs)

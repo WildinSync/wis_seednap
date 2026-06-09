@@ -192,8 +192,6 @@ taxonomy:
 """
     else:
         example_config = f"""# Seednap Pipeline Configuration for {marker}
-version: "0.1.0"
-
 marker:
   name: {marker}
   description: "Example {marker} marker configuration"
@@ -274,7 +272,7 @@ export:
     add_taxon: true
 
 metrics:
-  generate_plots: true
+  collect_asv_metrics: true
 
 report:
   read_tracking: true        # per-step read/sequence tracking table + data-loss warnings (default: on)

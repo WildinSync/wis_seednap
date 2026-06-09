@@ -32,9 +32,9 @@ class ExportConfig(StrictModel):
 class MetricsConfig(StrictModel):
     """Quality control metrics configuration."""
 
-    generate_plots: bool = Field(
+    collect_asv_metrics: bool = Field(
         default=True,
-        description="Collect DADA2 QC metrics and per-sample plots (DADA2 path only)",
+        description="Collect DADA2 ASV summary stats to metrics.json/csv + console (DADA2 path only)",
     )
 
 

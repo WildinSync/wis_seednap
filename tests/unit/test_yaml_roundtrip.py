@@ -64,7 +64,6 @@ def test_typo_in_yaml_is_rejected(tmp_path: Path) -> None:
     bad_yaml = tmp_path / "bad.yaml"
     bad_yaml.write_text(
         """
-version: "0.1.0"
 marker:
   name: "test"
   primers:

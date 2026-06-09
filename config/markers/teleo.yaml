@@ -7,7 +7,6 @@
 # For a bare-minimum starting point see config/markers/minimal.example.yaml.
 #
 # Configuration format version
-version: "0.1.0"
 
 # Marker-specific configuration
 marker:
@@ -143,7 +142,7 @@ export:
 
 # Quality control metrics configuration
 metrics:
-  generate_plots: true
+  collect_asv_metrics: true
 
 # Run reporting: per-step read/sequence tracking + HTML report (both on by default)
 report:

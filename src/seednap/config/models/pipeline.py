@@ -34,7 +34,6 @@ from seednap.config.models.trimming import TrimmingConfig
 class PipelineConfig(StrictModel):
     """Complete pipeline configuration."""
 
-    version: str = Field(default="0.1.0", description="Config format version")
     marker: MarkerConfig = Field(..., description="Marker configuration")
     paths: PathsConfig = Field(default_factory=PathsConfig, description="Path configuration")
     demultiplex: DemultiplexConfig = Field(

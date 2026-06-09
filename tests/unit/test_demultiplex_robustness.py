@@ -52,7 +52,6 @@ def test_orchestrator_skip_message_in_config() -> None:
     from seednap.config.loader import load_config
 
     yaml_text = """
-version: "0.1.0"
 marker:
   name: "teleo"
   primers:

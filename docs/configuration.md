@@ -31,7 +31,6 @@ block is actually used, and flags any referenced database or `raw_data` path tha
 
 ```
 PipelineConfig
-  version       free-form string (default "0.1.0")
   marker        (REQUIRED)  name + primers.{forward, reverse}
   paths         set raw_data; output/logs default
   demultiplex   off by default
@@ -64,14 +63,6 @@ wholesale, not appended**, so to change one entry of a list (e.g. `pipeline.step
 `taxonomy.contaminants`) you restate the whole list.
 
 ## Full Configuration Structure
-
-### `version`
-
-```yaml
-version: "0.1.0"
-```
-
-Config format version (informational; free-form string, default `"0.1.0"`, not enforced at load time).
 
 ### `marker`
 
@@ -277,7 +268,7 @@ export:
 
 ```yaml
 metrics:
-  generate_plots: true                       # Collect DADA2 QC metrics + plots (DADA2 path only)
+  collect_asv_metrics: true                  # Collect DADA2 ASV summary stats (metrics.json/csv + console; DADA2 path only)
 ```
 
 ### `report`
