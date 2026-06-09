@@ -140,7 +140,7 @@ paths:
   output: "outputs"
 
 pipeline:
-  steps: ["trim", "swarm", "taxonomy"]
+  steps: ["trim", "swarm", "taxonomy", "report"]   # a stage runs iff listed; use "dada2" instead of "swarm" for the ASV path
 ```
 
 Full configuration reference: [docs/configuration.md](docs/configuration.md)
@@ -148,7 +148,7 @@ Full configuration reference: [docs/configuration.md](docs/configuration.md)
 ## Reporting
 
 > [!TIP]
-> Every run reports on itself, no extra flags. `run-pipeline` writes these artifacts to `outputs/04_report/<marker>/`, on by default.
+> The `report` step is in the default `pipeline.steps`, so every run reports on itself out of the box, writing these artifacts to `outputs/04_report/<marker>/`. Drop `report` from `steps` to skip it, or set `report.html_report: false` for the tables only.
 
 ```
 read_tracking.csv / .txt    reads & sequences surviving each step, per sample
