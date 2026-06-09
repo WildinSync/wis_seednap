@@ -461,6 +461,99 @@ def test_contaminant_flagged_not_deleted(fixture_dir: Path) -> None:
     assert otu2["is_contaminant_candidate"] is True or otu2["is_contaminant_candidate"] == 1
 
 
+def test_genus_collapse_warning_uses_configured_threshold(
+    fixture_dir: Path, caplog
+) -> None:
+    """Regression: the D1 'confident call collapsed below genus' guard must read the
+    user-configured genus threshold, not a hardcoded 96.0.
+
+    OTU_1 has two equally-good hits at 92% identity (Perca_fluviatilis and
+    Cyprinus_carpio) that agree on class but disagree from order downward, so the LCA
+    collapses genus to None. With threshold_genus=90.0 the best pident (92) clears the
+    genus threshold, so the guard must fire. The buggy version read a hardcoded 96.0,
+    where 92 < 96 and the warning was silently suppressed -- exactly the 'confident call
+    silently lost' case the guard exists to catch.
+    """
+    blast_tsv = fixture_dir / "blast.tsv"
+    _write_blast_tsv(
+        blast_tsv,
+        [
+            ("OTU_1", "REF1", 92.0, 64, 5, 0, 1, 64, 1, 64, 1e-25, 119),
+            ("OTU_1", "REF4", 92.0, 64, 5, 0, 1, 64, 1, 64, 1e-25, 119),
+        ],
+    )
+    ass = BlastTaxonomicAssigner(
+        reference_fasta=fixture_dir / "ref.fasta",
+        threshold_species=99.0,
+        threshold_genus=90.0,  # 92 >= 90 -> guard must fire
+        threshold_family=70.0,
+        threshold_order=70.0,
+        threshold_class=70.0,
+        top_bitscore_pct=10.0,
+        lca_pident_delta=1.0,
+    )
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        df = ass.assign_taxonomy(
+            blast_tsv=blast_tsv,
+            asv_count_csv=fixture_dir / "abundance.csv",
+            asv_fasta=fixture_dir / "query.fasta",
+        )
+    # The LCA collapsed genus despite a 92% best hit clearing the configured genus threshold.
+    otu1 = df[df["ASV_ID"] == "OTU_1"].iloc[0]
+    assert otu1["class"] == "Actinopteri"
+    assert otu1["genus"] == "Unassigned"
+    # The guard must have fired, reporting the configured threshold (90.0), not 96.0.
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("collapsed below genus" in m for m in msgs), (
+        f"expected the genus-collapse guard to fire at threshold 90.0; got: {msgs}"
+    )
+    assert any("threshold (90.0)" in m for m in msgs), (
+        f"guard must report the configured genus threshold (90.0); got: {msgs}"
+    )
+
+
+def test_count_table_fasta_mismatch_warns(fixture_dir: Path, caplog) -> None:
+    """Regression: when the count table and query FASTA disagree on the sequence set, the
+    inner merge silently dropped the non-matching OTUs. It must now emit a [WARN] naming
+    the dropped count instead of silently shrinking the dataset (no-silent-drops contract).
+
+    The abundance CSV here carries one sequence that is absent from the query FASTA, so the
+    inner merge drops it; the guard must warn.
+    """
+    blast_tsv = fixture_dir / "blast.tsv"
+    _write_blast_tsv(
+        blast_tsv,
+        [("OTU_1", "REF1", 100.0, 64, 0, 0, 1, 64, 1, 64, 1e-30, 119)],
+    )
+    # Abundance table whose first sequence matches OTU_1 in the FASTA, plus an extra
+    # sequence that is NOT in the query FASTA -> the inner merge must drop it.
+    rogue = "ACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGTACGT"
+    otu1_seq = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+    counts = fixture_dir / "mismatch_abundance.csv"
+    counts.write_text(
+        "sequence,S1,S2\n"
+        f"{otu1_seq},10,5\n"
+        f"{rogue},20,15\n"
+    )
+    ass = BlastTaxonomicAssigner(reference_fasta=fixture_dir / "ref.fasta")
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        df = ass.assign_taxonomy(
+            blast_tsv=blast_tsv,
+            asv_count_csv=counts,
+            asv_fasta=fixture_dir / "query.fasta",
+        )
+    # Only the shared OTU survives the inner merge.
+    assert len(df) == 1
+    msgs = [r.getMessage() for r in caplog.records]
+    assert any("disagree on the sequence set" in m for m in msgs), (
+        f"expected a sequence-set mismatch [WARN]; got: {msgs}"
+    )
+
+
 def test_empty_blast_output_all_unassigned(fixture_dir: Path) -> None:
     """Edge case: empty BLAST TSV -> all OTUs Unassigned, no crash."""
     blast_tsv = fixture_dir / "blast.tsv"

@@ -315,8 +315,14 @@ class SwarmProcessor:
                 continue
             seen.add(sample_name)
 
-            # Find corresponding R2
-            r2_name = r1.name.replace("R1", "R2", 1)
+            # Find corresponding R2. Rewrite ONLY the matched R1 read-token, not
+            # an arbitrary "R1" substring: the sample-name prefix may itself
+            # contain "R1" (e.g. MR12_R1.fastq, R1B-site_R1.fastq), and a blind
+            # .replace("R1", "R2", 1) would corrupt the prefix and silently drop
+            # the sample (or pair it with the wrong R2). match.end() sits just
+            # after the token's "R1", so match.end()-2 is the start of that "R1".
+            token_start = match.end() - 2
+            r2_name = r1.name[:token_start] + "R2" + r1.name[match.end():]
             r2 = r1.parent / r2_name
             if r2.exists():
                 pairs.append((sample_name, r1, r2))

@@ -77,6 +77,30 @@ def test_humanizer_out_of_range(tmp_path):
     assert "max_ee" in msg and "out of range" in msg and "SDN-CFG-004" in msg
 
 
+def test_humanizer_string_too_short_is_not_unknown_key(tmp_path):
+    # A too-short primer is a valid key with a bad value: it must NOT be tagged
+    # SDN-CFG-001 ('unknown key'), which would send the user down the typo path.
+    d = _base(tmp_path)
+    d["marker"]["primers"]["forward"] = "ACGT"  # min_length=10
+    msg = _humanize(d)
+    assert "marker.primers.forward" in msg
+    assert "wrong length" in msg
+    assert "SDN-CFG-004" in msg
+    assert "SDN-CFG-001" not in msg
+
+
+def test_humanizer_demux_cross_field_uses_pipeline_topic(tmp_path):
+    # The demultiplex-protocol cross-field validator raises with an empty loc;
+    # it must map to the pipeline.steps topic (006), not the generic 'invalid
+    # choice' code (005).
+    d = _base(tmp_path)
+    d["pipeline"]["steps"] = ["demultiplex", "trim", "swarm", "taxonomy", "report"]
+    msg = _humanize(d)
+    assert "demultiplex" in msg and "pipeline.steps" in msg
+    assert "SDN-CFG-006" in msg
+    assert "SDN-CFG-005" not in msg
+
+
 def test_preflight_flags_missing_inputs(tmp_path):
     d = _base(tmp_path)
     d["paths"]["raw_data"] = str(tmp_path / "does_not_exist")  # missing dir; fasta also missing

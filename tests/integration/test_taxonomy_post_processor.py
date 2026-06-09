@@ -140,6 +140,43 @@ def test_contaminant_flagged_not_deleted(
     assert len(non_flagged) == 3
 
 
+def test_contaminant_flagged_in_multihit_species(abundance_csv: Path, tmp_path: Path) -> None:
+    """DADA2 addSpecies(allowMultiple=TRUE) produces '/'-joined multi-hit cells.
+
+    A configured contaminant hidden inside an ambiguous multi-match must still
+    be flagged; an exact-equality test would miss it. Fails before the fix,
+    passes after.
+    """
+    tax = tmp_path / "tax.csv"
+    pd.DataFrame({
+        "sequence": ["AAAAAAAA", "CCCCCCCC"],
+        "kingdom": ["Metazoa", "Metazoa"],
+        "phylum": ["Chordata", "Chordata"],
+        "class": ["Mammalia", "Actinopteri"],
+        "order": ["Primates", "Salmoniformes"],
+        "family": ["Hominidae", "Salmonidae"],
+        "genus": ["Homo", "Salmo"],
+        # First cell is a multi-hit that *contains* the contaminant Homo_sapiens;
+        # second is a clean multi-hit with no contaminant.
+        "species": ["Homo_sapiens/Homo_neanderthalensis", "Salmo_trutta/Salmo_salar"],
+    }).to_csv(tax, index=False)
+
+    out = tmp_path / "out.csv"
+    link_taxonomy_with_abundance(
+        tax, abundance_csv, out, contaminants=["Homo_sapiens"],
+    )
+    result = pd.read_csv(out)
+    assert len(result) == 4  # nothing deleted
+
+    flagged = result[result[CONTAMINANT_FLAG_COL]]
+    assert len(flagged) == 1
+    assert flagged.iloc[0]["species"] == "Homo_sapiens/Homo_neanderthalensis"
+
+    # The non-contaminant multi-hit row must NOT be flagged.
+    clean = result[result["species"] == "Salmo_trutta/Salmo_salar"]
+    assert not clean.iloc[0][CONTAMINANT_FLAG_COL]
+
+
 def test_blast_compatible_schema(
     abundance_csv: Path, taxonomy_csv_partial: Path, tmp_path: Path
 ) -> None:

@@ -853,7 +853,7 @@ class BlastTaxonomicAssigner:
             # but which still collapsed below genus (an LCA across disagreeing in-band
             # hits) is surfaced loudly, so a confident call is never silently lost to an
             # over-broad band (the no-silent-fallbacks policy).
-            genus_thr = getattr(self.filter, "threshold_genus", 96.0)
+            genus_thr = self.filter.thresholds["genus"]
             res_pident = pd.to_numeric(result["pident"], errors="coerce")
             collapsed = result[(res_pident >= genus_thr) & (result["genus"].isna())]
             if len(collapsed) > 0:
@@ -906,9 +906,30 @@ class BlastTaxonomicAssigner:
         # Attach ASV_ID via the FASTA
         asv_sequences = fasta_to_df(asv_fasta)
         asv_sequences = asv_sequences.rename(columns={"id": "ASV_ID", "sequence": "Sequence"})
+        n_count_before = len(asv_count)
+        n_fasta = len(asv_sequences)
         asv_count = pd.merge(
             asv_count, asv_sequences, how="inner", left_index=True, right_on="Sequence"
         )
+        # The inner merge keeps only sequences present in BOTH the count table and the
+        # query FASTA. In the validated SWARM/DADA2 paths the two files are produced
+        # together and match exactly, so nothing is dropped. If they ever diverge (e.g. a
+        # mismatched file passed to the standalone `assign-taxonomy` CLI), OTUs would
+        # vanish from the GBIF export silently -- which contradicts the no-silent-drops
+        # contract. Surface the mismatch loudly instead (the no-silent-fallbacks policy).
+        n_dropped_counts = n_count_before - len(asv_count)
+        n_dropped_fasta = n_fasta - len(asv_count)
+        if n_dropped_counts > 0 or n_dropped_fasta > 0:
+            logger.warning(
+                f"[WARN] blast_taxonomy: count table and query FASTA disagree on the "
+                f"sequence set: expected={n_count_before} count-table sequences and "
+                f"{n_fasta} FASTA sequences to match, got={len(asv_count)} in common "
+                f"(dropped {n_dropped_counts} count-table sequence(s) absent from the "
+                f"FASTA and {n_dropped_fasta} FASTA sequence(s) absent from the count "
+                f"table). fallback=only the {len(asv_count)} shared OTUs reach the "
+                f"output. This usually means a wrong/mismatched count table or FASTA was "
+                f"passed; confirm both come from the same clustering run."
+            )
 
         # Diagnostic: how many OTUs got no BLAST hits at all?
         otus_with_hits = set(result["ASV_ID"].dropna().unique()) if len(result) > 0 else set()

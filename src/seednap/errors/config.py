@@ -132,6 +132,27 @@ def _one(err: Any) -> Tuple[str, str]:
             "SDN-CFG-004",
         )
 
+    if etype in ("string_too_short", "string_too_long"):
+        # The key is valid; only its length violates the field constraint. Report
+        # the bound so this is not mistaken for an unknown-key error (SDN-CFG-001).
+        bound = ctx.get("min_length", ctx.get("max_length"))
+        rel = "at least" if etype == "string_too_short" else "at most"
+        return (
+            f"'{dotted}': value {given!r} is the wrong length "
+            f"(must be {rel} {bound} characters).",
+            "SDN-CFG-004",
+        )
+
+    if etype == "string_pattern_mismatch":
+        # The key is valid; the value does not match the required pattern.
+        pattern = ctx.get("pattern")
+        pat_txt = f" (expected pattern: {pattern})" if pattern else ""
+        return (
+            f"'{dotted}': value {given!r} does not match the required format"
+            f"{pat_txt}.",
+            "SDN-CFG-004",
+        )
+
     if etype == "literal_error":
         expected = str(ctx.get("expected", "")).replace("'", "")
         options = [o.strip() for o in expected.replace(" or ", ", ").split(",") if o.strip()]
@@ -151,12 +172,23 @@ def _one(err: Any) -> Tuple[str, str]:
         # `seednap explain <CODE>` lands on the right topic: a validator rooted at
         # `pipeline.*` (the steps DAG) -> 006; any path containing `databases`
         # (a taxonomy database block) -> 008; anything else -> 005 (generic invalid value).
-        code = "SDN-CFG-006" if loc and str(loc[0]) == "pipeline" else (
-            "SDN-CFG-008" if "databases" in (str(p) for p in loc) else "SDN-CFG-005")
+        # The cross-field demultiplex-protocol validator is an after-model-validator on
+        # PipelineConfig, so it carries an empty loc (); detect it by message content and
+        # route it to the pipeline.steps topic (006) rather than the generic 005.
+        if not loc and "demultiplex" in text and "pipeline.steps" in text:
+            code = "SDN-CFG-006"
+        elif loc and str(loc[0]) == "pipeline":
+            code = "SDN-CFG-006"
+        elif "databases" in (str(p) for p in loc):
+            code = "SDN-CFG-008"
+        else:
+            code = "SDN-CFG-005"
         return text, code
 
-    # Fallback: keep pydantic's message but name the location clearly.
-    return f"'{dotted}': {msg}", "SDN-CFG-001"
+    # Fallback: keep pydantic's message but name the location clearly. Use the neutral
+    # generic-invalid-value code (005), never the unknown-key code (001): the key here
+    # is valid, only its value (or a constraint we do not template above) is the problem.
+    return f"'{dotted}': {msg}", "SDN-CFG-005"
 
 
 def humanize_validation_error(exc: ValidationError, config_path: Path) -> str:

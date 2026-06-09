@@ -33,6 +33,7 @@ from typing import Any, Dict, List, Optional, Tuple, Union, cast
 import pandas as pd
 from jinja2 import Template
 
+from seednap.config.manifest import classify_control
 from seednap.steps.report.read_tracking import DADA2_STEPS
 from seednap.utils.logging import get_logger
 
@@ -225,6 +226,19 @@ def _esc(v: object) -> str:
     return _html.escape(str(v))
 
 
+def _is_negative_control(name: object) -> bool:
+    """Return whether a sample/column name is a negative control.
+
+    Uses ``config.manifest.classify_control`` (the documented single source of
+    truth for control identity) rather than the legacy literal ``blank`` prefix,
+    so legacy control conventions (CNEG/CEXT/CMET/CPCR/EXT_NC/PCR_NC/water) are
+    recognised, not silently counted as biological samples. Positive controls
+    and PCR standards are deliberately excluded -- only negative controls matter
+    for the report's contamination screening and biological-sample count.
+    """
+    return classify_control(str(name)).neg_cont_type is not None
+
+
 class HTMLReportBuilder:
     """Render a self-contained, paper-styled HTML run report."""
 
@@ -339,16 +353,32 @@ class HTMLReportBuilder:
             if otu is None:
                 return None
             # The full OTU table has a different schema from the taxonomy CSV
-            # (no rank columns, but extra OTU-level columns total/length/chimera/
-            # spread), so its non-sample column set is listed separately here
-            # rather than reusing _TAX_META.
-            meta = {"OTU", "OTU_ID", "ASV_ID", "total", "length", "chimera", "spread",
-                    "sequence", "Sequence"}
+            # (no rank columns, but extra OTU-level metadata columns). This set
+            # must mirror otu_table_builder.METADATA_COLS exactly -- omitting any
+            # of them (e.g. cloud/amplicon/abundance) misidentifies that per-OTU
+            # metadata column as a per-sample read-count column, producing phantom
+            # "samples" in the richness figure.
+            meta = {"OTU", "OTU_ID", "ASV_ID", "total", "cloud", "amplicon",
+                    "length", "abundance", "chimera", "spread", "sequence", "Sequence"}
             cols = [c for c in otu.columns if c not in meta]
             src = otu
         if not cols:
             return None
-        counts = (src[cols].apply(pd.to_numeric, errors="coerce").fillna(0) > 0).sum(axis=0)
+        # Require a numeric dtype as a second guard (mirroring gbif_formatter):
+        # an unanticipated string metadata column not in `meta` must never be
+        # counted as a sample.
+        numeric = src[cols].apply(pd.to_numeric, errors="coerce")
+        numeric_cols = [c for c in cols if numeric[c].notna().any()]
+        dropped = [c for c in cols if c not in numeric_cols]
+        if dropped:
+            logger.warning(
+                "[WARN] html_report: expected=numeric per-sample read-count "
+                f"columns, got=non-numeric column(s) {dropped}, fallback=excluded "
+                "from per-sample richness (treated as metadata, not samples)"
+            )
+        if not numeric_cols:
+            return None
+        counts = (numeric[numeric_cols].fillna(0) > 0).sum(axis=0)
         return counts.astype(int)
 
     def _read_meta(self, path: Optional[Path], kind: str) -> Optional[pd.DataFrame]:
@@ -371,10 +401,22 @@ class HTMLReportBuilder:
     # Numbers / metadata
     # ------------------------------------------------------------------ #
     def _n_controls(self) -> int:
-        """Count negative-control samples (those whose name begins with ``blank``)."""
+        """Count negative-control samples (per ``classify_control``, not just ``blank*``).
+
+        Emits a ``[WARN]`` when a non-empty dataset yields zero detected controls,
+        so a legacy run whose controls were silently mislabelled as biological
+        samples is not mistaken for a control-free run (the no-silent-fallbacks
+        policy)."""
         if "sample" not in self.df.columns:
             return 0
-        return int(self.df["sample"].astype(str).str.lower().str.startswith("blank").sum())
+        n = int(self.df["sample"].astype(str).map(_is_negative_control).sum())
+        if n == 0 and not self.df.empty:
+            logger.warning(
+                "[WARN] html_report: expected=>=1 negative control by name, got=0 "
+                "detected, fallback=report treats every sample as biological "
+                "(verify control naming; contamination screening will be skipped)"
+            )
+        return n
 
     def _run_date(self) -> str:
         """Return the run date (state completion/start timestamp), falling back to the report build date."""
@@ -611,9 +653,9 @@ class HTMLReportBuilder:
 
         # --- field metadata: location, dates, sites, institution ---
         if field is not None:
-            # biological samples only (drop Blank* controls) for geography
+            # biological samples only (drop negative controls) for geography
             idc = field.columns[0]
-            bio = field[~field[idc].astype(str).str.lower().str.startswith("blank")]
+            bio = field[~field[idc].astype(str).map(_is_negative_control)]
             lat = pd.to_numeric(bio.get("decimalLatitude", pd.Series(dtype=str)), errors="coerce").dropna()
             lon = pd.to_numeric(bio.get("decimalLongitude", pd.Series(dtype=str)), errors="coerce").dropna()
             if not lat.empty and not lon.empty:
@@ -749,7 +791,8 @@ class HTMLReportBuilder:
         rich = self._richness()
         parts = [f"<p>Sequencing yield per sample: reads retained to the {self.final_step} stage, "
                  f"the number of {feat} detected (features with at least one read), and overall "
-                 f"retention. Controls (<code>Blank*</code>) are expected to yield little.</p>"]
+                 f"retention. Negative controls (identified by the manifest control-naming "
+                 f"conventions) are expected to yield little.</p>"]
         rcap = (f"{feat} detected per sample." if rich is not None
                 else f"{feat} richness was unavailable (no per-sample feature table).")
         if rich is not None:
@@ -761,7 +804,7 @@ class HTMLReportBuilder:
         rows = []
         for _, r in self.df.iterrows():
             sample = str(r["sample"])
-            is_ctrl = sample.lower().startswith("blank")
+            is_ctrl = _is_negative_control(sample)
             name = f'<span class="flag-low">{_esc(sample)}</span>' if is_ctrl else _esc(sample)
             reads = r.get(self.final_step)
             reads_c = '<span class="na">NA</span>' if pd.isna(reads) else f"{int(reads):,}"
@@ -785,9 +828,21 @@ class HTMLReportBuilder:
         if tax is None:
             return None
         total = len(tax)
+        if total == 0:
+            # A taxonomy CSV with a header but zero feature rows (an all-chimera
+            # or non-amplifying run). Render an explanatory note instead of
+            # dividing by zero on the species/rank percentages below.
+            logger.warning(
+                "[WARN] html_report: expected=>=1 feature in taxonomy_csv, got=0 "
+                "rows, fallback=emit empty-run taxonomy note"
+            )
+            return ("<p>No features survived to taxonomic assignment for this run "
+                    "(the taxonomy table has zero rows). This is expected for an "
+                    "all-chimera run, a marker that did not amplify, or a failed "
+                    "sample set; it is not a taxonomy error.</p>")
         sp = int((~tax["species"].astype(str).isin(_UNASSIGNED)).sum()) if "species" in tax.columns else 0
         sample_cols = self._tax_sample_cols(tax)
-        ctrl = [c for c in sample_cols if str(c).lower().startswith("blank")]
+        ctrl = [c for c in sample_cols if _is_negative_control(c)]
         bio = [c for c in sample_cols if c not in ctrl] or sample_cols
         parts = [f"<p>Of {total:,} features, {sp:,} ({sp / total * 100:.1f}%) were assigned to species. "
                  f"Counts at each rank are shown in Figure {self._fig_n + 1}; the best-hit identity "
@@ -858,10 +913,12 @@ class HTMLReportBuilder:
             return ("<p>No taxonomy table was available, so contamination screening against "
                     "controls was not performed.</p>")
         sample_cols = self._tax_sample_cols(tax)
-        ctrl = [c for c in sample_cols if str(c).lower().startswith("blank")]
+        ctrl = [c for c in sample_cols if _is_negative_control(c)]
         if not ctrl:
-            return ("<p>No negative-control columns (<code>Blank*</code>) were found in the taxonomy "
-                    "table; contamination screening was not performed.</p>")
+            return ("<p>No negative-control columns were found in the taxonomy table "
+                    "(none of the per-sample column names classify as a negative control "
+                    "via the manifest control conventions); contamination screening was "
+                    "not performed.</p>")
         bio = [c for c in sample_cols if c not in ctrl]
         blanks = tax[ctrl].apply(pd.to_numeric, errors="coerce").fillna(0)
         in_blank = blanks.sum(axis=1) > 0
@@ -878,9 +935,12 @@ class HTMLReportBuilder:
             cells += [f"{int(pd.to_numeric(r[c], errors='coerce') or 0):,}" for c in ctrl]
             cells.append(f"{int(pd.to_numeric(r[bio], errors='coerce').fillna(0).sum()):,}" if bio else "n/a")
             rows.append(cells)
-        intro = (f"<p>{int(in_blank.sum())} feature(s) carried reads in a control. Controls are "
-                 f"identified by the <code>Blank*</code> name prefix and contamination is computed "
-                 f"from blank read counts (not a precomputed flag).</p>")
+        intro = (f"<p>{int(in_blank.sum())} feature(s) carried reads in a control. Negative controls "
+                 f"are identified by the manifest control-naming conventions (the "
+                 f"<code>classify_control</code> rules: <code>Blank*</code>, "
+                 f"<code>CNEG/CEXT/CMET/CPCR</code>, <code>EXT_NC/PCR_NC</code>, "
+                 f"<code>water*</code>) and contamination is computed from control read counts "
+                 f"(not a precomputed flag).</p>")
         return intro + self._table("Features detected in negative controls, ranked by total control reads.",
                                     ["feature taxon", *ctrl, "total in samples"], rows, scroll=True)
 
@@ -1161,8 +1221,10 @@ class HTMLReportBuilder:
         """Build the notes/methods section: control conventions, retention thresholds, footer."""
         s = self.summary
         parts = [
-            "<p>Controls are identified by the <code>Blank*</code> sample-name prefix; "
-            "contamination is computed from blank read counts, not a precomputed flag. "
+            "<p>Negative controls are identified by the manifest control-naming "
+            "conventions (the <code>classify_control</code> rules: <code>Blank*</code>, "
+            "<code>CNEG/CEXT/CMET/CPCR</code>, <code>EXT_NC/PCR_NC</code>, <code>water*</code>); "
+            "contamination is computed from control read counts, not a precomputed flag. "
             "Features with no assignment are reported as <code>Unassigned</code> and never counted "
             "as a taxon; median percent identity is computed over assigned features only.</p>",
             f"<p>Retention thresholds: a sample is flagged below "

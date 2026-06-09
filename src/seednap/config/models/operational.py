@@ -121,6 +121,16 @@ class PipelineStepsConfig(StrictModel):
                     raise ValueError(
                         f"pipeline.steps: '{consumer}' must come after '{feature_steps[0]}'."
                     )
+        # clean consumes the taxonomy-annotated table, so it must follow taxonomy.
+        requires_before("clean", "taxonomy")
         # export needs taxonomy earlier
         requires_before("export", "taxonomy")
+        # when cleaning is requested, export must use the cleaned table, so clean
+        # must come before export; otherwise export silently emits uncleaned counts.
+        if "clean" in pos and "export" in pos and pos["clean"] > pos["export"]:
+            raise ValueError(
+                "pipeline.steps: 'clean' must come before 'export'; otherwise export "
+                "would emit the uncleaned abundance table while you asked for control "
+                "decontamination. Reorder the list so 'clean' precedes 'export'."
+            )
         return self

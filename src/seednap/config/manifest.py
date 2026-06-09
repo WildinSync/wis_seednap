@@ -191,7 +191,7 @@ def classify_control(sample_name: str) -> ControlClass:
 # --------------------------------------------------------------------------- #
 # Canonical manifest row
 # --------------------------------------------------------------------------- #
-_ISO_DATE = re.compile(r"^\d{4}(-\d{2}(-\d{2})?)?$")
+_ISO_DATE = re.compile(r"^\d{4}(?:-(\d{2})(?:-(\d{2}))?)?$")
 
 
 class SampleManifestRow(BaseModel):
@@ -320,13 +320,40 @@ class SampleManifestRow(BaseModel):
     @classmethod
     def _validate_event_date(cls, v: Optional[str]) -> Optional[str]:
         """Canonical manifests carry ISO-8601 dates only (the migrator normalises legacy
-        dotted forms). Reject anything else loudly rather than risk a silent mis-parse."""
-        if v is None or _ISO_DATE.match(v):
+        dotted forms). Reject anything else loudly rather than risk a silent mis-parse.
+
+        The format regex only checks digit shape, so the month/day range is checked
+        explicitly here: an out-of-range value like ``2024-13`` or ``2024-00-45`` is a
+        silent data-corruption path into GBIF and must be rejected, not accepted.
+        """
+        if v is None:
             return v
-        raise ValueError(
-            f"eventDate {v!r} is not ISO-8601 (YYYY[-MM[-DD]]). Legacy dotted dates must be "
-            f"normalised by the migrator; a hand-authored manifest must use ISO dates."
-        )
+        m = _ISO_DATE.match(v)
+        if not m:
+            raise ValueError(
+                f"eventDate {v!r} is not ISO-8601 (YYYY[-MM[-DD]]). Legacy dotted dates must be "
+                f"normalised by the migrator; a hand-authored manifest must use ISO dates."
+            )
+        month, day = m.group(1), m.group(2)
+        if month is not None and not (1 <= int(month) <= 12):
+            raise ValueError(
+                f"eventDate {v!r} has an out-of-range month {month!r} (expected 01-12)."
+            )
+        if day is not None and not (1 <= int(day) <= 31):
+            raise ValueError(
+                f"eventDate {v!r} has an out-of-range day {day!r} (expected 01-31)."
+            )
+        # Full YYYY-MM-DD: reject calendar-impossible dates (e.g. Feb 30, Apr 31).
+        if month is not None and day is not None:
+            from datetime import date as _date
+
+            try:
+                _date(int(v[:4]), int(month), int(day))
+            except ValueError as exc:
+                raise ValueError(
+                    f"eventDate {v!r} is not a real calendar date ({exc})."
+                ) from exc
+        return v
 
     @model_validator(mode="after")
     def _validate_conditional_requirements(self) -> "SampleManifestRow":

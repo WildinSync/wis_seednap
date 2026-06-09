@@ -17,6 +17,16 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
+# Column names reserved for OTU metadata in the full contingency table.
+# A sample whose name collides with one of these would overwrite the metadata
+# value in build() and then be dropped from the abundance matrix by
+# to_taxonomy_input() (sample_cols is a set-difference against this list plus
+# "sequence"). That is a silent per-sample data loss, so build() refuses it.
+_RESERVED_METADATA_COLS = (
+    "OTU", "total", "cloud", "amplicon", "length",
+    "abundance", "chimera", "spread", "sequence",
+)
+
 
 class OtuTableBuilder:
     """
@@ -52,6 +62,23 @@ class OtuTableBuilder:
         swarms = self._parse_swarms(swarm_file)
         uchime = self._parse_uchime(uchime_file) if uchime_file else {}
         amplicons2samples, samples = self._parse_sample_fastas(sample_fastas)
+
+        # Guard against a sample name colliding with a reserved metadata column.
+        # Such a sample would overwrite the metadata value here and then be
+        # silently excluded from the abundance matrix in to_taxonomy_input()
+        # (which derives sample_cols by set-difference against the metadata
+        # column names). Fail loudly with the offending name instead.
+        reserved = set(_RESERVED_METADATA_COLS)
+        colliding = [s for s in samples if s in reserved]
+        if colliding:
+            raise ValueError(
+                f"Sample name(s) collide with reserved OTU-table metadata "
+                f"columns: {sorted(colliding)}. These names "
+                f"({sorted(reserved)}) are used for OTU metadata; a sample "
+                f"named like one of them would overwrite the metadata value "
+                f"and be dropped from the abundance matrix passed to taxonomy. "
+                f"Rename the offending sample(s) upstream."
+            )
 
         rows = []
         for i, (seed, mass) in enumerate(sorted_seeds, start=1):
@@ -133,12 +160,12 @@ class OtuTableBuilder:
         logger.info(f"Wrote representative sequences → {query_fasta_path}")
 
         # Write abundance CSV (DADA2 seqtab_clean_t format):
-        # First column = sequence, other columns = sample abundances
-        metadata_cols = [
-            "OTU", "total", "cloud", "amplicon", "length",
-            "abundance", "chimera", "spread",
+        # First column = sequence, other columns = sample abundances.
+        # Reuse the single reserved-metadata list build() guards against, so the
+        # exclusion set here cannot drift from the collision check there.
+        sample_cols = [
+            c for c in non_chimeric.columns if c not in _RESERVED_METADATA_COLS
         ]
-        sample_cols = [c for c in non_chimeric.columns if c not in metadata_cols + ["sequence"]]
 
         abundance_df = non_chimeric[["sequence"] + sample_cols].copy()
         abundance_df = abundance_df.set_index("sequence")

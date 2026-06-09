@@ -54,6 +54,7 @@ def link_taxonomy_with_abundance(
     taxonomy_sep: str = ",",
     *,
     rank_columns: Sequence[str] = DEFAULT_RANK_COLUMNS,
+    cascade_rank_columns: Optional[Sequence[str]] = None,
     contaminants: Optional[List[str]] = None,
     pident_col: Optional[str] = None,
     unassigned_label: str = UNASSIGNED_LABEL,
@@ -70,8 +71,17 @@ def link_taxonomy_with_abundance(
         output_path: Path to output merged CSV.
         sequence_col: Name of sequence column for the join (default: 'sequence').
         taxonomy_sep: Delimiter for the taxonomy file (default: ',').
-        rank_columns: Taxonomic ranks ordered coarse-to-fine. Used for cascade
-            nulling and for the output column order.
+        rank_columns: Taxonomic ranks ordered coarse-to-fine. Used for the
+            output column order (and, by default, for cascade nulling).
+        cascade_rank_columns: Subset of `rank_columns` (coarse-to-fine) over
+            which cascade nulling applies. Defaults to `rank_columns`. The
+            ecotag path passes the obitab-resolvable ranks (order..species)
+            here while keeping kingdom/phylum/class in `rank_columns` for
+            schema parity: obitab never resolves kingdom/phylum/class, so they
+            arrive as placeholders and must NOT trigger the cascade (which,
+            keyed on the coarsest rank, would otherwise force every finer rank
+            to Unassigned and silently zero out all ecotag taxonomy). Those
+            coarse ranks are enriched downstream (DarwinCore NCBI/WORMS lookup).
         contaminants: Optional list of species names (CRABS underscore format)
             to flag in `is_contaminant_candidate`. Rows are flagged, never
             deleted -- downstream decides.
@@ -183,10 +193,17 @@ def link_taxonomy_with_abundance(
             result[rank] = _normalize_unassigned(result[rank], unassigned_label)
 
     # Cascade null: coarse Unassigned -> all finer Unassigned (fix for I-3 / B3)
-    for i, rank in enumerate(rank_columns):
+    # Only ranks that the method actually resolves should drive the cascade;
+    # placeholder ranks (e.g. ecotag's absent kingdom/phylum/class) are kept in
+    # the output for schema parity but excluded here via cascade_rank_columns.
+    cascade_cols = list(cascade_rank_columns) if cascade_rank_columns is not None else list(rank_columns)
+    for i, rank in enumerate(cascade_cols):
+        if rank not in result.columns:
+            continue
         is_unassigned = result[rank] == unassigned_label
-        for finer in list(rank_columns)[i + 1:]:
-            result.loc[is_unassigned, finer] = unassigned_label
+        for finer in cascade_cols[i + 1:]:
+            if finer in result.columns:
+                result.loc[is_unassigned, finer] = unassigned_label
 
     # Optional pident column (copied from the method's confidence column, if any)
     if pident_col and pident_col in result.columns:
@@ -197,11 +214,27 @@ def link_taxonomy_with_abundance(
     # Contaminant flag (fix for I-7 / B5)
     if contaminants:
         contam_set = set(contaminants)
-        is_contam = result["species"].astype(str).isin(contam_set)
+
+        # DADA2 addSpecies runs with allowMultiple=TRUE, so a multi-hit cell
+        # holds a '/'-joined value (e.g. 'Salmo_trutta/Salmo_salar'). Match if
+        # ANY component is a configured contaminant; an exact equality test
+        # would miss a contaminant hidden inside an ambiguous multi-match.
+        def _row_is_contam(value: object) -> bool:
+            return any(part in contam_set for part in str(value).split("/"))
+
+        species_str = result["species"].astype(str)
+        is_contam = species_str.map(_row_is_contam)
         result[CONTAMINANT_FLAG_COL] = is_contam
         n_flagged = int(is_contam.sum())
         if n_flagged > 0:
-            breakdown = result.loc[is_contam, "species"].value_counts().to_dict()
+            # Break down by the matched components, not the raw (possibly
+            # multi-hit) cell, so the [WARN] names the actual contaminants.
+            matched_components: List[str] = []
+            for value in species_str[is_contam]:
+                matched_components.extend(
+                    part for part in str(value).split("/") if part in contam_set
+                )
+            breakdown = pd.Series(matched_components).value_counts().to_dict()
             logger.warning(
                 f"Flagged {n_flagged} OTUs as candidate contaminants "
                 f"(by species match): {breakdown}"

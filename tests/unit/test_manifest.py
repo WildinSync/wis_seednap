@@ -55,6 +55,13 @@ def test_iso_partial_dates_accepted(iso):
     assert r.eventDate == iso
 
 
+@pytest.mark.parametrize("bad", ["2024-02-30", "2024-04-31", "2023-02-29"])
+def test_iso_validator_rejects_calendar_impossible_date(bad):
+    """Full YYYY-MM-DD that passes the digit-range check but is not a real calendar date is rejected."""
+    with pytest.raises(ValueError, match="not a real calendar date"):
+        SampleManifestRow(eventID="x", seq_run_id="r", samp_category="sample", eventDate=bad)
+
+
 def test_na_and_insdc_tokens_become_none():
     """'NA' and INSDC missing-value tokens normalise to None, not a literal/NaN."""
     r = SampleManifestRow(
@@ -211,6 +218,36 @@ def test_slash_dates_with_time():
 def test_two_digit_year_refused():
     with pytest.raises(ValueError, match="unrecognised|ambiguous"):
         normalise_event_dates(["24.08.22", "26.08.22"])
+
+
+def test_two_part_out_of_range_month_raises():
+    """Adversarial-audit regression: a two-part MM.YYYY / YYYY.MM date with an out-of-range
+    month must raise, not silently emit '2024-13'."""
+    with pytest.raises(ValueError, match="out-of-range month"):
+        normalise_event_dates(["13.2024"])      # MM.YYYY with month 13
+    with pytest.raises(ValueError, match="out-of-range month"):
+        normalise_event_dates(["2024.00"])      # YYYY.MM with month 00
+
+
+def test_two_part_valid_month_still_parses():
+    """A valid two-part month must still normalise (no regression from the range check)."""
+    m = normalise_event_dates(["2024.07", "08.2024"])
+    assert m["2024.07"] == "2024-07"
+    assert m["08.2024"] == "2024-08"
+
+
+def test_iso_validator_rejects_out_of_range_month_day():
+    """Adversarial-audit regression: the eventDate validator must range-check the month/day,
+    not just the digit format, so a corrupt '2024-13' / '2024-00-45' is rejected."""
+    with pytest.raises(Exception):
+        SampleManifestRow(eventID="x", seq_run_id="r", samp_category="sample", eventDate="2024-13")
+    with pytest.raises(Exception):
+        SampleManifestRow(eventID="x", seq_run_id="r", samp_category="sample", eventDate="2024-00")
+    with pytest.raises(Exception):
+        SampleManifestRow(eventID="x", seq_run_id="r", samp_category="sample", eventDate="2024-00-45")
+    # A valid date is still accepted.
+    ok = SampleManifestRow(eventID="x", seq_run_id="r", samp_category="sample", eventDate="2024-12-31")
+    assert ok.eventDate == "2024-12-31"
 
 
 def test_ambiguous_dates_raise_without_order_but_resolve_with_order():
@@ -375,6 +412,36 @@ def test_migrator_extraction_blank_na_token_fires_intended_warn(tmp_path, caplog
     msgs = " ".join(r.message for r in caplog.records)
     assert "extraction blank 'Blank-ext-1'" in msgs and "got=none" in msgs
     assert "orphan blank batch" not in msgs  # the misleading warn must NOT fire
+
+
+def test_migrator_cext_missing_extraction_id_warns(tmp_path, caplog):
+    """Adversarial-audit regression: a CEXT/EXT_NC extraction blank (neg_cont_type
+    'extraction negative', rule != 'blank-ext') with a missing extraction_ID must fire the
+    same missing-extraction_ID WARN as a Blank-ext row -- it previously fell through silently."""
+    field = _write_field(tmp_path / "metadata_field_cext.csv", [
+        {"eventID": "S1", "eventDate": "2024-01-01", "extraction_ID": "EXP1"},
+        {"eventID": "CEXT01", "eventDate": "2024-01-01", "extraction_ID": "NA"},
+    ])
+    with caplog.at_level(logging.WARNING):
+        migrate_to_manifest(field, target_gene="teleo", seq_run_id="R1")
+    msgs = " ".join(r.message for r in caplog.records)
+    assert "extraction blank 'CEXT01'" in msgs and "got=none" in msgs
+
+
+def test_migrator_cext_registers_extraction_batch(tmp_path, caplog):
+    """Adversarial-audit regression: a CEXT/EXT_NC extraction blank sharing an extraction_ID
+    with a biological sample must register that batch, so the sample is NOT falsely reported
+    as having 'no extraction blank' (orphan-batch check uses the registered set)."""
+    field = _write_field(tmp_path / "metadata_field_cext2.csv", [
+        {"eventID": "S1", "eventDate": "2024-01-01", "extraction_ID": "EXP1"},
+        {"eventID": "EXT_NC", "eventDate": "2024-01-01", "extraction_ID": "EXP1"},
+    ])
+    with caplog.at_level(logging.INFO):
+        migrate_to_manifest(field, target_gene="teleo", seq_run_id="R1")
+    msgs = " ".join(r.message for r in caplog.records)
+    # EXP1 has both a sample and an extraction blank registered -> no orphan-batch report.
+    assert "no extraction blank" not in msgs
+    assert "orphan blank batch" not in msgs
 
 
 def test_migrator_per_row_seq_run_fallback_warns(tmp_path, caplog):

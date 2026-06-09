@@ -194,13 +194,12 @@ are optional at load time.
 > Headers are case-sensitive (for example `identificationReferences`, not
 > `IdentificationReferences`), and the table must have exactly one data row.
 
-> [!WARNING]
-> Control removal in `create-gbif` is a name-based filter that drops only
-> `eventID`s matching `blank`, `CNEG`, `CMET`, or `CEXT` (case-insensitive). It
-> is independent of the manifest control classifier (`manifest.classify_control`)
-> and recognises fewer patterns: it does not catch `CPCR`, `water`, or
-> `EXT_NC`/`PCR_NC` controls. Such controls pass through into the GBIF output, so
-> verify your control naming matches one of the four recognised patterns.
+> [!NOTE]
+> Control removal in `create-gbif` uses `manifest.classify_control` as the single
+> source of truth, so it drops the full set of recognised controls (`blank`,
+> `CNEG`, `CMET`, `CEXT`, `CPCR`, `water`, `EXT_NC`/`PCR_NC`, and mock/positive
+> forms), not just a few patterns. An `eventID` that looks control-like but cannot
+> be classified is kept and reported with a `[WARN]` rather than silently dropped.
 
 ## See also
 

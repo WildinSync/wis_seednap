@@ -11,7 +11,7 @@ from seednap.config.models.base import StrictModel
 # whose block fails validation is told exactly which key(s) the method needs.
 _REQUIRED_DB_PATHS: Dict[str, str] = {
     "blast": "fasta",
-    "dada2": "all",
+    "dada2": "all + species",
     "ecotag": "tree + fasta",
     "decipher": "trained",
 }
@@ -57,7 +57,10 @@ class Dada2DatabaseConfig(StrictModel):
     """DADA2 taxonomic database configuration."""
 
     all: Path = Field(..., description="Path to database with all taxonomic ranks")
-    species: Optional[Path] = Field(None, description="Path to species-level database")
+    species: Path = Field(
+        ...,
+        description="Path to species-level database (required: addSpecies is always run)",
+    )
     # Naive Bayesian classifier bootstrap threshold (Wang 2007 RDP standard).
     # Below this confidence, the rank is nulled and every finer rank is cascaded.
     # 80 is the published recommendation for short rRNA reads (<= 250 bp);

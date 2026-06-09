@@ -52,12 +52,11 @@ class SwarmClusterer:
             raise SwarmError(
                 "swarm not found on PATH. SWARM OTU clustering needs the 'swarm' "
                 "binary, which is not on your PATH. This almost always means the "
-                "conda environment is not activated. On the ETH ELE eDNA server "
-                "swarm ships in the 'metabarcoding' env; for local development it "
-                "is in the 'seednap' env.\n"
+                "seednap conda environment is not activated (it ships swarm alongside "
+                "the pipeline).\n"
                 "  Fix: activate the environment before running seednap, then re-run:\n"
-                "    conda activate metabarcoding   # ETH ELE eDNA server\n"
-                "    conda activate seednap         # local development\n"
+                "    conda activate /home/shared/edna/envs/seednap   # ETH ELE eDNA server\n"
+                "    conda activate seednap                          # local development (environment.yml)\n"
                 "  If swarm is still missing after activation, install it with "
                 "'conda install -c bioconda swarm'. Confirm with 'swarm --version'."
             )

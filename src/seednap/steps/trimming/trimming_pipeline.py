@@ -356,16 +356,28 @@ class LigationTrimmer:
             discard_untrimmed=True,
         )
 
-        # Get list of demultiplexed samples
-        samples = sorted(
-            set(
-                [
-                    f.name.replace(".R1.fastq.gz", "").replace(".R2.fastq.gz", "")
-                    for f in demux_dir.glob("*.R*.fastq.gz")
-                    if "unknown" not in f.name.lower()
-                ]
-            )
+        # Get list of demultiplexed samples. cutadapt names each per-tag output
+        # file after the matched adapter (the {name} placeholder = the sample
+        # name from the tag FASTA) and writes a single catch-all bucket named
+        # exactly 'unknown.R*.fastq.gz' for reads matching no tag. Exclude only
+        # that exact catch-all name; a substring test would silently drop
+        # legitimate samples whose eventID contains 'unknown' (e.g. an
+        # undetermined-site blank). With --discard-untrimmed cutadapt does not
+        # even emit the catch-all, so normally nothing is excluded here.
+        all_names = sorted(
+            {
+                f.name.replace(".R1.fastq.gz", "").replace(".R2.fastq.gz", "")
+                for f in demux_dir.glob("*.R*.fastq.gz")
+            }
         )
+        samples = [name for name in all_names if name.lower() != "unknown"]
+        excluded = [name for name in all_names if name.lower() == "unknown"]
+        if excluded:
+            logger.warning(
+                f"[WARN] demultiplex {library_name}: expected=per-sample tag "
+                f"outputs only, got=catch-all bucket(s) {excluded}, "
+                f"fallback=excluded from the sample list (reads matching no tag)"
+            )
 
         logger.info(f"Demultiplexed {len(samples)} samples")
 

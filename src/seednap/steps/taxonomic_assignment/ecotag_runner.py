@@ -462,13 +462,96 @@ class EcotagRunner:
         Returns:
             Path to output CSV file with merged taxonomy and abundances
         """
+        import pandas as pd
+
         from seednap.utils.taxonomy import link_taxonomy_with_abundance
 
+        # The shared post-processor expects rank columns named kingdom/phylum/
+        # class/order/family/genus/species. OBITools obitab output has no
+        # kingdom/phylum/class columns, and its order/family/genus/species
+        # columns hold numeric NCBI taxids -- the scientific names live in
+        # order_name/family_name/genus_name/species_name. Map the obitab schema
+        # to the shared schema first (mirroring gbif_formatter.from_ecotag);
+        # otherwise the post-processor would see no usable rank columns and
+        # silently mark every ecotag OTU 'Unassigned'.
+        taxonomy_tsv = Path(taxonomy_tsv)
+        try:
+            tax_df = pd.read_csv(taxonomy_tsv, sep="\t")
+        except (pd.errors.EmptyDataError, pd.errors.ParserError):
+            # Empty/unreadable taxonomy: hand it straight to the linker, which
+            # already handles an empty taxonomy file (all-Unassigned, with a
+            # warning) rather than masking the schema-mapping path.
+            return link_taxonomy_with_abundance(
+                taxonomy_path=taxonomy_tsv,
+                abundance_path=abundance_csv,
+                output_path=output_csv,
+                sequence_col=sequence_col,
+                taxonomy_sep="\t",
+                contaminants=contaminants,
+            )
+
+        rename_map = {
+            "order_name": "order",
+            "family_name": "family",
+            "genus_name": "genus",
+            "species_name": "species",
+        }
+        # The base-name columns (order/family/genus/species) hold numeric NCBI
+        # taxids, not names; the scientific names live in the *_name columns.
+        # For each rank: if the *_name column is present, drop the numeric
+        # taxid column (so the rename does not collide) and rename *_name to the
+        # shared rank name. If the *_name column is ABSENT, drop the numeric
+        # taxid column outright -- passing a taxid through as a rank value would
+        # silently corrupt the taxonomy.
+        rank_name_cols: list = []
+        for src, dst in rename_map.items():
+            if src in tax_df.columns:
+                if dst in tax_df.columns:
+                    tax_df = tax_df.drop(columns=[dst])
+                rank_name_cols.append(dst)
+            elif dst in tax_df.columns:
+                # Numeric taxid with no accompanying *_name column: not a name.
+                tax_df = tax_df.drop(columns=[dst])
+        tax_df = tax_df.rename(columns=rename_map)
+
+        if not rank_name_cols:
+            raise EcotagError(
+                f"Ecotag taxonomy table {taxonomy_tsv} has no rank-name column "
+                f"after mapping the obitab schema. Expected at least one of "
+                f"order_name/family_name/genus_name/species_name (renamed to "
+                f"order/family/genus/species); available columns: "
+                f"{list(tax_df.columns)}. The obitab output schema may have "
+                f"drifted -- refusing to link, which would otherwise mark every "
+                f"OTU 'Unassigned' silently."
+            )
+
+        # Add coarse-rank placeholders absent from obitab output, mirroring
+        # gbif_formatter.from_ecotag. They are kept in the output schema (the
+        # GBIF formatter's from_blast path requires kingdom/phylum/class/order/
+        # family/genus/species to all be present) but are excluded from the
+        # cascade below so an absent coarse rank does NOT force the resolved
+        # finer ranks to Unassigned. DarwinCore enriches kingdom/phylum/class
+        # downstream via NCBI/WORMS.
+        for placeholder in ("kingdom", "phylum", "class"):
+            if placeholder not in tax_df.columns:
+                tax_df[placeholder] = pd.NA
+
+        # Write the mapped taxonomy to a CSV next to the output, then link.
+        output_csv = Path(output_csv)
+        output_csv.parent.mkdir(parents=True, exist_ok=True)
+        mapped_csv = output_csv.parent / f"{taxonomy_tsv.stem}_mapped.csv"
+        tax_df.to_csv(mapped_csv, index=False)
+
+        # rank_columns keeps the full BLAST-compatible 7-rank output schema;
+        # cascade_rank_columns restricts cascade-nulling to the ranks obitab
+        # actually resolves (order..species), so the placeholder kingdom/phylum/
+        # class do not silently zero out the resolved taxonomy.
         return link_taxonomy_with_abundance(
-            taxonomy_path=taxonomy_tsv,
+            taxonomy_path=mapped_csv,
             abundance_path=abundance_csv,
             output_path=output_csv,
             sequence_col=sequence_col,
-            taxonomy_sep="\t",
+            taxonomy_sep=",",
+            cascade_rank_columns=("order", "family", "genus", "species"),
             contaminants=contaminants,
         )

@@ -240,11 +240,18 @@ def normalise_event_dates(
         elif (m := _TWO_PART.match(core)):
             a, b = m.group(1), m.group(2)
             if len(a) == 4:
-                simple[tok] = f"{int(a):04d}-{int(b):02d}"      # YYYY.MM
+                year, month = int(a), int(b)                    # YYYY.MM
             elif len(b) == 4:
-                simple[tok] = f"{int(b):04d}-{int(a):02d}"      # MM.YYYY
+                year, month = int(b), int(a)                    # MM.YYYY
             else:
                 unparseable.append(tok)
+                continue
+            if not (1 <= month <= 12):
+                raise ValueError(
+                    f"{context}: token {tok!r} has an out-of-range month {month} "
+                    f"(expected 01-12); normalise the source file."
+                )
+            simple[tok] = f"{year:04d}-{month:02d}"
         else:
             unparseable.append(tok)
 
@@ -635,9 +642,16 @@ def migrate_to_manifest(
                     f"{default_run_id!r} -- this row joins a different DADA2 batch; verify"
                 )
 
-        # extraction_ID expectations (the control-association key)
+        # extraction_ID expectations (the control-association key). Drive this off the
+        # biological meaning (an extraction-negative control) rather than the single
+        # 'blank-ext' rule, so CEXT/EXT_NC extraction blanks get the same missing-ID
+        # [WARN] and are registered for the orphan-batch checks. This realigns the
+        # migrator with CleaningProcessor._is_extraction_neg.
         extraction = raw.get("extraction_ID")
-        if cls.rule == "blank-ext":
+        is_extraction_neg = (
+            cls.neg_cont_type is not None and "extraction" in cls.neg_cont_type.lower()
+        )
+        if is_extraction_neg:
             if extraction:
                 extraction_of_blanks.add(extraction)
             else:

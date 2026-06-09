@@ -108,17 +108,45 @@ class CleaningProcessor:
         bio_cols: List[str] = []
         for c in sample_cols:
             row = by_event.get(c)
-            if row is not None and row.is_control:
+            if row is not None and row.samp_category == "negative control":
                 control_cols[c] = {"neg_cont_type": row.neg_cont_type, "extraction_id": row.extraction_ID}
+            elif row is not None and row.is_control:
+                # A positive control / PCR standard deliberately contains target species; using
+                # it for decontamination would erase legitimate reads. Exclude it, but record it.
+                bio_cols.append(c)
+                logger.warning(
+                    f"[WARN] cleaning: expected=negative control for decontamination, "
+                    f"got={c!r} is samp_category={row.samp_category!r} (not a negative control), "
+                    f"fallback=not used as a decontamination control"
+                )
             elif row is not None:
                 bio_cols.append(c)
             else:
                 cls = classify_control(c)
-                if cls.is_control:
+                if cls.neg_cont_type is not None and cls.samp_category == "negative control":
                     control_cols[c] = {"neg_cont_type": cls.neg_cont_type, "extraction_id": None}
                     logger.warning(
                         f"[WARN] cleaning: expected control {c!r} in the manifest, got=absent, "
                         f"fallback=classified by name as {cls.neg_cont_type!r}"
+                    )
+                elif cls.is_control:
+                    # Positive control / PCR standard classified by name: not a decontamination
+                    # control. Keep its reads (treated as a biological column) but record it.
+                    bio_cols.append(c)
+                    logger.warning(
+                        f"[WARN] cleaning: column {c!r} is absent from the manifest and "
+                        f"classifies as samp_category={cls.samp_category!r} (not a negative "
+                        f"control), fallback=not used as a decontamination control"
+                    )
+                elif cls.warn_reason:
+                    # A control-looking name that matched no known control pattern; surface
+                    # the specific reason (the no-silent-fallbacks policy) rather than the
+                    # weaker generic message.
+                    bio_cols.append(c)
+                    logger.warning(
+                        f"[WARN] cleaning: column {c!r} is absent from the manifest; "
+                        f"treated as a biological sample (whole-dataset controls apply). "
+                        f"{cls.warn_reason}"
                     )
                 else:
                     bio_cols.append(c)

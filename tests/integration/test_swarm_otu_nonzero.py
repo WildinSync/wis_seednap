@@ -104,3 +104,32 @@ def test_seed_size_annotations_are_stripped(swarm_outputs: Path) -> None:
     )
     # The amplicon column holds the canonical seed IDs (no ;size=...; suffix)
     assert ";size=" not in str(df["amplicon"].tolist())
+
+
+def test_sample_name_colliding_with_metadata_column_raises(swarm_outputs: Path) -> None:
+    """A sample whose name equals a reserved metadata column must fail loudly.
+
+    Pre-fix: such a sample silently overwrote the metadata value in build()
+    and was then dropped from the abundance matrix by to_taxonomy_input()
+    (sample_cols is a set-difference against the metadata column names), so a
+    whole sample vanished from the table handed to taxonomy with no warning.
+    Post-fix: build() raises ValueError naming the offending sample.
+    """
+    builder = OtuTableBuilder()
+
+    # A per-sample FASTA named "length.fasta" => sample name "length", which
+    # collides with the reserved metadata column "length".
+    sample_dir = swarm_outputs / "dereplicated"
+    (sample_dir / "length.fasta").write_text(
+        ">SHA1A;size=4;\nACGTACGTACGTACGTACGT\n"
+        ">SHA1B;size=2;\nTTTTAAAACCCCGGGGAAAA\n"
+    )
+
+    with pytest.raises(ValueError, match=r"length"):
+        builder.build(
+            representatives_fasta=swarm_outputs / "cluster_representatives.sorted.fasta",
+            stats_file=swarm_outputs / "all.stats",
+            swarm_file=swarm_outputs / "all.swarm",
+            uchime_file=None,
+            sample_fastas=sorted(sample_dir.glob("*.fasta")),
+        )

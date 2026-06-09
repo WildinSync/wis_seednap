@@ -105,7 +105,8 @@ class RScriptRunner:
                 f"running against a stale/partial checkout whose scripts/ was never pulled or was "
                 f"deleted -- this is a broken installation, not a config problem. Fix: reinstall "
                 f"editable from a complete checkout with `pip install -e .` from the seednap repo "
-                f"root inside the active conda environment (e.g. metabarcoding), then confirm the "
+                f"root inside the active conda environment (on the ETH ELE eDNA server: "
+                f"/home/shared/edna/envs/seednap), then confirm the "
                 f"scripts are present with `ls {SCRIPTS_DIR}` (expect dada2_process.R, "
                 f"taxo_dada2_marker.R, taxo_decipher_marker.R)."
             )

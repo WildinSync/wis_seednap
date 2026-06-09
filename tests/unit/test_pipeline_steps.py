@@ -44,6 +44,10 @@ def test_default_includes_report_and_no_skip() -> None:
         (["trim", "trim", "dada2", "taxonomy"], "duplicate stage"),
         (["trim", "demultiplex", "dada2", "taxonomy"], "'demultiplex' must come before 'trim'"),
         (["trim", "clean"], "requires a feature step"),
+        # clean consumes the taxonomy-annotated table, so it must follow taxonomy.
+        (["trim", "dada2", "clean", "taxonomy", "export"], "'clean' must come after 'taxonomy'"),
+        # cleaning requested but export precedes it -> export would emit uncleaned counts.
+        (["trim", "dada2", "taxonomy", "export", "clean"], "'clean' must come before 'export'"),
     ],
 )
 def test_invalid_step_orders_rejected_with_message(steps, needle) -> None:

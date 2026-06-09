@@ -295,14 +295,14 @@ The `threshold_*` values drive a per-rank cascade: if percent identity falls bel
 databases:
   dada2:
     all: "/path/to/dada2_all.fasta"        # RDP-format DB (required)
-    species: "/path/to/dada2_species.fasta" # optional
+    species: "/path/to/dada2_species.fasta" # required (addSpecies is always run)
     bootstrap_threshold: 80
 ```
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `all` | path | required | RDP-format database with all ranks |
-| `species` | path | none | Optional species-level database |
+| `species` | path | required | Species-level exact-match DB (addSpecies is always run) |
 | `bootstrap_threshold` | int (0-100) | `80` | Minimum RDP bootstrap percent for a rank to be retained (Wang 2007). Below this, the rank is nulled and all finer ranks cascade to null |
 
 ### `databases.ecotag`

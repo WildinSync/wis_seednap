@@ -343,24 +343,52 @@ class DarwinCoreBuilder:
 
     @staticmethod
     def _remove_controls(df: pd.DataFrame) -> pd.DataFrame:
-        """Drop control rows whose eventID matches blank/CNEG/CMET/CEXT.
+        """Drop control rows by eventID, using the canonical control classifier.
 
-        This is a self-contained, name-based filter on the GBIF formatting
-        path. It is NOT the same scheme as config.manifest.classify_control,
-        which is the FAIRe-anchored single source of truth for control identity
-        and recognises a strict superset of these patterns (CPCR, water,
-        EXT_NC/PCR_NC and underscore/space/run-suffixed forms). The two paths
-        can therefore disagree: e.g. a 'water' or 'CPCR' control is caught by
-        classify_control but passes through this regex untouched. They are kept
-        independent because GBIF formatting consumes the already-built taxonomy
-        table directly and does not carry the manifest classification through.
+        Uses ``config.manifest.classify_control`` -- the FAIRe-anchored single
+        source of truth for control identity -- rather than a separate ad-hoc
+        regex. The previous local regex (``blank|CNEG|CMET|CEXT``) was a strict
+        SUBSET of classify_control's patterns, so controls named ``CPCR*``,
+        ``EXT_NC``, ``PCR_NC`` or ``water`` passed through and were written into
+        the GBIF occurrence CSV as genuine biological records -- a silent
+        injection of negative/positive-control reads into a GBIF submission.
+
+        Any name that classify_control flags as control-LOOKING but cannot
+        classify to a known rule (``rule == 'unclassified-control-like'``, e.g.
+        an underscore-suffixed ``water_001`` that the canonical patterns do not
+        resolve) is left in the output (it stays a biological sample), but a
+        ``[WARN]`` is emitted naming the eventID so a possible leaked control is
+        visible before GBIF submission rather than silent (no-silent-fallbacks
+        policy).
         """
-        mask = df["eventID"].str.contains(
-            r"blank|CNEG|CMET|CEXT", case=False, na=False
-        )
-        n_removed = mask.sum()
+        from seednap.config.manifest import classify_control
+
+        event_ids = df["eventID"].astype(str)
+        classes = {eid: classify_control(eid) for eid in event_ids.unique()}
+
+        control_ids = {eid for eid, cls in classes.items() if cls.is_control}
+        unclassified = {
+            eid: cls.warn_reason
+            for eid, cls in classes.items()
+            if cls.rule == "unclassified-control-like"
+        }
+
+        for eid, reason in unclassified.items():
+            print(
+                f"[WARN] _remove_controls: expected=control identity for "
+                f"eventID {eid!r}, got=control-looking but unclassified "
+                f"({reason}), fallback=kept as a biological sample in the GBIF "
+                f"output -- verify it is not a control before submission",
+                flush=True,
+            )
+
+        mask = event_ids.isin(control_ids)
+        n_removed = int(mask.sum())
         if n_removed > 0:
-            logger.info(f"Removed {n_removed} control sample row(s)")
+            logger.info(
+                f"Removed {n_removed} control sample row(s) "
+                f"(controls: {sorted(control_ids)})"
+            )
         return df[~mask].reset_index(drop=True)
 
     @staticmethod
@@ -419,19 +447,22 @@ class DarwinCoreBuilder:
     ) -> None:
         """Sanity-check sample metadata before merging.
 
-        Raises ValueError on out-of-range coordinates or unknown env_medium.
+        Raises ValueError on missing required columns, out-of-range coordinates, or
+        unknown env_medium.
         """
-        required = ("eventID", "eventDate")
+        # env_medium is required: build() maps it to an ENVO term by direct indexing,
+        # so a missing column must fail here with a clear message, not a raw KeyError later.
+        required = ("eventID", "eventDate", "env_medium")
         missing = [c for c in required if c not in sample_meta.columns]
         if missing:
             raise ValueError(
                 f"Sample metadata CSV '{sample_metadata_path}' is missing required "
-                f"columns: {missing}. GBIF needs at least 'eventID' (must match the "
-                f"per-sample column names carried in the taxonomy table) and 'eventDate' "
-                f"(format yyyy, yyyy.mm, or yyyy.mm.dd). Rename your headers to these exact "
+                f"columns: {missing}. GBIF needs 'eventID' (must match the per-sample "
+                f"column names carried in the taxonomy table), 'eventDate' (format yyyy, "
+                f"yyyy.mm, or yyyy.mm.dd), and 'env_medium' (one of the known ENVO terms: "
+                f"water, soil, river, marine, sediment). Rename your headers to these exact "
                 f"names. Recognized optional columns: decimalLatitude, decimalLongitude, "
-                f"depth, size_frac, samp_size (legacy 'volume' is auto-renamed to samp_size), "
-                f"and env_medium (must be one of the known ENVO terms when present)."
+                f"depth, size_frac, samp_size (legacy 'volume' is auto-renamed to samp_size)."
             )
 
         # Latitude / longitude range checks
@@ -502,6 +533,18 @@ class DarwinCoreBuilder:
     @staticmethod
     def _check_required_fields(out: pd.DataFrame) -> None:
         """Verify every DwC-required column has data before writing (G1)."""
+        # Zero-row check FIRST: on an empty frame `(series == "").all()` is True
+        # for every column, so the blank-field loop would otherwise report all
+        # required fields as 'blank in every row' and misattribute the cause to a
+        # missing otu_db. The real cause is that no occurrence rows survived.
+        if len(out) == 0:
+            raise ValueError(
+                "GBIF output has no occurrence rows: every record was dropped by "
+                "control removal and non-target filtering (or all reads were "
+                "zero-filtered upstream). There is nothing to submit. Check that "
+                "the taxonomy results table is non-empty and that controls/"
+                "non-target taxa did not remove every row."
+            )
         empty_fields = []
         for col in _DWC_REQUIRED_FIELDS:
             if col not in out.columns:

@@ -52,7 +52,7 @@ class DecipherRunner(RScriptRunner):
             stop("DECIPHER R package not found in the active environment. ",
                  "The 'decipher' taxonomy method needs the DECIPHER Bioconductor ",
                  "package under the same R interpreter the pipeline calls. ",
-                 "Fix: activate the project env (conda activate metabarcoding), ",
+                 "Fix: activate the project env (on the ETH ELE eDNA server: conda activate /home/shared/edna/envs/seednap), ",
                  "install it the way this repo pins it ",
                  "(conda install -c bioconda bioconductor-decipher; ",
                  "it is also in environment.yml), ",

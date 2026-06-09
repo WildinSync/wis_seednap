@@ -24,6 +24,11 @@ def _neg(ev, neg_type, ext=None):
                              neg_cont_type=neg_type, extraction_ID=ext)
 
 
+def _pos(ev, ext=None):
+    return SampleManifestRow(eventID=ev, seq_run_id="run1", samp_category="positive control",
+                             pos_cont_type="other: positive/mock control", extraction_ID=ext)
+
+
 @pytest.fixture
 def manifest():
     return SampleManifest(rows=[
@@ -120,3 +125,65 @@ def test_extraction_blank_matching_no_sample_warns(caplog):
     with caplog.at_level(logging.WARNING):
         CleaningProcessor(mode="subtract").clean(ab, m, id_col="sequence")
     assert any("matches no biological sample" in r.message for r in caplog.records)
+
+
+def test_positive_control_not_used_for_decontamination(caplog):
+    """A positive/mock control deliberately contains target species; it must NOT be used
+    as a decontamination control (would erase real reads). It is excluded from controls,
+    its OTUs are not flagged in_negative_control, and the skip is WARNed -- not silent."""
+    m = SampleManifest(rows=[
+        _sample("S1", "EXP1"), _sample("S2", "EXP1"),
+        _pos("CPOS", "EXP1"),
+    ])
+    # O1 is the shared target species: present in both real samples and the positive control.
+    ab = pd.DataFrame({
+        "sequence": ["O1", "O2"],
+        "S1": [100, 30], "S2": [200, 0],
+        "CPOS": [150, 0],
+    })
+    with caplog.at_level(logging.WARNING):
+        df, rep, res = CleaningProcessor(mode="subtract").clean(ab, m, id_col="sequence")
+    # The positive control is not counted as a decontamination control.
+    assert res.n_controls == 0 and res.total_reads_removed == 0
+    # O1 is not flagged as in_negative_control (the positive control is not a negative one).
+    flagged = dict(zip(df["sequence"], df["in_negative_control"]))
+    assert not flagged["O1"] and not flagged["O2"]
+    # Real reads of the shared target species survive untouched.
+    by = df.set_index("sequence")
+    assert by.loc["O1", "S1"] == 100 and by.loc["O1", "S2"] == 200
+    # The skip is on the record (no-silent-fallbacks policy).
+    assert any("CPOS" in r.message and "not used as a decontamination control" in r.message
+               for r in caplog.records)
+
+
+def test_orphan_positive_control_classified_by_name_not_used(caplog):
+    """A positive/mock control column absent from the manifest (classified by name) must
+    likewise be excluded from decontamination, with a [WARN]."""
+    m = SampleManifest(rows=[_sample("S1", "EXP1"), _sample("S2", "EXP1")])
+    ab = pd.DataFrame({
+        "sequence": ["O1"],
+        "S1": [100], "S2": [200],
+        "Mock1": [150],  # orphan positive/mock control, classifies as positive control
+    })
+    with caplog.at_level(logging.WARNING):
+        df, rep, res = CleaningProcessor(mode="subtract").clean(ab, m, id_col="sequence")
+    assert res.n_controls == 0 and res.total_reads_removed == 0
+    by = df.set_index("sequence")
+    assert by.loc["O1", "S1"] == 100 and by.loc["O1", "S2"] == 200
+    assert any("Mock1" in r.message and "not used as a decontamination control" in r.message
+               for r in caplog.records)
+
+
+def test_unclassified_control_like_surfaces_warn_reason(caplog):
+    """An orphan column whose name looks like a control but matches no rule is treated as a
+    biological sample, but the specific 'looks like a control -- verify' reason must be on
+    the record, not just the generic 'absent from manifest' message."""
+    m = SampleManifest(rows=[_sample("S1", "EXP1"), _neg("Bpcr", "PCR negative", None)])
+    ab = pd.DataFrame({
+        "sequence": ["O1"],
+        "S1": [100], "Neg-thing": [40], "Bpcr": [0],
+    })
+    with caplog.at_level(logging.WARNING):
+        CleaningProcessor(mode="subtract").clean(ab, m, id_col="sequence")
+    assert any("Neg-thing" in r.message and "looks like a control" in r.message
+               for r in caplog.records)

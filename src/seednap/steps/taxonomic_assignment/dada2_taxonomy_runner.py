@@ -116,8 +116,9 @@ class Dada2TaxonomyRunner(RScriptRunner):
                 f"marker YAML, but that path does not exist on this host (config "
                 f"validation checks the path string, not its presence on disk). Point "
                 f"taxonomy.databases.dada2.species at the species-assignment FASTA for "
-                f"this marker and confirm the file exists on this server, or remove "
-                f"the species key to skip species-level assignment."
+                f"this marker and confirm the file exists on this server. The species "
+                f"DB is required for the dada2 method (addSpecies is always run); it "
+                f"cannot be skipped by omitting the key."
             )
         if not query_fasta.exists():
             raise FileNotFoundError(f"Query FASTA not found: {query_fasta}")

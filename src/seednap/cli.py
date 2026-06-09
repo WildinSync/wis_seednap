@@ -523,9 +523,15 @@ def blast(
         if output is None:
             output = query_fasta.parent / f"{query_fasta.stem}_blast_taxonomy.csv"
 
-        # Create temporary directory for BLAST output
-        blast_output_dir = query_fasta.parent / "blast_temp"
-        blast_output_dir.mkdir(exist_ok=True)
+        # Create a unique temporary directory for BLAST output. Using
+        # tempfile.mkdtemp (not a fixed "blast_temp" name with exist_ok=True)
+        # guarantees this command never adopts -- and then rmtree's -- a
+        # pre-existing user directory that happens to be named blast_temp.
+        import tempfile
+
+        blast_output_dir = Path(
+            tempfile.mkdtemp(prefix="blast_temp_", dir=query_fasta.parent)
+        )
 
         # Run BLAST search
         console.print("[cyan]Step 1/3:[/cyan] Running BLAST search...")

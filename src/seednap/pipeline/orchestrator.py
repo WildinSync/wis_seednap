@@ -931,6 +931,35 @@ class PipelineOrchestrator:
             )
             return {}
 
+    def _warn_if_export_predates_clean(self, export_step: Optional[Any]) -> None:
+        """Warn when an already-completed export predates a (re-)completed clean step.
+
+        On --resume a clean step that was SKIPPED in run 1 (transient error) can
+        re-run and now COMPLETE, writing a fresh cleaned table. But if export was
+        already COMPLETED against the uncleaned table, _should_run_step('export')
+        returns False and export is not re-run, so the GBIF CSV silently stays
+        stale. Surface this per the no-silent-fallbacks policy; the user must
+        re-run export to pick up the cleaned table.
+        """
+        if export_step is None or export_step.completed_at is None:
+            return
+        clean_step = self.state.get_step("clean")
+        if (
+            clean_step is not None
+            and clean_step.completed_at is not None
+            and clean_step.outputs.get("cleaned_table")
+            and clean_step.completed_at > export_step.completed_at
+        ):
+            logger.warning(
+                "[WARN] export: expected=GBIF CSV reflecting the decontaminated "
+                f"table (clean completed {clean_step.completed_at.isoformat()}), "
+                f"got=stale export completed earlier ({export_step.completed_at.isoformat()}) "
+                "against the uncleaned table, fallback=existing export left as-is. "
+                "Re-run the 'export' step (e.g. delete the 'export' entry from the "
+                "state JSON, or use the standalone export command) so the GBIF CSV "
+                "reflects the cleaned table."
+            )
+
     def run_export(self) -> Dict[str, Path]:
         """
         Run export step (GBIF formatting).
@@ -942,6 +971,10 @@ class PipelineOrchestrator:
 
         if not self._should_run_step(step_name):
             step = self.state.get_step(step_name)
+            # Export-staleness guard on --resume after a clean retry: if the clean
+            # step completed AFTER this already-completed export, the GBIF CSV still
+            # reflects the pre-clean (uncleaned) table and is silently stale.
+            self._warn_if_export_predates_clean(step)
             return step.outputs if step else {}
 
         log_pipeline_step(step_name, "start", logger)

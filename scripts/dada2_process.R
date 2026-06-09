@@ -68,8 +68,8 @@ df_to_fasta <- function(file, output_file_path){
 }
 
 # Extract the sample name from a ".../<sample>.R[12].fastq" path: strip the
-# directory and everything from the ".R1"/".R2" token onward. Used only to name
-# the QC PNGs; sample-name extraction elsewhere uses strsplit on "." instead.
+# directory and everything from the ".R1"/".R2" token onward. Used to name the
+# QC PNGs; sample-name extraction elsewhere strips the read-suffix the same way.
 extract_pattern_samplename <- function(input_string) {
   sub(".*/([^/]+)\\.[Rr][12].*", "\\1", input_string)
 }
@@ -97,8 +97,9 @@ if(length(fastqFs) != length(fastqRs)) stop("Forward and reverse files do not ma
 fnFs <- sort(list.files(pathFR, pattern="R1.fastq", full.names = TRUE))
 fnRs <- sort(list.files(pathFR, pattern="R2.fastq", full.names = TRUE))
 # Extract sample names. The trim step writes "<sample>.R1.fastq" (dot-delimited,
-# uncompressed), so the name is the text before the first "."
-sample.names <- sapply(strsplit(basename(fnFs), "\\."), `[`, 1)
+# uncompressed). Strip the read-suffix token rather than splitting on the first
+# "." so sample names that themselves contain "." are not truncated or collided.
+sample.names <- sub("\\.[Rr][12]\\.fastq.*$", "", basename(fnFs))
 
 # Check if file is not empty
 valid_indices <- which(file.exists(fnFs) & file.exists(fnRs) & file.info(fnFs)$size > 0 & file.info(fnRs)$size > 0)
@@ -158,8 +159,8 @@ invisible(mclapply(seq_along(paste0(filtpathFR, "/", fastqFs)), function(i) {
 # FIltered reads
 filtFs <- list.files(filtpathFR, pattern="R1.fastq", full.names = TRUE)
 filtRs <- list.files(filtpathFR, pattern="R2.fastq", full.names = TRUE)
-sample.names <- sapply(strsplit(basename(filtFs), "\\."), `[`, 1) # Assumes filename = samplename.R1.fastq (dot-delimited)
-sample.namesR <- sapply(strsplit(basename(filtRs), "\\."), `[`, 1) # Assumes filename = samplename.R2.fastq (dot-delimited)
+sample.names <- sub("\\.[Rr][12]\\.fastq.*$", "", basename(filtFs)) # filename = samplename.R1.fastq; strip read-suffix, not first dot
+sample.namesR <- sub("\\.[Rr][12]\\.fastq.*$", "", basename(filtRs)) # filename = samplename.R2.fastq; strip read-suffix, not first dot
 if(!identical(sample.names, sample.namesR)) stop("Forward and reverse files do not match.")
 names(filtFs) <- sample.names
 names(filtRs) <- sample.names
@@ -281,7 +282,7 @@ if (pool && !use_per_library) {
   denoisedF <- sapply(dadaFs_list, getN)
 }
 track_in <- as.data.frame(out)                       # cols: reads.in, reads.out
-rownames(track_in) <- sapply(strsplit(rownames(track_in), "\\."), `[`, 1)
+rownames(track_in) <- sub("\\.[Rr][12]\\.fastq.*$", "", rownames(track_in))
 mergers_list <- if (is.data.frame(mergers)) setNames(list(mergers), sample.names) else mergers
 mergedN <- sapply(mergers_list, getN)
 nonchim <- rowSums(seqtab)
