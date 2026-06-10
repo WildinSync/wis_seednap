@@ -91,6 +91,62 @@ def print_warning(message: str) -> None:
     logger.warning(f"[WARN] {message}")
 
 
+def _assign_kwargs_from_config(config: Any, method: str) -> Dict[str, Any]:
+    """Build TaxonomicAssigner.assign_taxonomy kwargs from a marker config's selected
+    method block, so the standalone `assign-taxonomy --config` matches `run-pipeline`.
+
+    This mirrors the per-method kwargs the orchestrator passes (see
+    pipeline/orchestrator.py run_taxonomy): for BLAST that includes the BLAST search
+    params (perc_identity, qcov_hsp_perc, evalue, max_target_seqs, task) that the
+    standalone command otherwise leaves at the assigner defaults -- the divergence this
+    fixes. `contaminants` is the marker-level list, applied to every method just as the
+    orchestrator does. Caller layers explicit CLI overrides on top of this dict.
+    """
+    db = config.taxonomy.get_database_config()
+    contaminants = config.taxonomy.contaminants
+    if method == "blast":
+        return {
+            "reference_fasta": db.fasta,
+            "threshold_species": db.threshold_species,
+            "threshold_genus": db.threshold_genus,
+            "threshold_family": db.threshold_family,
+            "threshold_order": db.threshold_order,
+            "threshold_class": db.threshold_class,
+            "top_bitscore_pct": db.top_bitscore_pct,
+            "lca_pident_delta": db.lca_pident_delta,
+            "lca_algorithm": db.lca_algorithm,
+            "lca_pid": db.lca_pid,
+            "lca_diff": db.lca_diff,
+            "contaminants": contaminants,
+            "perc_identity": db.perc_identity,
+            "qcov_hsp_perc": db.qcov_hsp_perc,
+            "evalue": db.evalue,
+            "max_target_seqs": db.max_target_seqs,
+            "task": db.task,
+        }
+    if method == "dada2":
+        return {
+            "rdp_db_path": db.all,
+            "species_db_path": db.species,
+            "bootstrap_threshold": db.bootstrap_threshold,
+            "contaminants": contaminants,
+        }
+    if method == "ecotag":
+        return {
+            "taxonomy_db": db.tree,
+            "reference_db": db.fasta,
+            "contaminants": contaminants,
+        }
+    if method == "decipher":
+        return {
+            "trained_classifier_path": db.trained,
+            "threshold": db.threshold,
+            "processors": db.processors,
+            "contaminants": contaminants,
+        }
+    return {}
+
+
 @click.group()
 @click.version_option(version=__version__, prog_name="seednap")
 @click.option(
@@ -1079,6 +1135,13 @@ def swarm(
 @click.argument("query_fasta", type=click.Path(exists=True, path_type=Path))
 @click.argument("asv_count_csv", type=click.Path(exists=True, path_type=Path))
 @click.option(
+    "--config",
+    "config_file",
+    type=click.Path(exists=True, path_type=Path),
+    help="Marker YAML config: use its taxonomy.databases.<method> block (db path + method "
+    "params) so the result matches run-pipeline. Explicit options below override the config.",
+)
+@click.option(
     "--output-dir",
     "-o",
     type=click.Path(path_type=Path),
@@ -1188,11 +1251,14 @@ def swarm(
     default=8,
     help="Number of CPU cores (default: 8)",
 )
+@click.pass_context
 def assign_taxonomy(
+    ctx: click.Context,
     method: str,
     marker: str,
     query_fasta: Path,
     asv_count_csv: Path,
+    config_file: Optional[Path],
     output_dir: Path,
     reference_fasta: Optional[Path],
     rdp_db: Optional[Path],
@@ -1228,6 +1294,11 @@ def assign_taxonomy(
     DADA2: --rdp-db and --species-db
     ecotag: --taxonomy-db and --reference-db
     DECIPHER: --trained-classifier
+
+    Pass --config <marker.yaml> to use that marker's taxonomy.databases.<method>
+    block (database path plus method parameters, e.g. BLAST evalue/task/thresholds)
+    so the standalone result matches run-pipeline. Any explicit option above
+    overrides the corresponding config value.
     """
     from seednap.steps.taxonomic_assignment import TaxonomicAssigner
 
@@ -1241,6 +1312,27 @@ def assign_taxonomy(
     console.print(f"Output directory: {output_dir}\n")
 
     try:
+        # When --config is given, derive method parameters from that marker's
+        # taxonomy.databases.<method> block (db path + blast evalue/task/thresholds/
+        # lca params, etc.) so this standalone command matches run-pipeline. Without it,
+        # the explicit options / model defaults are used as before.
+        #
+        # The config's taxonomy.method must equal the positional METHOD; using a config
+        # written for one method while asking for another would silently apply the wrong
+        # parameter set, so we raise instead of guessing (no-silent-fallback rule).
+        config_kwargs: Dict[str, Any] = {}
+        if config_file is not None:
+            cfg = load_config(config_file)
+            if cfg.taxonomy.method != method:
+                print_error(
+                    f"--config {config_file} is for taxonomy method "
+                    f"'{cfg.taxonomy.method}', but you asked for '{method}'. "
+                    f"Run `assign-taxonomy {cfg.taxonomy.method} ...` or pass a config "
+                    f"whose taxonomy.method is '{method}'."
+                )
+                sys.exit(1)
+            config_kwargs = _assign_kwargs_from_config(cfg, method)
+
         # Initialize assigner
         assigner = TaxonomicAssigner(
             method=method,
@@ -1248,54 +1340,82 @@ def assign_taxonomy(
             output_dir=output_dir,
         )
 
-        # Prepare method-specific arguments
-        kwargs = {}
+        # Prepare method-specific arguments. Start from the config-derived values (if any)
+        # then let any EXPLICITLY-passed CLI option override its config counterpart;
+        # _given() distinguishes a user-typed flag from a value left at its click default.
+        def _given(param_name: str) -> bool:
+            from click.core import ParameterSource
+
+            return ctx.get_parameter_source(param_name) == ParameterSource.COMMANDLINE
+
+        kwargs: Dict[str, Any] = dict(config_kwargs)
 
         if method == "blast":
-            if not reference_fasta:
-                print_error("--reference-fasta is required for BLAST method")
-                sys.exit(1)
-            kwargs.update({
-                "reference_fasta": reference_fasta,
-                "threshold_species": threshold_species,
-                "threshold_genus": threshold_genus,
-                "threshold_family": threshold_family,
-                "threshold_order": threshold_order,
-                "threshold_class": threshold_class,
-                "top_bitscore_pct": top_bitscore_pct,
-                "lca_pident_delta": lca_pident_delta,
-                "lca_algorithm": lca_algorithm,
-                "lca_pid": lca_pid,
-                "lca_diff": lca_diff,
-            })
+            if _given("reference_fasta") or "reference_fasta" not in kwargs:
+                if not reference_fasta:
+                    print_error(
+                        "--reference-fasta is required for BLAST method "
+                        "(or pass --config with a taxonomy.databases.blast.fasta path)"
+                    )
+                    sys.exit(1)
+                kwargs["reference_fasta"] = reference_fasta
+            for opt in (
+                "threshold_species", "threshold_genus", "threshold_family",
+                "threshold_order", "threshold_class", "top_bitscore_pct",
+                "lca_pident_delta", "lca_algorithm", "lca_pid", "lca_diff",
+            ):
+                if _given(opt) or opt not in kwargs:
+                    kwargs[opt] = locals()[opt]
 
         elif method == "dada2":
-            if not rdp_db or not species_db:
-                print_error("--rdp-db and --species-db are required for DADA2 method")
-                sys.exit(1)
-            kwargs.update({
-                "rdp_db_path": rdp_db,
-                "species_db_path": species_db,
-            })
+            if _given("rdp_db") or "rdp_db_path" not in kwargs:
+                if not rdp_db:
+                    print_error(
+                        "--rdp-db is required for DADA2 method "
+                        "(or pass --config with a taxonomy.databases.dada2.all path)"
+                    )
+                    sys.exit(1)
+                kwargs["rdp_db_path"] = rdp_db
+            if _given("species_db") or "species_db_path" not in kwargs:
+                if not species_db:
+                    print_error(
+                        "--species-db is required for DADA2 method "
+                        "(or pass --config with a taxonomy.databases.dada2.species path)"
+                    )
+                    sys.exit(1)
+                kwargs["species_db_path"] = species_db
 
         elif method == "ecotag":
-            if not taxonomy_db or not reference_db:
-                print_error("--taxonomy-db and --reference-db are required for ecotag method")
-                sys.exit(1)
-            kwargs.update({
-                "taxonomy_db": taxonomy_db,
-                "reference_db": reference_db,
-            })
+            if _given("taxonomy_db") or "taxonomy_db" not in kwargs:
+                if not taxonomy_db:
+                    print_error(
+                        "--taxonomy-db is required for ecotag method "
+                        "(or pass --config with a taxonomy.databases.ecotag.tree path)"
+                    )
+                    sys.exit(1)
+                kwargs["taxonomy_db"] = taxonomy_db
+            if _given("reference_db") or "reference_db" not in kwargs:
+                if not reference_db:
+                    print_error(
+                        "--reference-db is required for ecotag method "
+                        "(or pass --config with a taxonomy.databases.ecotag.fasta path)"
+                    )
+                    sys.exit(1)
+                kwargs["reference_db"] = reference_db
 
         elif method == "decipher":
-            if not trained_classifier:
-                print_error("--trained-classifier is required for DECIPHER method")
-                sys.exit(1)
-            kwargs.update({
-                "trained_classifier_path": trained_classifier,
-                "threshold": confidence_threshold,
-                "processors": processors,
-            })
+            if _given("trained_classifier") or "trained_classifier_path" not in kwargs:
+                if not trained_classifier:
+                    print_error(
+                        "--trained-classifier is required for DECIPHER method "
+                        "(or pass --config with a taxonomy.databases.decipher.trained path)"
+                    )
+                    sys.exit(1)
+                kwargs["trained_classifier_path"] = trained_classifier
+            if _given("confidence_threshold") or "threshold" not in kwargs:
+                kwargs["threshold"] = confidence_threshold
+            if _given("processors") or "processors" not in kwargs:
+                kwargs["processors"] = processors
 
         # Run taxonomic assignment
         console.print(f"[bold]Running {method.upper()} taxonomic assignment...[/bold]")

@@ -32,12 +32,25 @@ import pandas as pd
 from pydantic import BaseModel, ConfigDict, Field
 
 from seednap.config.manifest import SampleManifest, classify_control
+from seednap.utils.taxonomy import TAXONOMIC_RANKS
 
 logger = logging.getLogger(__name__)
 
 _CLEANING_MODES = ("flag", "subtract")
 # OTU-level flag column added to the output marking OTUs seen in any negative control.
 CONTROL_FLAG_COL = "in_negative_control"
+
+# Per-OTU annotation/metadata columns that are NOT biological samples. A taxonomy
+# or BLAST table interleaves these with the numeric sample columns; some (pident,
+# the boolean is_contaminant_candidate) are numeric and would otherwise be mistaken
+# for samples. This mirrors the sample-detection set used by
+# gbif_formatter._transform_to_long_format and utils.taxonomy (a sample column is
+# numeric and not in this known non-sample set). The rank list comes from the
+# single source of truth (TAXONOMIC_RANKS) so the schema cannot drift.
+_NON_SAMPLE_COLUMNS = frozenset(TAXONOMIC_RANKS) | {
+    "sequence", "Sequence", "ASV_ID", "OTU", "OTU_ID", "taxon", "rank",
+    "pident", "is_contaminant_candidate",
+}
 
 
 class CleaningResult(BaseModel):
@@ -79,10 +92,13 @@ class CleaningProcessor:
             abundance: OTU x sample table; ``id_col`` is the OTU identifier column.
             manifest: provides per-eventID samp_category / neg_cont_type / extraction_ID.
             id_col: name of the OTU identifier column (e.g. "sequence" or "ASV_ID").
-            sample_cols: explicit sample columns. Required for a taxonomy table, which has
-                numeric *non-sample* columns (e.g. ``pident``); when omitted, every numeric
-                column other than ``id_col`` is treated as a sample (correct for a pure
-                OTU/ASV count matrix).
+            sample_cols: explicit sample columns. When omitted, a sample column is any
+                numeric column other than ``id_col`` and the known per-OTU annotation
+                columns (``_NON_SAMPLE_COLUMNS``: the taxonomic ranks, sequence/Sequence,
+                ASV_ID, OTU/OTU_ID, taxon, rank, pident, is_contaminant_candidate). This
+                makes a taxonomy/BLAST table (which interleaves numeric non-sample columns
+                such as ``pident`` with the samples) clean correctly without an explicit
+                list, and is also correct for a pure OTU/ASV count matrix.
 
         Returns:
             (cleaned_df, report_df, result). ``cleaned_df`` is a copy with a
@@ -96,10 +112,17 @@ class CleaningProcessor:
         by_event = {r.eventID: r for r in manifest.rows}
 
         if sample_cols is None:
-            # No explicit list: numeric columns are counts; taxonomy/meta columns are strings.
+            # No explicit list: a sample column is numeric and NOT one of the known
+            # per-OTU annotation columns. A taxonomy/BLAST table interleaves numeric
+            # non-sample columns (pident, the boolean is_contaminant_candidate) with
+            # the sample columns; excluding _NON_SAMPLE_COLUMNS keeps them out of the
+            # sample set (mirrors gbif_formatter / utils.taxonomy sample detection),
+            # so standalone `clean` on a taxonomy table no longer corrupts results.
             sample_cols = [
                 c for c in df.columns
-                if c != id_col and pd.api.types.is_numeric_dtype(df[c])
+                if c != id_col
+                and c not in _NON_SAMPLE_COLUMNS
+                and pd.api.types.is_numeric_dtype(df[c])
             ]
         else:
             sample_cols = [c for c in sample_cols if c in df.columns and c != id_col]

@@ -180,8 +180,14 @@ class DarwinCoreBuilder:
             self._map_env_medium
         )
 
-        # Join sample metadata
-        merged = results.merge(sample_meta, on="eventID", how="left")
+        # Join sample metadata. Match on a normalized eventID key so the common
+        # legacy mismatch (R make.names() rewrote the dashed canonical eventID
+        # DAR-2023-0025 to the dotted DAR.2023.0025 in the taxonomy table, while
+        # the sample-metadata sheet keeps the dashed form) still joins. Joining
+        # on the raw eventID would match ZERO rows and leave eventDate / coords /
+        # env_medium blank in 100% of the GBIF output while the command exits 0
+        # -- a silent loss of all spatial/temporal data (no-silent-fallbacks).
+        merged = self._merge_sample_metadata(results, sample_meta)
 
         # Add project-level fields
         merged["recordedby"] = project_meta["recordedby"].iloc[0]
@@ -399,6 +405,106 @@ class DarwinCoreBuilder:
         df = df.copy()
         df["nb_reads_total"] = totals
         return df
+
+    @staticmethod
+    def _normalize_event_id(value: object) -> str:
+        """Normalize an eventID for matching across dot/dash sanitization.
+
+        R's ``make.names()`` rewrites the dashed canonical eventID
+        (``DAR-2023-0025``) to a dotted form (``DAR.2023.0025``) when it is used
+        as a data-frame column name, so the taxonomy table and the sample-
+        metadata sheet can disagree purely on separator characters. Mapping every
+        run of ``.``/``_``/``-`` to a single dash and upper-casing makes the two
+        forms compare equal without altering the genuine sample identity.
+        """
+        if pd.isna(value):
+            return ""
+        return re.sub(r"[._-]+", "-", str(value).strip()).strip("-").upper()
+
+    def _merge_sample_metadata(
+        self, results: pd.DataFrame, sample_meta: pd.DataFrame
+    ) -> pd.DataFrame:
+        """Left-join sample metadata onto results on a normalized eventID key.
+
+        The output eventID is taken from the sample-metadata side (the canonical,
+        dashed form) wherever a match exists, so a make.names-dotted taxonomy
+        eventID is written to GBIF in its canonical form. After the join the
+        metadata-match rate is checked: a low rate emits a ``[WARN]`` and a zero
+        rate raises -- a join that drops all location/date data must never pass
+        silently (no-silent-fallbacks).
+        """
+        results = results.copy()
+        sample_meta = sample_meta.copy()
+
+        # Normalized join key on both sides; keep the raw results eventID for the
+        # unmatched fallback and the canonical metadata eventID for the output.
+        results["_eventid_key"] = results["eventID"].apply(self._normalize_event_id)
+        sample_meta["_eventid_key"] = sample_meta["eventID"].apply(
+            self._normalize_event_id
+        )
+
+        # A duplicated normalized key in the metadata would fan-out reads on the
+        # join (one taxonomy row -> many), silently inflating organismQuantity.
+        dup_keys = sample_meta["_eventid_key"][
+            sample_meta["_eventid_key"].duplicated() & (sample_meta["_eventid_key"] != "")
+        ].unique()
+        if len(dup_keys) > 0:
+            raise ValueError(
+                f"Sample metadata '{self.sample_metadata_path}' has eventIDs that "
+                f"collide after normalizing dot/dash separators: keys {sorted(dup_keys)}. "
+                f"Each sample must map to one metadata row; rename the duplicates so "
+                f"their eventIDs differ by more than separator characters."
+            )
+
+        # Carry the canonical (dashed) metadata eventID through the merge under a
+        # distinct name so we can prefer it for output without colliding with the
+        # results-side eventID column.
+        sample_meta = sample_meta.rename(columns={"eventID": "_eventid_canonical"})
+
+        merged = results.merge(sample_meta, on="_eventid_key", how="left")
+
+        matched = merged["_eventid_canonical"].notna()
+        n_total = len(merged)
+        n_matched = int(matched.sum())
+        match_rate = (n_matched / n_total) if n_total else 0.0
+
+        if n_total > 0 and n_matched == 0:
+            sample_keys = sorted(
+                k for k in results["_eventid_key"].unique() if k
+            )[:5]
+            meta_keys = sorted(
+                k for k in sample_meta["_eventid_key"].unique() if k
+            )[:5]
+            raise ValueError(
+                f"Sample-metadata join matched ZERO of {n_total} occurrence rows: "
+                f"no eventID in the taxonomy table '{self.taxonomy_results_path}' "
+                f"matches any eventID in the sample metadata "
+                f"'{self.sample_metadata_path}' even after normalizing dot/dash "
+                f"separators. Every eventDate / decimalLatitude / decimalLongitude / "
+                f"env_medium would be blank. Example taxonomy eventID keys "
+                f"{sample_keys}; example metadata eventID keys {meta_keys}. Fix the "
+                f"eventID values so they correspond before submitting to GBIF."
+            )
+
+        if match_rate < 1.0:
+            unmatched_ids = sorted(
+                merged.loc[~matched, "eventID"].astype(str).unique()
+            )[:5]
+            print(
+                f"[WARN] _merge_sample_metadata: expected=every occurrence eventID "
+                f"to match a sample-metadata row, got={n_matched}/{n_total} matched "
+                f"({match_rate:.0%}), fallback=unmatched rows keep their original "
+                f"eventID and have blank location/date/env_medium fields "
+                f"(unmatched examples: {unmatched_ids})",
+                flush=True,
+            )
+
+        # Output eventID: canonical dashed form where matched, original otherwise.
+        merged["eventID"] = merged["_eventid_canonical"].where(
+            matched, merged["eventID"]
+        )
+        merged = merged.drop(columns=["_eventid_key", "_eventid_canonical"])
+        return merged
 
     @staticmethod
     def _create_occurrence_id(df: pd.DataFrame, marker: str) -> pd.Series:

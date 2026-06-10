@@ -100,6 +100,22 @@ class TagFileGenerator:
             )
         return self._format_tag_sequence(tag)
 
+    def _read_metadata(self, metadata_csv: Path) -> pd.DataFrame:
+        """
+        Read a metadata file, auto-detecting the delimiter.
+
+        Lab Corr_tags files are semicolon-delimited while the historical
+        seednap metadata is comma-delimited. ``sep=None`` with the python
+        engine sniffs the delimiter so both load without a hardcoded choice.
+
+        Args:
+            metadata_csv: Path to the metadata file.
+
+        Returns:
+            Parsed DataFrame.
+        """
+        return pd.read_csv(metadata_csv, sep=None, engine="python")
+
     def _write_fasta(self, df: pd.DataFrame, output_path: Union[str, Path]) -> None:
         """
         Write DataFrame to FASTA file for cutadapt.
@@ -163,7 +179,7 @@ class TagFileGenerator:
                 "and run/library columns."
             )
 
-        df = pd.read_csv(metadata_csv)
+        df = self._read_metadata(metadata_csv)
 
         # Validate columns
         required_cols = [sample_col, tag_col, run_col]
@@ -254,7 +270,7 @@ class TagFileGenerator:
                 "and library columns."
             )
 
-        df = pd.read_csv(metadata_csv)
+        df = self._read_metadata(metadata_csv)
 
         # Validate columns
         required_cols = [sample_col, tag_col, library_col]
@@ -262,10 +278,16 @@ class TagFileGenerator:
         if missing_cols:
             raise ValueError(
                 f"Metadata CSV {metadata_csv} is missing required column(s): "
-                f"{missing_cols}. Ligation demultiplexing needs columns: "
-                f"{required_cols} (sample id, tag sequence, library). "
-                f"Found columns: {list(df.columns)}. "
-                f"Rename your CSV headers to match."
+                f"{missing_cols}. Ligation demultiplexing needs a header row with "
+                f"columns: {required_cols} (sample id, tag sequence, library). "
+                f"Found columns: {list(df.columns)}.\n\n"
+                f"If this is a lab Corr_tags file it will not work as-is: those "
+                f"files are headerless and use the column order "
+                f"well;library;sample;project;marker;tagseq. Convert it to a "
+                f"metadata file with an explicit header first, mapping "
+                f"eventID=sample, tag_demultiplex=tagseq, library=library. "
+                f"Otherwise rename your existing CSV headers to match the "
+                f"required columns above."
             )
 
         logger.info(f"Loaded ligation metadata with {len(df)} samples from {metadata_csv}")

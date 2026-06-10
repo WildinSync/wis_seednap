@@ -2,7 +2,7 @@
 
 import logging
 from pathlib import Path
-from typing import List, Optional, Union, cast
+from typing import Callable, Dict, List, Optional, Union, cast
 
 import pandas as pd
 
@@ -198,7 +198,7 @@ class GBIFFormatter:
         Raises:
             ValueError: If method is not recognised.
         """
-        dispatch = {
+        dispatch: Dict[str, Callable[..., pd.DataFrame]] = {
             "dada2": self.from_dada2_rdp,
             "ecotag": self.from_ecotag,
             "blast": self.from_blast,
@@ -218,6 +218,7 @@ class GBIFFormatter:
         output_path: Optional[Union[str, Path]] = None,
         add_rank: bool = True,
         add_taxon: bool = True,
+        _source_format: str = "dada2",
     ) -> pd.DataFrame:
         """
         Convert DADA2 RDP taxonomic assignment output to GBIF format.
@@ -236,6 +237,10 @@ class GBIFFormatter:
             output_path: Optional path to output GBIF CSV file
             add_rank: Whether to add 'rank' column (default: True)
             add_taxon: Whether to add 'taxon' column (default: True)
+            _source_format: Internal label naming the actual source format
+                (dada2/blast/decipher) for the INFO log line. The BLAST and
+                DECIPHER outputs share this DADA2-shaped path; this parameter
+                keeps the log truthful about which method produced the input.
 
         Returns:
             DataFrame in GBIF-compatible long format
@@ -256,7 +261,7 @@ class GBIFFormatter:
                 f"--input at the existing taxonomy CSV."
             )
 
-        logger.info(f"Converting DADA2 output to GBIF format: {input_path}")
+        logger.info(f"Converting {_source_format} output to GBIF format: {input_path}")
 
         # Read CSV
         try:
@@ -521,7 +526,9 @@ class GBIFFormatter:
             DataFrame in GBIF-compatible long format
         """
         # BLAST output should already be in a similar format to DADA2
-        return self.from_dada2_rdp(input_path, output_path, add_rank, add_taxon)
+        return self.from_dada2_rdp(
+            input_path, output_path, add_rank, add_taxon, _source_format="blast"
+        )
 
     def from_decipher(
         self,
@@ -543,4 +550,6 @@ class GBIFFormatter:
             DataFrame in GBIF-compatible long format
         """
         # DECIPHER output should be similar to DADA2
-        return self.from_dada2_rdp(input_path, output_path, add_rank, add_taxon)
+        return self.from_dada2_rdp(
+            input_path, output_path, add_rank, add_taxon, _source_format="decipher"
+        )

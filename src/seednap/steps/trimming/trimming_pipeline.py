@@ -84,6 +84,13 @@ class StandardTrimmer:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
+        # Per-sample cutadapt logs live in a self-contained logs dir derived from
+        # output_dir itself. Walking two levels up from output_dir broke for a
+        # shallow standalone -o (e.g. -o /tmp/out walked to mkdir("/logs"),
+        # PermissionError). output_dir / "logs" works for both the standalone CLI
+        # and the orchestrator (whose output_dir is <output>/01_trim/<marker>).
+        log_dir = output_dir / "logs"
+
         # Calculate reverse complements for 3' trimming
         fwd_rc = reverse_complement(forward_primer)
         rev_rc = reverse_complement(reverse_primer)
@@ -112,34 +119,37 @@ class StandardTrimmer:
                 f"KEPT in the trimmed output"
             )
         logger.info(f"Pass 1: Trimming 5' primers for {sample_name}")
-        self.cutadapt.trim_primers(
-            r1_input=r1_input,
-            r1_output=r1_temp,
-            r2_input=r2_input,
-            r2_output=r2_temp,
-            forward_primer=forward_primer,
-            reverse_primer=reverse_primer,
-            untrimmed_r1=untrimmed_r1,
-            untrimmed_r2=untrimmed_r2,
-            discard_untrimmed=do_discard,
-            log_file=output_dir.parent.parent / "logs" / f"{sample_name}_trim_pass1.txt",
-        )
+        try:
+            self.cutadapt.trim_primers(
+                r1_input=r1_input,
+                r1_output=r1_temp,
+                r2_input=r2_input,
+                r2_output=r2_temp,
+                forward_primer=forward_primer,
+                reverse_primer=reverse_primer,
+                untrimmed_r1=untrimmed_r1,
+                untrimmed_r2=untrimmed_r2,
+                discard_untrimmed=do_discard,
+                log_file=log_dir / f"{sample_name}_trim_pass1.txt",
+            )
 
-        # Pass 2: Trim 3' primers (-a/-A) on reverse complements
-        logger.info(f"Pass 2: Trimming 3' primers for {sample_name}")
-        self.cutadapt.trim_primers(
-            r1_input=r1_temp,
-            r1_output=r1_final,
-            r2_input=r2_temp,
-            r2_output=r2_final,
-            adapter_3p_r1=rev_rc,
-            adapter_3p_r2=fwd_rc,
-            log_file=output_dir.parent.parent / "logs" / f"{sample_name}_trim_pass2.txt",
-        )
-
-        # Clean up temporary files
-        r1_temp.unlink()
-        r2_temp.unlink()
+            # Pass 2: Trim 3' primers (-a/-A) on reverse complements
+            logger.info(f"Pass 2: Trimming 3' primers for {sample_name}")
+            self.cutadapt.trim_primers(
+                r1_input=r1_temp,
+                r1_output=r1_final,
+                r2_input=r2_temp,
+                r2_output=r2_final,
+                adapter_3p_r1=rev_rc,
+                adapter_3p_r2=fwd_rc,
+                log_file=log_dir / f"{sample_name}_trim_pass2.txt",
+            )
+        finally:
+            # Always remove the pass-1 temp files, even if a pass raised, so an
+            # aborted run does not leave misleading orphan *_TEMPORARY.fastq files.
+            for temp in (r1_temp, r2_temp):
+                if temp.exists():
+                    temp.unlink()
 
         if not keep_untrimmed and untrimmed_r1 and untrimmed_r2:
             if untrimmed_r1.exists():
@@ -463,13 +473,18 @@ class LigationTrimmer:
         # reverse-strand read), round 2's mates are swapped before merging:
         # round2.R2 (the forward-primer read in opposite-orientation pairs) joins
         # the final R1, and round2.R1 (the reverse-primer read) joins the final R2.
+        #
+        # Samples whose merged output carries no surviving reads are written as
+        # valid but empty per-sample FASTQs; name them in a [WARN] rather than
+        # letting an empty file pass silently as a real sample.
+        empty_samples: List[str] = []
         for sample in samples:
             if sample in failed_samples:
                 continue
             try:
                 # Final R1 = forward-strand reads: round1.R1 (already forward)
                 # + round2.R2 (forward-primer read from the swapped pairs).
-                self._merge_gzip_files(
+                r1_bytes = self._merge_gzip_files(
                     [
                         primer_detect_dir / f"trim_round1_{sample}.R1.fastq.gz",
                         primer_detect_dir / f"trim_round2_{sample}.R2.fastq.gz",
@@ -479,18 +494,28 @@ class LigationTrimmer:
 
                 # Final R2 = reverse-strand reads: round1.R2 (already reverse)
                 # + round2.R1 (reverse-primer read from the swapped pairs).
-                self._merge_gzip_files(
+                r2_bytes = self._merge_gzip_files(
                     [
                         primer_detect_dir / f"trim_round1_{sample}.R2.fastq.gz",
                         primer_detect_dir / f"trim_round2_{sample}.R1.fastq.gz",
                     ],
                     realigned_dir / f"{sample}.R2.fastq.gz",
                 )
+                if r1_bytes == 0 and r2_bytes == 0:
+                    empty_samples.append(sample)
             except Exception as e:
                 logger.warning(
                     f"Step 5 (merge realigned) failed for sample '{sample}': {e}"
                 )
                 failed_samples.append(sample)
+
+        if empty_samples:
+            logger.warning(
+                f"[WARN] realign {library_name}: expected=at least one surviving "
+                f"read per sample, got=zero reads after primer detection for "
+                f"sample(s) {empty_samples}, fallback=empty per-sample FASTQ(s) "
+                f"written (these samples contribute nothing downstream)"
+            )
 
         if failed_samples:
             logger.warning(
@@ -514,16 +539,23 @@ class LigationTrimmer:
         return realigned_dir
 
     @staticmethod
-    def _merge_gzip_files(input_files: List[Path], output_file: Path) -> None:
+    def _merge_gzip_files(input_files: List[Path], output_file: Path) -> int:
         """
         Merge multiple gzipped files into one.
 
         Args:
             input_files: List of input gzipped files
             output_file: Output gzipped file
+
+        Returns:
+            Total uncompressed bytes written. Zero means the merged output has
+            no surviving reads (a valid but empty FASTQ).
         """
         with gzip.open(output_file, "wb") as f_out:
             for input_file in input_files:
                 if input_file.exists():
                     with gzip.open(input_file, "rb") as f_in:
                         shutil.copyfileobj(f_in, f_out)
+            # GzipFile.tell() reports the uncompressed offset; after all copies
+            # this is the total uncompressed bytes written. Zero => empty FASTQ.
+            return f_out.tell()
