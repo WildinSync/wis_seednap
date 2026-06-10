@@ -20,12 +20,14 @@ from __future__ import annotations
 import re
 import shutil
 import subprocess
-from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-R_SCRIPT = REPO_ROOT / "scripts" / "dada2_process.R"
+# The R scripts ship inside the package; resolve via the same helper the runners use
+# (robust to the package layout, not a hardcoded repo-root path).
+from seednap.utils.r_runner import r_script_path
+
+R_SCRIPT = r_script_path("dada2_process.R")
 
 # The bug cases: distinct sample names that the old dot-split collapsed/collided.
 SAMPLES_TO_FILES = {

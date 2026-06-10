@@ -14,16 +14,18 @@ dependencies:
   - vsearch=2.30.5
   - swarm=3.1.6
 
-  # R and R packages
+  # R and R packages (pinned to validated versions; the DADA2/DECIPHER
+  # versions produce the biology results, so leaving them unpinned risks
+  # silent output drift across environment rebuilds)
   - r-base=4.2
-  - r-tidyverse
-  - r-patchwork
-  - bioconductor-biostrings
-  - bioconductor-dada2
-  - bioconductor-decipher
+  - r-tidyverse=2.0.0
+  - r-patchwork=1.2.0
+  - bioconductor-biostrings=2.66.0
+  - bioconductor-dada2=1.26.0
+  - bioconductor-decipher=2.26.0
 
   # Python scientific stack (conda packages)
-  - pandas>=2.0
+  - pandas>=2.2  # BLAST LCA uses DataFrameGroupBy.apply(include_groups=...)
   - numpy>=1.24
   - biopython>=1.80
   - pyyaml>=6.0
@@ -44,6 +46,7 @@ dependencies:
   - pip
   - pip:
     - pydantic>=2.0
+    - python-dotenv>=1.0  # loads NCBI Entrez API key from .env at runtime
     - pytest-mock>=3.11
     - ruff>=0.1
     - pre-commit>=3.0

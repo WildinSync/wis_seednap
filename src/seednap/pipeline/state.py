@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from pydantic import BaseModel, Field, ValidationError
 
+from seednap.__version__ import __version__ as _SEEDNAP_VERSION
 from seednap.errors import SeednapError
 
 logger = logging.getLogger(__name__)
@@ -133,8 +134,17 @@ class PipelineState(BaseModel):
     """Complete pipeline execution state."""
 
     marker: str = Field(..., description="Marker name")
+    seednap_version: Optional[str] = Field(
+        default=None,
+        description="seednap version that created this run's state "
+        "(None = a state file written before version stamping existed)",
+    )
     config_path: Optional[Path] = Field(
         default=None, description="Path to config file used"
+    )
+    config_snapshot_path: Optional[Path] = Field(
+        default=None,
+        description="Path to the effective merged-config YAML snapshot for this run",
     )
     started_at: datetime = Field(
         default_factory=datetime.now, description="When pipeline started"
@@ -418,4 +428,8 @@ class PipelineState(BaseModel):
         Returns:
             New PipelineState object
         """
-        return cls(marker=marker, config_path=config_path)
+        # New runs are stamped with the running version; a None on a loaded state therefore
+        # signals a state file written before version stamping existed (handled on resume).
+        return cls(
+            marker=marker, config_path=config_path, seednap_version=_SEEDNAP_VERSION
+        )

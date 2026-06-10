@@ -318,6 +318,8 @@ outputs/
 > [!NOTE]
 > The final taxonomy table uses `dada2RDP` for the DADA2 method, but the `_cleaned.csv` and `_gbif.csv` tables use the raw `taxonomy.method` value `dada2`. See section 3.
 
+For a worked example of these outputs -- read tracking, OTU table, taxonomy table, and the FAIRe sample manifest, with trimmed sample rows -- see [example-outputs/](example-outputs/).
+
 ## State management and resume
 
 The pipeline saves state to `.{marker}_state.json` in the output directory after each step. To resume a failed run:

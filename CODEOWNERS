@@ -1,0 +1,7 @@
+# Code owners for SeeDNAP.
+#
+# These owners are requested for review when a matching file is changed.
+# See https://docs.github.com/articles/about-code-owners for syntax.
+
+# Default owner for everything in the repository.
+* @WildinSync

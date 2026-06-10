@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "seednap"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Modern eDNA metabarcoding pipeline with DADA2"
 authors = [
     {name = "ETH ELE Lab", email = "rzendehdel@ethz.ch"},
@@ -29,7 +29,7 @@ dependencies = [
     "pydantic>=2.0",
     "pyyaml>=6.0",
     "click>=8.0",
-    "pandas>=2.0",
+    "pandas>=2.2",  # BLAST LCA uses DataFrameGroupBy.apply(include_groups=...)
     "numpy>=1.24",
     "biopython>=1.80",
     "rich>=13.0",
@@ -64,11 +64,14 @@ Documentation = "https://github.com/WildinSync/wis_seednap/blob/main/README.md"
 Repository = "https://github.com/WildinSync/wis_seednap"
 Issues = "https://github.com/WildinSync/wis_seednap/issues"
 
+[tool.setuptools.dynamic]
+version = {attr = "seednap.__version__.__version__"}
+
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
-seednap = ["py.typed", "data/templates/*.csv"]
+seednap = ["py.typed", "data/templates/*.csv", "scripts/*.R"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

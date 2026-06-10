@@ -64,7 +64,10 @@ def load_yaml(file_path: Path) -> Dict[str, Any]:
             f"`seednap init -o {file_path}`."
         ) from e
     except yaml.YAMLError as e:
-        raise ConfigError(f"Invalid YAML in config file {file_path}: {e}") from e
+        raise ConfigError(
+            f"Invalid YAML in config file {file_path}: {e} "
+            f"[SDN-CFG-009] (run `seednap explain SDN-CFG-009` for more)"
+        ) from e
     except Exception as e:
         raise ConfigError(
             f"Could not read config file {file_path}: {e}. Expected a single YAML "

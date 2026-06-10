@@ -9,10 +9,14 @@ This module orchestrates the complete seednap pipeline:
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
+import yaml
+
+from seednap.__version__ import __version__ as SEEDNAP_VERSION
 from seednap.config.loader import load_config
 from seednap.config.models import PipelineConfig
+from seednap.config.models.operational import VALID_STEPS
 from seednap.pipeline.state import PipelineState
 from seednap.steps.dada2.processor import Dada2Processor
 from seednap.steps.formatting.gbif_formatter import GBIFFormatter
@@ -90,6 +94,25 @@ class PipelineOrchestrator:
             logger.info(
                 f"Completed steps: {', '.join(self.state.get_completed_steps())}"
             )
+            # Reproducibility: the state was written by some seednap version; if the
+            # running version differs (or predates version stamping), the resumed steps may
+            # not match what already ran.
+            if self.state.seednap_version is None:
+                logger.warning(
+                    f"[WARN] resume version unknown: "
+                    f"expected=a recorded seednap version, got=None (this state file "
+                    f"predates version stamping), got_running={SEEDNAP_VERSION}, "
+                    f"fallback=resuming anyway. Already-completed steps were produced by "
+                    f"an unknown earlier version."
+                )
+            elif self.state.seednap_version != SEEDNAP_VERSION:
+                logger.warning(
+                    f"[WARN] resume version mismatch: "
+                    f"expected={self.state.seednap_version} (version that wrote this "
+                    f"run's state), got={SEEDNAP_VERSION} (running version), "
+                    f"fallback=resuming anyway. Outputs from already-completed steps "
+                    f"were produced by the stored version."
+                )
         else:
             self.state = PipelineState.from_config(
                 marker=self.config.marker.name, config_path=self.config_path
@@ -100,6 +123,30 @@ class PipelineOrchestrator:
             logger.info(
                 f"Starting new pipeline run for marker: {self.config.marker.name}"
             )
+
+        # Build the step dispatch once and assert it covers every valid stage, so the
+        # dispatch table cannot silently drift from operational.VALID_STEPS.
+        self._step_methods: Dict[str, Callable[[], Dict[str, Any]]] = {
+            "demultiplex": self.run_demultiplex,
+            "trim": self.run_trim,
+            "dada2": self.run_dada2,
+            "swarm": self.run_swarm,
+            "taxonomy": self.run_taxonomy,
+            "clean": self.run_clean,
+            "export": self.run_export,
+            "report": self.run_report,
+        }
+        missing = set(VALID_STEPS) - set(self._step_methods)
+        if missing:
+            raise RuntimeError(
+                f"Step dispatch is missing handlers for valid stage(s) "
+                f"{sorted(missing)}; operational.VALID_STEPS and the orchestrator "
+                f"dispatch have drifted. Add a run_* handler for each missing stage."
+            )
+
+        # Reproducibility: snapshot the effective merged config into the output tree and
+        # record its path in the state JSON, so a run is reconstructable from its outputs.
+        self._write_config_snapshot()
 
     def _setup_logging(self) -> None:
         """Configure logging using existing logging utilities."""
@@ -151,6 +198,29 @@ class PipelineOrchestrator:
         """Save current pipeline state."""
         self.state.save(self.state_file)
 
+    def _write_config_snapshot(self) -> None:
+        """Write the effective merged config (YAML) into the output tree and record
+        its path in the state.
+
+        Reproducibility: a run must be reconstructable from its outputs, so we persist
+        the fully-merged config (defaults + the marker YAML) rather than relying on the
+        original YAML still existing unchanged. The snapshot lives next to the state
+        file at ``<paths.output>/.<marker>_config.snapshot.yaml`` and its path is stored
+        on the state so the state JSON references it.
+        """
+        snapshot_path = (
+            self.config.paths.output
+            / f".{self.config.marker.name}_config.snapshot.yaml"
+        )
+        snapshot_path.parent.mkdir(parents=True, exist_ok=True)
+        # mode="json" serializes Path/enum values to plain strings so safe_dump works.
+        config_dump = self.config.model_dump(mode="json")
+        with open(snapshot_path, "w", encoding="utf-8") as f:
+            yaml.safe_dump(config_dump, f, default_flow_style=False, sort_keys=False)
+        self.state.config_snapshot_path = snapshot_path
+        self._save_state()
+        logger.info(f"Wrote effective config snapshot to {snapshot_path}")
+
     def _should_run_step(self, step_name: str) -> bool:
         """
         Determine if a step should be run.
@@ -177,6 +247,51 @@ class PipelineOrchestrator:
             return True
 
         return True
+
+    def _execute_step(
+        self,
+        step_name: str,
+        body: Callable[[], Dict[str, Any]],
+        post_complete: Optional[Callable[[], None]] = None,
+    ) -> Dict[str, Any]:
+        """Run one pipeline step's body with the shared state/logging scaffold.
+
+        Behavior-preserving extraction of the boilerplate every uniform run_* method
+        repeated: should-run guard (return cached outputs when skipped), start logging
+        and state, try the body, on success record outputs/complete/save/log, on failure
+        record fail/save/log and re-raise.
+
+        Args:
+            step_name: Pipeline stage name (also the state key).
+            body: Callable returning the step's outputs dict; the only step-specific work.
+            post_complete: Optional hook run AFTER complete_step but BEFORE _save_state,
+                for work that must observe the completed step's recorded outputs (e.g.
+                dada2/swarm manifest cross-checks). Preserves the original call ordering.
+
+        Returns:
+            The step's outputs dict (or the previously recorded outputs when skipped).
+        """
+        if not self._should_run_step(step_name):
+            step = self.state.get_step(step_name)
+            return step.outputs if step else {}
+
+        log_pipeline_step(step_name, "start", logger)
+        self.state.start_step(step_name)
+        self._save_state()
+
+        try:
+            outputs = body()
+            self.state.complete_step(step_name, outputs)
+            if post_complete is not None:
+                post_complete()
+            self._save_state()
+            log_pipeline_step(step_name, "complete", logger)
+            return outputs
+        except Exception as e:
+            self.state.fail_step(step_name, e)
+            self._save_state()
+            log_pipeline_step(step_name, "error", logger)
+            raise
 
     def _get_trimmed_reads_dir(self) -> Path:
         """Get the trimmed-reads directory that dada2/swarm consume.
@@ -209,40 +324,21 @@ class PipelineOrchestrator:
         Raises:
             ValueError: If demultiplex is enabled but metadata is missing
         """
-        step_name = "demultiplex"
-
         # This step runs iff "demultiplex" is listed in pipeline.steps. If your raw inputs are
         # already demultiplexed (one FASTQ per sample), simply omit "demultiplex" from steps.
-        if not self._should_run_step(step_name):
-            step = self.state.get_step(step_name)
-            return step.outputs if step else {}
-
-        log_pipeline_step(step_name, "start", logger)
-        self.state.start_step(step_name)
-        self._save_state()
-
-        try:
+        def body() -> Dict[str, Any]:
             logger.info(f"Running demultiplexing: {self.config.demultiplex.protocol}")
 
             if self.config.demultiplex.protocol == "ligation":
-                outputs = self._run_ligation_demux()
+                return self._run_ligation_demux()
             elif self.config.demultiplex.protocol == "standard":
-                outputs = self._run_standard_demux()
+                return self._run_standard_demux()
             else:
                 raise ValueError(
                     f"Unknown demultiplex protocol: {self.config.demultiplex.protocol}"
                 )
 
-            self.state.complete_step(step_name, outputs)
-            self._save_state()
-            log_pipeline_step(step_name, "complete", logger)
-            return outputs
-
-        except Exception as e:
-            self.state.fail_step(step_name, e)
-            self._save_state()
-            log_pipeline_step(step_name, "error", logger)
-            raise
+        return self._execute_step("demultiplex", body)
 
     def _run_ligation_demux(self) -> Dict[str, Path]:
         """Run ligation-based demultiplexing."""
@@ -307,17 +403,7 @@ class PipelineOrchestrator:
             Dictionary with the trimmed-reads directory and the per-sample
             trim outputs (under the ``"samples"`` key).
         """
-        step_name = "trim"
-
-        if not self._should_run_step(step_name):
-            step = self.state.get_step(step_name)
-            return step.outputs if step else {}
-
-        log_pipeline_step(step_name, "start", logger)
-        self.state.start_step(step_name)
-        self._save_state()
-
-        try:
+        def body() -> Dict[str, Any]:
             logger.info("Running primer trimming")
 
             trimmer = StandardTrimmer(
@@ -326,7 +412,7 @@ class PipelineOrchestrator:
                 min_length=self.config.trimming.min_length,
                 overlap=self.config.trimming.overlap,
             )
-            
+
             output_dir = self.config.paths.output / "01_trim" / self.config.marker.name
 
             # Get list of samples from raw data directory
@@ -353,21 +439,12 @@ class PipelineOrchestrator:
 
                 trimmed_outputs[sample_name] = sample_outputs
 
-            outputs: Dict[str, Any] = {
+            return {
                 "trimmed_dir": output_dir,
                 "samples": trimmed_outputs,
             }
 
-            self.state.complete_step(step_name, outputs)
-            self._save_state()
-            log_pipeline_step(step_name, "complete", logger)
-            return outputs
-
-        except Exception as e:
-            self.state.fail_step(step_name, e)
-            self._save_state()
-            log_pipeline_step(step_name, "error", logger)
-            raise
+        return self._execute_step("trim", body)
 
     def run_dada2(self) -> Dict[str, Path]:
         """
@@ -376,17 +453,7 @@ class PipelineOrchestrator:
         Returns:
             Dictionary with output paths
         """
-        step_name = "dada2"
-
-        if not self._should_run_step(step_name):
-            step = self.state.get_step(step_name)
-            return step.outputs if step else {}
-
-        log_pipeline_step(step_name, "start", logger)
-        self.state.start_step(step_name)
-        self._save_state()
-
-        try:
+        def body() -> Dict[str, Any]:
             logger.info("Running DADA2 processing")
 
             trimmed_reads_dir = self._get_trimmed_reads_dir()
@@ -397,7 +464,7 @@ class PipelineOrchestrator:
                 output_base_dir=self.config.paths.output,
             )
 
-            outputs = processor.process(
+            return processor.process(
                 max_ee=self.config.dada2.filter.max_ee,
                 trunc_q=self.config.dada2.filter.trunc_q,
                 min_overlap=self.config.dada2.merge.min_overlap,
@@ -413,17 +480,11 @@ class PipelineOrchestrator:
                 collect_metrics=self.config.dada2.collect_metrics,
             )
 
-            self.state.complete_step(step_name, outputs)
-            self._validate_manifest_against_abundance("dada2")
-            self._save_state()
-            log_pipeline_step(step_name, "complete", logger)
-            return outputs
-
-        except Exception as e:
-            self.state.fail_step(step_name, e)
-            self._save_state()
-            log_pipeline_step(step_name, "error", logger)
-            raise
+        return self._execute_step(
+            "dada2",
+            body,
+            post_complete=lambda: self._validate_manifest_against_abundance("dada2"),
+        )
 
     def run_swarm(self) -> Dict[str, Path]:
         """
@@ -432,17 +493,7 @@ class PipelineOrchestrator:
         Returns:
             Dictionary with output paths
         """
-        step_name = "swarm"
-
-        if not self._should_run_step(step_name):
-            step = self.state.get_step(step_name)
-            return step.outputs if step else {}
-
-        log_pipeline_step(step_name, "start", logger)
-        self.state.start_step(step_name)
-        self._save_state()
-
-        try:
+        def body() -> Dict[str, Any]:
             logger.info("Running SWARM OTU clustering")
 
             trimmed_reads_dir = self._get_trimmed_reads_dir()
@@ -453,7 +504,7 @@ class PipelineOrchestrator:
                 output_base_dir=self.config.paths.output,
             )
 
-            outputs = processor.process(
+            return processor.process(
                 d=self.config.swarm.clustering.d,
                 fastidious=self.config.swarm.clustering.fastidious,
                 boundary=self.config.swarm.clustering.boundary,
@@ -465,17 +516,11 @@ class PipelineOrchestrator:
                 chimera_detection=self.config.swarm.chimera.method != "none",
             )
 
-            self.state.complete_step(step_name, outputs)
-            self._validate_manifest_against_abundance("swarm")
-            self._save_state()
-            log_pipeline_step(step_name, "complete", logger)
-            return outputs
-
-        except Exception as e:
-            self.state.fail_step(step_name, e)
-            self._save_state()
-            log_pipeline_step(step_name, "error", logger)
-            raise
+        return self._execute_step(
+            "swarm",
+            body,
+            post_complete=lambda: self._validate_manifest_against_abundance("swarm"),
+        )
 
     def _build_library_map(self) -> Optional[Path]:
         """Write a ``sample,library`` CSV for DADA2-by-library, derived from the manifest's
@@ -697,6 +742,7 @@ class PipelineOrchestrator:
             provenance = {
                 "dataset_name": marker,
                 "marker": marker,
+                "seednap_version": self.state.seednap_version,
                 "primer_fwd": self.config.marker.primers.forward,
                 "primer_rev": self.config.marker.primers.reverse,
                 "raw_data": str(self.config.paths.raw_data),
@@ -732,17 +778,7 @@ class PipelineOrchestrator:
         Returns:
             Dictionary with output paths
         """
-        step_name = "taxonomy"
-
-        if not self._should_run_step(step_name):
-            step = self.state.get_step(step_name)
-            return step.outputs if step else {}
-
-        log_pipeline_step(step_name, "start", logger)
-        self.state.start_step(step_name)
-        self._save_state()
-
-        try:
+        def body() -> Dict[str, Any]:
             logger.info(f"Running taxonomic assignment: {self.config.taxonomy.method}")
 
             # Get outputs from clustering step (DADA2 or SWARM)
@@ -832,20 +868,11 @@ class PipelineOrchestrator:
                 }
 
             # Run assignment
-            outputs = assigner.assign_taxonomy(
+            return assigner.assign_taxonomy(
                 query_fasta=query_fasta, asv_count_csv=asv_count_csv, **kwargs
             )
 
-            self.state.complete_step(step_name, outputs)
-            self._save_state()
-            log_pipeline_step(step_name, "complete", logger)
-            return outputs
-
-        except Exception as e:
-            self.state.fail_step(step_name, e)
-            self._save_state()
-            log_pipeline_step(step_name, "error", logger)
-            raise
+        return self._execute_step("taxonomy", body)
 
     def run_clean(self) -> Dict[str, Path]:
         """Control-decontamination step: clean the taxonomy table against its negative
@@ -1124,17 +1151,8 @@ class PipelineOrchestrator:
         active_steps = list(self.config.pipeline.steps)
         logger.info(f"Pipeline steps: {' → '.join(active_steps)}")
 
-        # Map step names to methods
-        step_methods = {
-            "demultiplex": self.run_demultiplex,
-            "trim": self.run_trim,
-            "dada2": self.run_dada2,
-            "swarm": self.run_swarm,
-            "taxonomy": self.run_taxonomy,
-            "clean": self.run_clean,
-            "export": self.run_export,
-            "report": self.run_report,
-        }
+        # Dispatch is built (and validated against VALID_STEPS) once in __init__.
+        step_methods = self._step_methods
 
         # Execute steps
         for step_name in active_steps:

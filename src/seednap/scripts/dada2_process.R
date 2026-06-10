@@ -21,7 +21,7 @@ options(bitmapType = "cairo")
 suppressMessages(suppressWarnings({
   library(dada2); packageVersion("dada2")
   library(Biostrings)
-  library(DECIPHER)
+  library(parallel)
   library(dplyr)
   library(patchwork)
   library(ggplot2)

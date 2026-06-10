@@ -70,17 +70,19 @@ class LogConfig:
         # Remove existing handlers
         root_logger.handlers.clear()
 
-        # Console handler with rich formatting
-        if console_output:
-            console_handler = RichHandler(
-                console=self.console,
-                show_time=format_style == "detailed",
-                show_path=format_style == "detailed",
-                rich_tracebacks=True,
-                tracebacks_show_locals=level == "DEBUG",
-            )
-            console_handler.setLevel(numeric_level)
-            root_logger.addHandler(console_handler)
+        # Console handler with rich formatting. Always attached so safety [WARN]s and errors stay
+        # visible on screen; in quiet mode (console_output=False) it is restricted to WARNING+ so
+        # only INFO/DEBUG chatter is silenced. This keeps the no-silent-fallback warnings on the
+        # console even under --quiet.
+        console_handler = RichHandler(
+            console=self.console,
+            show_time=format_style == "detailed",
+            show_path=format_style == "detailed",
+            rich_tracebacks=True,
+            tracebacks_show_locals=level == "DEBUG",
+        )
+        console_handler.setLevel(numeric_level if console_output else logging.WARNING)
+        root_logger.addHandler(console_handler)
 
         # File handler with detailed formatting
         if log_file:

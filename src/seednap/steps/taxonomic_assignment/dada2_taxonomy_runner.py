@@ -76,7 +76,7 @@ class Dada2TaxonomyRunner(RScriptRunner):
             multithread: Use multithreading (default: True)
             bootstrap_threshold: Min bootstrap (%) for a rank to be retained
                 (default 80, per Wang 2007 RDP standard for short rRNA reads)
-            script_path: Path to R script (default: scripts/taxo_dada2_marker.R)
+            script_path: Path to R script (default: seednap/scripts/taxo_dada2_marker.R)
             log_file: Path to log file
 
         Returns:

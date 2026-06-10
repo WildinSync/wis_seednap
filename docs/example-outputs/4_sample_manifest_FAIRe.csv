@@ -1,0 +1,6 @@
+eventID,parentEventID,eventDate,decimalLatitude,decimalLongitude,geodeticDatum,minimumDepthInMeters,maximumDepthInMeters,materialSampleID,samplingProtocol,geo_loc_name,env_broad_scale,env_local_scale,env_medium,samp_collect_method,samp_size,samp_size_unit,size_frac,samp_vol_we_dna_ext,sop,target_gene,assay_name,assay_type,seq_run_id,lib_id,pcr_plate_id,mid_forward,mid_reverse,samp_category,neg_cont_type,pos_cont_type,rel_cont_id,extraction_ID,reads_raw,reads_trimmed,reads_filtered,reads_denoised,reads_merged,reads_nonchimeric
+DAR-2025-1103,,2025-08-19,46.33994,6.91542,,,0.25,,,,,,water,,15.0,,0.45,,,teleo,teleo,metabarcoding,fw_ch_rhone_2025_teleo,,,,,sample,,,,EXP524,,,,,,
+DAR-2025-1115,,2025-08-19,46.33994,6.91542,,,0.25,,,,,,water,,15.0,,0.45,,,teleo,teleo,metabarcoding,fw_ch_rhone_2025_teleo,,,,,sample,,,,EXP524,,,,,,
+DAR-2025-1120,,2025-08-18,46.13273,7.048175,,,0.25,,,,,,water,,15.0,,0.45,,,teleo,teleo,metabarcoding,fw_ch_rhone_2025_teleo,,,,,sample,,,,EXP524,,,,,,
+Blank-ext-1,,2025-09-04,,,,,,,,,,,water,,,,,,,teleo,teleo,metabarcoding,fw_ch_rhone_2025_teleo,,,,,negative control,extraction negative,,,EXP524,,,,,,
+Blank-PCR-1,,2025-09-04,,,,,,,,,,,water,,,,,,,teleo,teleo,metabarcoding,fw_ch_rhone_2025_teleo,,,,,negative control,PCR negative,,,,,,,,,

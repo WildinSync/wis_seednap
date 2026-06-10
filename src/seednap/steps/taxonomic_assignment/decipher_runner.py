@@ -99,7 +99,7 @@ class DecipherRunner(RScriptRunner):
             query_fasta: Path to query.fasta (sequences to assign taxonomy to)
             threshold: Minimum confidence threshold (0-100, default: 60)
             processors: Number of CPU cores to use (default: 8)
-            script_path: Path to R script (default: scripts/taxo_decipher_marker.R)
+            script_path: Path to R script (default: seednap/scripts/taxo_decipher_marker.R)
             log_file: Optional path to log file
 
         Returns:

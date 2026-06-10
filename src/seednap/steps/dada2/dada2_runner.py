@@ -91,7 +91,7 @@ class Dada2Runner(RScriptRunner):
             max_len: Maximum read length (None = no filter)
             library_map: Optional path to a sample-to-library map used for
                 per-library error learning (None = no map)
-            script_path: Path to R script (default: scripts/dada2_process.R)
+            script_path: Path to R script (default: seednap/scripts/dada2_process.R)
             log_file: Path to log file
 
         Returns:

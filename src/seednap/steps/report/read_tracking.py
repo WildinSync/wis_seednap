@@ -6,7 +6,7 @@ survive each step -- from artifacts the pipeline already writes:
 - **raw / trimmed** come from the per-sample Cutadapt logs
   (``<sample>_trim_pass1.txt`` / ``_trim_pass2.txt``);
 - **DADA2 path** (``filtered -> denoised -> merged -> nonchim``) comes from the
-  ``track_reads.csv`` emitted by ``scripts/dada2_process.R``;
+  ``track_reads.csv`` emitted by ``seednap/scripts/dada2_process.R``;
 - **SWARM path** (``clustered``) comes from per-sample column sums of
   ``otu_table.csv``.
 

@@ -69,11 +69,19 @@ pip install -e .
 # --full emits the annotated reference template)
 seednap init --marker teleo --output config/markers/my_marker.yaml
 
+# Before the first run, edit the config to point at your own data:
+#   1. paths.raw_data        -> a directory of paired-end FASTQ files
+#   2. taxonomy.databases.<method> -> a reference database for the chosen method
+# A fresh config references neither, so the run fails preflight until both exist.
+
+# Check the config (and that those paths resolve on disk) before any compute:
+seednap validate config/markers/my_marker.yaml
+
 # Run the pipeline
 seednap run-pipeline config/markers/my_marker.yaml
 ```
 
-That's it. See [docs/](docs/) for configuration details, step-by-step guides, and CLI reference.
+See [docs/](docs/) for configuration details, step-by-step guides, and CLI reference.
 
 > [!TIP]
 > If a run fails partway, fix the cause and re-run with `seednap run-pipeline config.yaml --resume`
@@ -186,6 +194,10 @@ Per-step artifacts go under `<paths.output>/<NN_step>/<marker>/` (`01_trim`, `02
 
 The `<method>` token follows `taxonomy.method`, except the DADA2 taxonomy table uses `dada2RDP`.
 Run state lives at `<paths.output>/.<marker>_state.json`.
+
+For a worked example of what a finished run produces -- read tracking, OTU table,
+taxonomy table, and FAIRe sample manifest, with trimmed sample rows -- see
+[docs/example-outputs/](docs/example-outputs/).
 
 ## Reporting
 
