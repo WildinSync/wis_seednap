@@ -16,23 +16,12 @@ output FASTQs and writes the log file (which mkdir's the log dir's parent).
 
 from __future__ import annotations
 
-import importlib
-import sys
 from pathlib import Path
 
-# The eDNA server installs seednap as an editable package pointing at a
-# DIFFERENT checkout, so a plain ``import seednap`` resolves there, not to the
-# repo under test. Prepend this repo's ``src`` and drop any cached seednap
-# modules so the behavioral tests below exercise this checkout's code.
-_REPO_SRC = Path(__file__).resolve().parents[2] / "src"
-sys.path.insert(0, str(_REPO_SRC))
-for _name in list(sys.modules):
-    if _name == "seednap" or _name.startswith("seednap."):
-        del sys.modules[_name]
+from seednap.steps.trimming.trimming_pipeline import StandardTrimmer
 
-StandardTrimmer = importlib.import_module(
-    "seednap.steps.trimming.trimming_pipeline"
-).StandardTrimmer
+# Path to the production source, used only for the source-reading regression guard below.
+_REPO_SRC = Path(__file__).resolve().parents[2] / "src"
 
 # The regression guard reads the production source directly.
 _REPO_TRIMMING = (
