@@ -39,3 +39,6 @@ docs/report/
 
 # outputs_test is a symlink to the local validation dataset (see seednap-data)
 /outputs_test
+
+# Build artifacts (wheel/sdist staging)
+build/
