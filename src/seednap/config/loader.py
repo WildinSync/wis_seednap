@@ -1,4 +1,12 @@
-"""Configuration loading and validation utilities."""
+"""Load, merge, and validate a marker's YAML configuration into a PipelineConfig.
+
+This is the entry point that turns a per-marker YAML file (under ``config/markers/``) into the
+validated :class:`~seednap.config.models.PipelineConfig` the orchestrator runs from. It reads
+the YAML, optionally merges it over a defaults file (user keys win; see :func:`merge_configs`),
+and validates the result against the strict Pydantic models, humanising any validation error
+into an actionable message. It also provides the helpers behind the ``seednap validate`` and
+``seednap init`` CLI commands.
+"""
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -9,7 +17,12 @@ from seednap.config.models import PipelineConfig
 
 
 class ConfigError(Exception):
-    """Configuration error exception."""
+    """Raised for any unreadable, malformed, or invalid pipeline configuration.
+
+    Carries a human-readable, actionable message (e.g. the offending file, the closest-match
+    key suggestion, or the fix) so a configuration mistake stops the run at load time with a
+    clear explanation rather than a mid-run crash.
+    """
 
     pass
 

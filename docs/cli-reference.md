@@ -8,6 +8,12 @@ single stage standalone. For the per-stage behavior and algorithms see
 [pipeline-steps.md](pipeline-steps.md); for every config key see
 [configuration.md](configuration.md).
 
+A few terms recur below. An **ASV** (amplicon sequence variant) is an exact
+denoised sequence produced by DADA2; an **OTU** (operational taxonomic unit) is a
+cluster of similar sequences produced by SWARM. Both are rows in the final
+abundance table (one feature per row, one sample per column). The two are
+alternative, mutually exclusive feature paths.
+
 ## Where commands write
 
 `run-pipeline` writes under the canonical output tree rooted at `paths.output`
@@ -20,12 +26,23 @@ single stage standalone. For the per-stage behavior and algorithms see
 | `<output>/03_taxo/<marker>/` | Taxonomy intermediates (BLAST TSV, etc.) |
 | `<output>/04_report/<marker>/` | `read_tracking.{csv,txt}`, `step_summary.csv`, `report.html` |
 | `<output>/<marker>_<method>.csv` | Final merged taxonomy + abundance table |
+| `<output>/<marker>_<method>_cleaned.csv` | Cleaned table, written only when the `clean` step runs |
 | `<output>/<marker>_<method>_gbif.csv` | Final GBIF long-format table |
 | `<output>/.<marker>_state.json` | Pipeline state JSON (drives `--resume`) |
+| `<output>/.<marker>_config.snapshot.yaml` | Effective merged config recorded for the run |
 
 `<method>` is the `taxonomy.method` token, except the DADA2 taxonomy table uses
-`dada2RDP` (so `<marker>_dada2RDP.csv`). The standalone commands write where you
-point `-o`/`--output`; the example paths below assume the default tree.
+`dada2RDP` (so `<marker>_dada2RDP.csv`; the GBIF and cleaned files still use the
+plain `dada2` token). The standalone commands write where you point `-o`/`--output`;
+the example paths below assume the default tree.
+
+> [!NOTE]
+> Every `run-pipeline` run is reproducible from its own outputs. The effective
+> merged config (your YAML plus all defaults that were filled in) is snapshotted
+> to `<output>/.<marker>_config.snapshot.yaml`, and the running SeeDNAP version is
+> stamped into the state JSON. On `--resume`, a version mismatch between the
+> recorded and running version emits a `[WARN]` rather than silently mixing
+> outputs from two versions.
 
 ## Global Options
 
@@ -129,7 +146,7 @@ seednap swarm MARKER TRIMMED_READS_DIR [OPTIONS]
 | `-d, --distance INTEGER` | `1` | SWARM distance threshold |
 | `-t, --threads INTEGER` | `4` | CPU threads |
 | `--no-fastidious` | off | Disable singleton refinement |
-| `--no-chimera-filter` | off | Skip de novo chimera detection |
+| `--no-chimera-filter` | off | Skip de novo chimera detection (chimeras are artificial sequences formed when two parent templates fuse during PCR) |
 
 ```bash
 seednap swarm teleo /path/to/trimmed -o outputs -d 1 -t 8
@@ -164,10 +181,11 @@ seednap dada2 teleo /path/to/trimmed -o outputs --max-ee 2.0 --trunc-q 11
 ```
 
 `--library-map` learns a separate DADA2 error model per sequencing library and
-merges the per-library tables (2+ libraries denoised separately then identical
-ASVs collapsed; a single library uses the standard pooled path). In `run-pipeline`
-this is the `dada2.per_library` config field (default `false`), with libraries
-grouped from the manifest's `seq_run_id`. See [configuration.md](configuration.md).
+merges the per-library tables (2+ libraries denoised separately, then identical
+ASVs collapsed; with a single library, or when the flag is omitted, the standard
+single-batch path runs). In `run-pipeline` this is the `dada2.per_library` config
+field (default `false`), with libraries grouped from the manifest's `seq_run_id`.
+See [configuration.md](configuration.md).
 
 > [!NOTE]
 > The standalone `dada2` command always collects ASV metrics (writes
@@ -179,9 +197,16 @@ grouped from the manifest's `seq_run_id`. See [configuration.md](configuration.m
 
 ## `clean`
 
-Decontaminate an abundance table against its negative controls. Control identity
-(extraction vs PCR blanks, extraction batches) is derived from a FAIRe manifest
-migrated from the field metadata.
+Decontaminate an abundance table against its negative controls. A negative
+control (or "blank") is a sample carried through extraction and/or PCR with no
+biological template; any sequence it contains is contamination. SeeDNAP derives
+control identity (extraction vs PCR blanks, and which extraction batch each
+belongs to) from a FAIRe sample manifest migrated from the field metadata.
+
+Cleaning is presence-based and operates at the OTU/ASV level: any OTU/ASV that has
+reads in an applicable control is removed from (`subtract`) or annotated in (`flag`)
+the samples that control covers. An extraction blank cleans only the biological
+samples that share its `extraction_ID` batch; a PCR blank cleans the whole dataset.
 
 ```
 seednap clean ABUNDANCE_CSV FIELD_METADATA OUTPUT [OPTIONS]
@@ -201,14 +226,20 @@ seednap clean outputs/02_swarm/teleo/otu_table.csv \
 ```
 
 In a full run this is the `cleaning:` config section (`mode`, default `flag`); it
-runs only when `clean` is listed in `pipeline.steps`. See
-[configuration.md](configuration.md).
+runs only when `clean` is listed in `pipeline.steps`, after `taxonomy` and before
+`export`. There it cleans the taxonomy-annotated table (not the standalone
+`ABUNDANCE_CSV` argument) and takes control identity from `report.sample_metadata`;
+if that is not set, cleaning is skipped with a `[WARN]` and export uses the
+uncleaned table. See [configuration.md](configuration.md).
 
 ---
 
 ## `blast`
 
-BLAST taxonomic assignment with LCA resolution.
+BLAST taxonomic assignment with LCA resolution. When a query sequence has several
+good database hits that disagree on identity, the **LCA** (lowest common ancestor)
+is the most specific rank on which those hits still agree, so the sequence is
+assigned only as deeply as the evidence supports.
 
 ```
 seednap blast QUERY_FASTA REF_FASTA ASV_COUNT [OPTIONS]
@@ -278,6 +309,7 @@ Additional options:
 
 | Option | Default | Description |
 |---|---|---|
+| `--config PATH` | | Marker YAML config: reuse its `taxonomy.databases.<method>` block (database path plus method parameters) so the standalone result matches `run-pipeline`. Any explicit option below overrides the config value |
 | `-o, --output-dir PATH` | `outputs/` | Base output directory |
 | `--threshold-species FLOAT` | `99.0` | Species %ID threshold (BLAST) |
 | `--threshold-genus FLOAT` | `96.0` | Genus %ID threshold (BLAST) |
@@ -294,10 +326,15 @@ Additional options:
 
 > [!NOTE]
 > Unlike the standalone `blast` command, the `assign-taxonomy` BLAST path does NOT
-> expose `--task`, `--perc-identity`, `--qcov-hsp-perc`, or `--evalue`; those stay
-> at their defaults (`task=megablast`, `perc_identity=80`, `qcov_hsp_perc=80`,
-> `evalue=1e-25`). Use the `blast` command, or set them in the `taxonomy.databases.blast`
-> config, to change them.
+> expose `--task`, `--perc-identity`, `--qcov-hsp-perc`, or `--evalue` as flags; left
+> on their own they stay at their defaults (`task=megablast`, `perc_identity=80`,
+> `qcov_hsp_perc=80`, `evalue=1e-25`). To change them, pass `--config <marker.yaml>`
+> (which carries those `taxonomy.databases.blast` values), or use the `blast` command.
+
+> [!IMPORTANT]
+> When you pass `--config`, the config's `taxonomy.method` must equal the positional
+> METHOD argument. Asking for one method with a config written for another is rejected
+> with an error rather than silently applying the wrong parameter set.
 
 ---
 
@@ -322,7 +359,10 @@ seednap format-gbif outputs/teleo_blast.csv -f blast -o outputs/teleo_gbif.csv
 
 ## `create-gbif`
 
-Build a full DarwinCore-compliant GBIF occurrence CSV.
+Build a full DarwinCore-compliant GBIF occurrence CSV. DarwinCore is the GBIF
+standard vocabulary for biodiversity records (each row is an occurrence with
+columns like `eventID`, `decimalLatitude`, `eventDate`, `scientificName`); this is
+the file you submit to GBIF.
 
 ```
 seednap create-gbif TAXONOMY_RESULTS SAMPLE_METADATA PROJECT_METADATA OUTPUT [OPTIONS]
@@ -330,8 +370,8 @@ seednap create-gbif TAXONOMY_RESULTS SAMPLE_METADATA PROJECT_METADATA OUTPUT [OP
 
 | Option | Default | Description |
 |---|---|---|
-| `--summarise-pcr / --no-summarise-pcr` | off | Aggregate PCR replicates per sample |
-| `--skip-enrichment` | off | Skip NCBI/WORMS taxonomy enrichment |
+| `--summarise-pcr / --no-summarise-pcr` | off | Aggregate PCR replicates per sample (strips the `_XX` replicate suffix from the eventID and sums reads) |
+| `--skip-enrichment` | off | Skip NCBI/WORMS taxonomy enrichment (kingdom/phylum lookup) |
 
 ```bash
 seednap create-gbif outputs/teleo_gbif.csv metadata/samples.csv metadata/project.csv outputs/teleo_darwincore.csv
@@ -340,6 +380,14 @@ seednap create-gbif outputs/teleo_gbif.csv metadata/samples.csv metadata/project
 > [!WARNING]
 > Enrichment needs `NCBI_API_KEY` in `.env` (see `.env.example`). Without a key,
 > NCBI throttles the step heavily; pass `--skip-enrichment` to skip it entirely.
+
+> [!IMPORTANT]
+> Sample metadata is joined onto the occurrences by `eventID`, on a normalized key
+> so that a taxonomy table whose eventIDs were rewritten by R's `make.names()`
+> (dots for dashes) still matches the canonical dashed eventIDs in the metadata; the
+> output carries the canonical form. If some eventIDs do not match, a `[WARN]` names
+> them and they get blank location/date fields. If ZERO eventIDs match, the build
+> raises rather than emit a file with every coordinate and date blank.
 
 See [gbif-export.md](gbif-export.md) for the metadata column requirements.
 

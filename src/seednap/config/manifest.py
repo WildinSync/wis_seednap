@@ -88,7 +88,18 @@ NEG_CONT_TYPES = (
 
 
 def _is_other(value: str) -> bool:
-    """A FAIRe ``other:``-prefixed free-text value."""
+    """Test whether a value uses the FAIRe ``other:`` free-text escape hatch.
+
+    FAIRe controlled-vocabulary slots permit a value outside the fixed list by
+    prefixing it with the literal ``other:`` followed by free text; this is how a
+    real-world control type that is not in the standard vocabulary is recorded.
+
+    Args:
+        value: A candidate vocabulary value (leading/trailing whitespace tolerated).
+
+    Returns:
+        True if the value begins (case-insensitively) with ``other:``.
+    """
     return value.strip().lower().startswith("other:")
 
 
@@ -112,12 +123,29 @@ class ControlClass(BaseModel):
 
     @property
     def is_control(self) -> bool:
-        """True for any non-``sample`` category (negative/positive control, PCR standard)."""
+        """Report whether this classification is a control rather than a field sample.
+
+        Any non-``sample`` FAIRe category (negative control, positive control, or PCR
+        standard) is a control: a deliberately non-biological well used to detect
+        contamination or to calibrate, not a collected environmental specimen.
+
+        Returns:
+            True for any category other than ``sample``.
+        """
         return self.samp_category != "sample"
 
     @property
     def is_pcr_blank(self) -> bool:
-        """PCR blanks legitimately carry a null extraction_ID (whole-dataset scope)."""
+        """Report whether this control is a PCR-stage (rather than extraction-stage) blank.
+
+        A PCR blank (no-template control added at amplification) legitimately has no
+        extraction batch, so a null ``extraction_ID`` is expected for it and it is scoped
+        to the whole dataset rather than to one extraction batch.
+
+        Returns:
+            True if the matched classification rule was a PCR-blank rule
+            (``blank-pcr``, ``pcr-nc``, or ``cpcr``).
+        """
         return self.rule in ("blank-pcr", "pcr-nc", "cpcr")
 
 
@@ -169,10 +197,19 @@ def classify_control(sample_name: str) -> ControlClass:
     The single source of truth for control identity. A strict superset of the legacy
     ``blank|CNEG|CMET|CEXT`` regex: it additionally catches ``CPCR``, ``EXT_NC``,
     ``PCR_NC``, ``water`` and the underscore/space-separated and run-suffixed forms.
+    Controls (blanks, negative/positive controls) must be distinguished from biological
+    samples so their reads are treated as contamination signal, not as detected taxa.
 
-    Returns a :class:`ControlClass`; when ``warn_reason`` is set, or when a control-looking
-    name fails to classify (``rule == 'unclassified-control-like'``), the caller must emit a
-    ``[WARN]`` so the assumption is recorded rather than silently applied.
+    Args:
+        sample_name: The raw sample/library name as it appears in the lab CSVs (matched
+            case-insensitively against its stripped form; None is tolerated).
+
+    Returns:
+        A :class:`ControlClass` carrying ``samp_category``, the matching
+        ``neg_cont_type``/``pos_cont_type`` (if any), the ``rule`` that matched, and an
+        optional ``warn_reason``. When ``warn_reason`` is set, or when a control-looking
+        name fails to classify (``rule == 'unclassified-control-like'``), the caller must
+        emit a ``[WARN]`` so the assumption is recorded rather than silently applied.
     """
     name = (sample_name or "").strip()
     for pattern, kwargs in _CONTROL_RULES:
@@ -280,7 +317,18 @@ class SampleManifestRow(BaseModel):
 
         Runs before typing so that ``"NA"`` in a numeric column becomes ``None`` (not a
         string that would later coerce to NaN and skip range checks) and so that the INSDC
-        missing-value tokens on control rows are tolerated.
+        missing-value tokens FAIRe mandates on control rows (e.g.
+        ``not applicable: control sample``) are tolerated.
+
+        Args:
+            data: The raw input passed to the model; only a dict (one CSV record) is
+                rewritten, anything else is returned untouched.
+
+        Returns:
+            For a dict input, a new dict where string cells are stripped and any
+            missing-value token (compared case-insensitively against
+            :data:`MISSING_VALUE_TOKENS`) is replaced with None; otherwise the input
+            unchanged.
         """
         if not isinstance(data, dict):
             return data
@@ -299,7 +347,23 @@ class SampleManifestRow(BaseModel):
     @field_validator("samp_category")
     @classmethod
     def _validate_samp_category(cls, v: str) -> str:
-        """Accept a FAIRe samp_category from the controlled vocabulary or an ``other:`` value."""
+        """Validate the FAIRe ``samp_category`` against its controlled vocabulary.
+
+        ``samp_category`` is the top-level FAIRe distinction between a biological sample
+        and the various control types; an unrecognised value here would silently mislabel
+        a control as a sample (or vice versa).
+
+        Args:
+            v: The proposed samp_category value.
+
+        Returns:
+            The value unchanged when it is one of :data:`SAMP_CATEGORIES` or an
+            ``other:``-prefixed value.
+
+        Raises:
+            ValueError: The value is neither in the controlled vocabulary nor an
+                ``other:`` value.
+        """
         if v in SAMP_CATEGORIES or _is_other(v):
             return v
         raise ValueError(
@@ -309,7 +373,23 @@ class SampleManifestRow(BaseModel):
     @field_validator("neg_cont_type")
     @classmethod
     def _validate_neg_cont_type(cls, v: Optional[str]) -> Optional[str]:
-        """Accept a MIxS neg_cont_type from the controlled vocabulary, an ``other:`` value, or None."""
+        """Validate the MIxS ``neg_cont_type`` against its controlled vocabulary.
+
+        ``neg_cont_type`` records which negative control a blank is (field, extraction,
+        PCR, etc.), which determines what contamination it can detect and which samples
+        it should be associated with.
+
+        Args:
+            v: The proposed neg_cont_type value, or None if absent.
+
+        Returns:
+            The value unchanged when it is None, one of :data:`NEG_CONT_TYPES`, or an
+            ``other:``-prefixed value.
+
+        Raises:
+            ValueError: A non-None value that is neither in the controlled vocabulary nor
+                an ``other:`` value.
+        """
         if v is None or v in NEG_CONT_TYPES or _is_other(v):
             return v
         raise ValueError(
@@ -319,12 +399,26 @@ class SampleManifestRow(BaseModel):
     @field_validator("eventDate")
     @classmethod
     def _validate_event_date(cls, v: Optional[str]) -> Optional[str]:
-        """Canonical manifests carry ISO-8601 dates only (the migrator normalises legacy
-        dotted forms). Reject anything else loudly rather than risk a silent mis-parse.
+        """Validate that ``eventDate`` is a real ISO-8601 (partial) calendar date.
 
-        The format regex only checks digit shape, so the month/day range is checked
-        explicitly here: an out-of-range value like ``2024-13`` or ``2024-00-45`` is a
-        silent data-corruption path into GBIF and must be rejected, not accepted.
+        Canonical manifests carry ISO-8601 dates only (the migrator normalises legacy
+        dotted forms). Reject anything else loudly rather than risk a silent mis-parse,
+        because the collection date flows through to GBIF. The format regex only checks
+        digit shape, so the month/day range and full-date calendar validity are checked
+        explicitly here: an out-of-range value like ``2024-13`` or ``2024-00-45``, or an
+        impossible date like Feb 30, is a silent data-corruption path into GBIF and must
+        be rejected.
+
+        Args:
+            v: The proposed eventDate, expected as ``YYYY``, ``YYYY-MM`` or
+                ``YYYY-MM-DD``, or None if absent.
+
+        Returns:
+            The value unchanged when it is None or a valid (partial) ISO-8601 date.
+
+        Raises:
+            ValueError: The value is non-ISO-8601 in shape, has an out-of-range month
+                (not 01-12) or day (not 01-31), or is a calendar-impossible full date.
         """
         if v is None:
             return v
@@ -357,12 +451,23 @@ class SampleManifestRow(BaseModel):
 
     @model_validator(mode="after")
     def _validate_conditional_requirements(self) -> "SampleManifestRow":
-        """FAIRe Mandatory-if rules surfaced as errors naming the offending eventID.
+        """Enforce FAIRe Mandatory-if rules tying a control category to its control type.
 
+        FAIRe requires that a negative control declare which negative it is
+        (``neg_cont_type``) and a positive control declare its ``pos_cont_type``; without
+        these a control cannot be correctly associated with the samples it guards.
         Note: eventDate is *not* hard-required here. A manifest can legitimately be built
         at the demux stage (identity + library + tag) before field metadata supplies dates;
         a missing eventDate on a biological sample is surfaced as a loud
         :meth:`SampleManifest.check_completeness` ``[WARN]``, not a constructor failure.
+
+        Returns:
+            The validated model instance (``self``), unchanged.
+
+        Raises:
+            ValueError: A negative control is missing ``neg_cont_type``, or a positive
+                control is missing ``pos_cont_type`` (message names the offending
+                eventID).
         """
         if self.samp_category == "negative control" and not self.neg_cont_type:
             raise ValueError(
@@ -378,7 +483,15 @@ class SampleManifestRow(BaseModel):
 
     @property
     def is_control(self) -> bool:
-        """True for any non-``sample`` category (negative/positive control, PCR standard)."""
+        """Report whether this row is a control rather than a biological field sample.
+
+        Any non-``sample`` FAIRe ``samp_category`` (negative control, positive control,
+        or PCR standard) is a control well used to detect contamination or calibrate,
+        not a collected environmental specimen.
+
+        Returns:
+            True for any ``samp_category`` other than ``sample``.
+        """
         return self.samp_category != "sample"
 
 
@@ -393,28 +506,62 @@ class SampleManifest:
     """A validated collection of :class:`SampleManifestRow`, plus provenance + accessors."""
 
     def __init__(self, rows: List[SampleManifestRow], source: Optional[Path] = None) -> None:
-        """Hold validated rows and the optional source path they came from."""
+        """Hold validated rows and the optional source path they came from.
+
+        Args:
+            rows: The already-validated manifest rows, one per sample-library.
+            source: The CSV path the rows were loaded from, kept for provenance; None
+                when the manifest was assembled in memory (e.g. by the migrator).
+        """
         self.rows = rows
         self.source = source
 
     def __len__(self) -> int:
+        """Return the number of rows (sample-libraries) in the manifest.
+
+        Returns:
+            The row count.
+        """
         return len(self.rows)
 
     # -- accessors --------------------------------------------------------- #
     def event_ids(self) -> List[str]:
-        """Return the eventID of every row, in order."""
+        """Return the eventID (canonical sample key) of every row, in row order.
+
+        Returns:
+            A list of eventIDs; may contain repeats if a sample appears in more than
+            one sequencing run.
+        """
         return [r.eventID for r in self.rows]
 
     def controls(self) -> List[SampleManifestRow]:
-        """Return the control rows (any non-``sample`` samp_category)."""
+        """Return the control rows (any non-``sample`` samp_category).
+
+        Controls are negative/positive controls and PCR standards: non-biological wells
+        used to assess contamination and calibration.
+
+        Returns:
+            The subset of rows that are controls, in row order.
+        """
         return [r for r in self.rows if r.is_control]
 
     def biological_samples(self) -> List[SampleManifestRow]:
-        """Return the biological (non-control) sample rows."""
+        """Return the biological (non-control) sample rows.
+
+        Returns:
+            The subset of rows whose ``samp_category`` is ``sample``, in row order.
+        """
         return [r for r in self.rows if not r.is_control]
 
     def seq_run_ids(self) -> List[str]:
-        """Return the distinct seq_run_id values in first-seen order."""
+        """Return the distinct seq_run_id values in first-seen order.
+
+        ``seq_run_id`` is the DADA2-by-library error-model batch key: samples sharing a
+        run are denoised together, so this is the set of error-model batches.
+
+        Returns:
+            The unique seq_run_id values, ordered by first appearance.
+        """
         seen: Dict[str, None] = {}
         for r in self.rows:
             seen.setdefault(r.seq_run_id, None)
@@ -422,12 +569,25 @@ class SampleManifest:
 
     # -- serialisation ----------------------------------------------------- #
     def to_dataframe(self) -> pd.DataFrame:
-        """Serialise the manifest to a DataFrame in canonical column order."""
+        """Serialise the manifest to a DataFrame in canonical column order.
+
+        Returns:
+            A DataFrame with one row per sample-library and columns equal to
+            :data:`MANIFEST_COLUMNS` (the model field declaration order). Missing
+            optional values appear as None.
+        """
         df = pd.DataFrame([r.model_dump() for r in self.rows], columns=list(MANIFEST_COLUMNS))
         return df
 
     def to_csv(self, path: Path) -> Path:
-        """Write the manifest to ``path`` (creating parents) and return the path."""
+        """Write the manifest to ``path`` as CSV, creating parent directories.
+
+        Args:
+            path: Destination CSV path; parent directories are created if absent.
+
+        Returns:
+            The path written to (the same ``path``, as a :class:`Path`).
+        """
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         self.to_dataframe().to_csv(path, index=False)
@@ -435,8 +595,15 @@ class SampleManifest:
         return path
 
     def check_controls(self) -> None:
-        """Emit a [WARN] when a run carries no controls, so the absence is on the record
-        (a run with no negative controls cannot have its contamination assessed)."""
+        """Emit a ``[WARN]`` when the manifest carries no control samples.
+
+        A run with no negative controls cannot have its contamination assessed, so the
+        absence is logged loudly rather than passing silently (the no-silent-fallbacks
+        policy).
+
+        Returns:
+            None. Side effect only: logs a ``[WARN]`` if no controls are present.
+        """
         if not self.controls():
             logger.warning(
                 "[WARN] manifest: expected=at least one negative/positive control sample, "
@@ -445,10 +612,16 @@ class SampleManifest:
             )
 
     def check_completeness(self) -> None:
-        """Emit a [WARN] for biological samples missing eventDate.
+        """Emit a ``[WARN]`` for biological samples missing ``eventDate``.
 
-        eventDate is required before GBIF export but may legitimately be absent in a manifest
-        built at the demux stage; this surfaces the gap loudly without blocking construction.
+        eventDate (collection date) is required before GBIF export but may legitimately
+        be absent in a manifest built at the demux stage, before field metadata is
+        joined; this surfaces the gap loudly without blocking construction. Up to five
+        offending eventIDs are named, with a count of any remainder.
+
+        Returns:
+            None. Side effect only: logs a ``[WARN]`` if any biological sample lacks an
+            eventDate.
         """
         missing = [r.eventID for r in self.biological_samples() if not r.eventDate]
         if missing:
@@ -468,11 +641,20 @@ def load_manifest(path: Path) -> SampleManifest:
     row model -- not pandas -- owns null handling. Every row is validated through
     :class:`SampleManifestRow`; all row errors are aggregated into one message naming the
     offending rows. Duplicate ``(eventID, seq_run_id)`` keys raise (one row per
-    sample-library). Emits a ``[WARN]`` if the manifest has no controls.
+    sample-library, since a sample appears once per sequencing run). Emits a ``[WARN]`` if
+    the manifest has no controls and a ``[WARN]`` if any biological sample lacks an
+    eventDate.
+
+    Args:
+        path: Path to the canonical manifest CSV.
+
+    Returns:
+        A :class:`SampleManifest` of validated rows, with ``source`` set to ``path``.
 
     Raises:
         FileNotFoundError: the manifest does not exist.
-        ValueError: the manifest is empty, has duplicate keys, or any row fails validation.
+        ValueError: the manifest is empty, has duplicate ``(eventID, seq_run_id)`` keys,
+            or any row fails validation (the message lists every bad row).
     """
     path = Path(path)
     if not path.exists():
@@ -532,7 +714,14 @@ class AbundanceValidationResult(BaseModel):
 
     @property
     def ok(self) -> bool:
-        """True when no abundance sample is missing from the manifest."""
+        """Report whether every abundance sample column has a matching manifest row.
+
+        An orphan column (a sample in the OTU/abundance table with no manifest row) is
+        the dangerous silent-ID-mismatch case; its absence means the cross-check passed.
+
+        Returns:
+            True when there are no orphan abundance columns.
+        """
         return not self.orphan_abundance_columns
 
 
@@ -555,11 +744,22 @@ def _abundance_sample_columns(
 ) -> List[str]:
     """Return the per-sample columns of an abundance/OTU table.
 
-    SeeDNAP OTU tables are sequences x samples; the sample columns are every column that is
-    not OTU metadata. A column whose name matches a manifest ``eventID`` is ALWAYS kept (a
-    real sample literally named ``total``/``order`` must not be silently dropped by the
-    metadata denylist, and if such a name is also a meta token we ``[WARN]``). Reads only
-    the header (``nrows=0``) with ``utf-8-sig``.
+    SeeDNAP OTU tables are sequences x samples (one row per OTU/ASV, one column per
+    sample plus OTU-level metadata such as taxonomy or total read count). The sample
+    columns are every column that is not OTU metadata. A column whose name matches a
+    manifest ``eventID`` is ALWAYS kept (a real sample literally named ``total``/``order``
+    must not be silently dropped by the metadata denylist, and if such a name is also a
+    meta token a ``[WARN]`` is logged). Reads only the header (``nrows=0``).
+
+    Args:
+        abundance_csv: Path to the abundance/OTU CSV; read with ``utf-8-sig``.
+        id_column: Name of the OTU/ASV identifier column to exclude, if known; when None,
+            identifier columns are excluded via the metadata denylist instead.
+        known_event_ids: The manifest eventIDs; any column matching one of these is kept
+            as a sample column even if it collides with a metadata token.
+
+    Returns:
+        The list of column names judged to be per-sample columns, in header order.
     """
     known = known_event_ids or set()
     header = pd.read_csv(abundance_csv, nrows=0, encoding="utf-8-sig")
@@ -589,14 +789,31 @@ def validate_against_abundance(
 ) -> AbundanceValidationResult:
     """Cross-check the manifest's ``eventID`` set against an abundance table's sample columns.
 
-    This is the up-front silent-ID-mismatch guard (the no-silent-fallbacks policy): an abundance column
-    with no manifest row (an *orphan*, e.g. a ``Blank-PCR-3`` present in the OTU table but
-    absent from the field metadata) would otherwise be silently treated as an unknown
-    field sample. Orphans are reported and ``[WARN]``-logged (or raised if
-    ``raise_on_orphan``); manifest rows absent from the abundance table are reported
-    separately as harmless (the pipeline may legitimately drop a control to zero).
+    This is the up-front silent-ID-mismatch guard (the no-silent-fallbacks policy): an
+    abundance column with no manifest row (an *orphan*, e.g. a ``Blank-PCR-3`` present in
+    the OTU table but absent from the field metadata) would otherwise be silently treated
+    as an unknown field sample, injecting contamination reads into the dataset. Orphans
+    are reported and ``[WARN]``-logged (or raised if ``raise_on_orphan``); manifest rows
+    absent from the abundance table are reported separately as harmless (the pipeline may
+    legitimately drop a control to zero reads).
 
-    Both files are read with ``utf-8-sig``.
+    Args:
+        manifest: The validated manifest whose eventID set is the source of truth.
+        abundance_csv: Path to the abundance/OTU CSV to check against (read with
+            ``utf-8-sig``).
+        id_column: Name of the OTU/ASV identifier column to exclude from the sample
+            columns, if known.
+        raise_on_orphan: When True, raise instead of only warning if any orphan column
+            is found.
+
+    Returns:
+        An :class:`AbundanceValidationResult` with the detected sample columns, the
+        orphan columns (abundance samples missing from the manifest), and the extra
+        manifest rows (eventIDs absent from the abundance table).
+
+    Raises:
+        FileNotFoundError: the abundance table does not exist.
+        ValueError: ``raise_on_orphan`` is True and one or more orphan columns are found.
     """
     abundance_csv = Path(abundance_csv)
     if not abundance_csv.exists():

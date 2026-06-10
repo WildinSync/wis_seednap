@@ -50,25 +50,27 @@ If you manage dependencies yourself, install the package and then the external t
 pip install -e .
 ```
 
-External tools and R packages:
+External tools and R packages (these are the exact channels and pins used in `environment.yml`):
 
 ```bash
 # Primer trimming
-pip install cutadapt==5.2
+conda install -c bioconda cutadapt=5.2
 
-# SWARM clustering + read merging, dereplication, chimera detection
+# SWARM OTU clustering + read merging, dereplication, chimera detection
+# (chimeras are artefactual sequences formed when two real templates fuse during PCR)
 conda install -c bioconda vsearch=2.30.5 swarm=3.1.6
 
 # BLAST taxonomy
 conda install -c bioconda blast=2.17.0
 
-# DADA2 / DECIPHER R stack (all five are loaded by the R scripts)
-conda install -c bioconda r-base=4.2 r-tidyverse r-patchwork \
-  bioconductor-biostrings bioconductor-dada2 bioconductor-decipher
+# DADA2 / DECIPHER R stack. r-base, r-tidyverse and r-patchwork come from
+# conda-forge; the bioconductor-* packages come from bioconda, so give both channels.
+conda install -c conda-forge -c bioconda r-base=4.2 r-tidyverse=2.0.0 r-patchwork=1.2.0 \
+  bioconductor-biostrings=2.66.0 bioconductor-dada2=1.26.0 bioconductor-decipher=2.26.0
 ```
 
 > [!WARNING]
-> Install the full R stack, not just dada2 and DECIPHER. The R scripts also `library(Biostrings)`, `library(tidyverse)` (dplyr/ggplot2), and `library(patchwork)`; a partial install passes `pip install` and import checks but fails at runtime the first time an R step loads a missing package. Also note that `environment.yml` does not install OBITools (the optional `ecotag` method); set it up separately if you need it, per [ecotag-setup.md](ecotag-setup.md).
+> Install the full R stack, not just dada2 and DECIPHER. The R scripts also call `library(Biostrings)`, `library(dplyr)`, `library(ggplot2)` (the last two ship with `r-tidyverse`), and `library(patchwork)`; a partial install passes `pip install -e .` and Python import checks but fails at runtime the first time an R step loads a missing package. Note also that `environment.yml` does not install OBITools (the optional `ecotag` taxonomy method); set it up separately if you need it, per [ecotag-setup.md](ecotag-setup.md).
 
 ## Requirements
 
@@ -81,7 +83,7 @@ Defined in `pyproject.toml`:
 | `pydantic` | >= 2.0 | Configuration validation |
 | `pyyaml` | >= 6.0 | YAML config parsing |
 | `click` | >= 8.0 | CLI framework |
-| `pandas` | >= 2.0 | Data manipulation |
+| `pandas` | >= 2.2 | Data manipulation |
 | `numpy` | >= 1.24 | Numerical operations |
 | `biopython` | >= 1.80 | Sequence handling |
 | `rich` | >= 13.0 | Console output formatting |
@@ -98,23 +100,23 @@ The conda environment pins each tool to the version validated on the ETH ELE eDN
 
 | Tool | Pinned version | Required for | Install |
 |---|---|---|---|
-| Cutadapt | 5.2 | Primer trimming | `pip install cutadapt==5.2` |
+| Cutadapt | 5.2 | Primer trimming | `conda install -c bioconda cutadapt=5.2` |
 | VSEARCH | 2.30.5 | Read merging, dereplication, chimera detection | `conda install -c bioconda vsearch=2.30.5` |
-| SWARM | 3.1.6 | OTU clustering | `conda install -c bioconda swarm=3.1.6` |
+| SWARM | 3.1.6 | OTU clustering (groups near-identical reads into operational taxonomic units) | `conda install -c bioconda swarm=3.1.6` |
 | BLAST+ | 2.17.0 | BLAST taxonomic assignment | `conda install -c bioconda blast=2.17.0` |
-| R | 4.2 | DADA2 and DECIPHER methods | `conda install -c bioconda r-base=4.2` |
+| R | 4.2 | DADA2 (ASV inference) and DECIPHER taxonomy methods | `conda install -c conda-forge r-base=4.2` |
 
 ### R packages (DADA2 / DECIPHER)
 
-Loaded by the R scripts and pinned in `environment.yml`:
+Loaded by the R scripts and pinned in `environment.yml`. ASV inference and merging come from DADA2; DECIPHER is the alternative taxonomy classifier; the rest support sequence I/O and the diagnostic plots:
 
-| Package | Source |
-|---|---|
-| `dada2` | Bioconductor |
-| `DECIPHER` | Bioconductor |
-| `Biostrings` | Bioconductor |
-| `tidyverse` (dplyr, ggplot2) | conda-forge |
-| `patchwork` | conda-forge |
+| conda package | Pinned version | Source |
+|---|---|---|
+| `bioconductor-dada2` | 1.26.0 | Bioconductor |
+| `bioconductor-decipher` | 2.26.0 | Bioconductor |
+| `bioconductor-biostrings` | 2.66.0 | Bioconductor |
+| `r-tidyverse` (provides `dplyr`, `ggplot2`) | 2.0.0 | conda-forge |
+| `r-patchwork` | 1.2.0 | conda-forge |
 
 ### ecotag (optional)
 
@@ -134,7 +136,14 @@ The repository ships a pytest suite that exercises the post-processing logic wit
 pytest
 ```
 
-Tests cover BLAST LCA / cascade-null behavior, the DarwinCore builder, SWARM OTU non-zero invariants, the shared taxonomy post-processor, demultiplex robustness, ecotag discovery, runner signatures, utility coverage, and YAML round-tripping. Add new tests under `tests/unit/` or `tests/integration/` when you change load-bearing logic.
+Tests cover, among other things:
+
+- BLAST lowest-common-ancestor (LCA) behavior: when several reference sequences match a feature equally well, the assignment is collapsed to the lowest taxonomic rank they all agree on (e.g. genus rather than a guessed species), including the case where that resolves to nothing.
+- The DarwinCore builder (DarwinCore is the GBIF biodiversity record standard that the `create-gbif` export targets).
+- SWARM OTU non-zero invariants: a guard that the OTU (operational taxonomic unit, a cluster of near-identical reads treated as one feature) by sample table is not silently all zeros, which would mean reads were dropped during clustering.
+- The shared taxonomy post-processor, demultiplex robustness, ecotag tool discovery, runner signatures, config-snapshot reproducibility, R-script packaging, and YAML round-tripping.
+
+Add new tests under `tests/unit/` or `tests/integration/` when you change load-bearing logic.
 
 ## See also
 

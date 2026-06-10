@@ -1,4 +1,18 @@
-"""Build DarwinCore-compliant GBIF occurrence CSVs from eDNA pipeline outputs."""
+"""Build DarwinCore-compliant GBIF occurrence CSVs from eDNA pipeline outputs.
+
+Final step of the formatting stage, run by the ``create-gbif`` command. It joins
+the long-format taxonomy table from ``format-gbif`` with the field sample
+metadata (date, coordinates, environment medium) and the project metadata
+(marker, recorder, references) into a single table that follows the GBIF
+DarwinCore eDNA-Occurrence schema, ready for submission to GBIF. Along the way it
+removes negative/positive control samples (blanks must never be published as
+real biodiversity records), drops non-target taxa, fills higher taxonomy via
+``TaxonomyEnricher``, maps the environment medium to standard ENVO ontology
+terms, and assigns a stable ``occurrenceID``. Per project policy it fails loudly
+(raises, or logs ``[WARN]``) rather than writing blank required fields or
+silently dropping samples, because a sample of environmental DNA cannot be
+re-collected.
+"""
 
 import hashlib
 import logging
@@ -38,7 +52,22 @@ _DWC_REQUIRED_FIELDS = (
 
 
 def _load_template(filename: str) -> pd.DataFrame:
-    """Load a bundled CSV template from the seednap.data.templates package."""
+    """Load a bundled CSV template from the seednap.data.templates package.
+
+    Reads a reference CSV shipped inside the installed package (e.g. the primer
+    list), using ``importlib.resources`` so it resolves whether the package is
+    installed normally or zipped.
+
+    Args:
+        filename: File name of the template inside ``seednap.data.templates``
+            (e.g. ``"primers_list.csv"``).
+
+    Returns:
+        The template parsed as a DataFrame (columns as defined in the CSV).
+
+    Raises:
+        FileNotFoundError: If the named template is not bundled in the package.
+    """
     ref = resources.files("seednap.data.templates").joinpath(filename)
     with resources.as_file(ref) as path:
         return pd.read_csv(path)
@@ -310,7 +339,22 @@ class DarwinCoreBuilder:
 
     @staticmethod
     def _validate_dates(series: pd.Series) -> None:
-        """Raise ValueError if any date doesn't match yyyy[.mm[.dd]]."""
+        """Raise ValueError if any date doesn't match yyyy[.mm[.dd]].
+
+        GBIF expects ISO-style partial dates; this enforces the accepted formats
+        before the values are written to the ``eventDate`` column. NA values are
+        ignored (an unknown collection date is allowed to be blank).
+
+        Args:
+            series: The ``eventDate`` column from the sample metadata.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: If any non-NA value does not match ``yyyy``, ``yyyy.mm``,
+                or ``yyyy.mm.dd``; the message lists the offending values.
+        """
         pattern = re.compile(r"^\d{4}(\.\d{2}){0,2}$")
         invalid = series.dropna().apply(lambda d: not pattern.match(str(d)))
         if invalid.any():
@@ -322,7 +366,23 @@ class DarwinCoreBuilder:
 
     @staticmethod
     def _summarise_pcr_replicates(df: pd.DataFrame) -> pd.DataFrame:
-        """Strip PCR replicate suffix (_XX) from eventID and sum reads."""
+        """Strip PCR replicate suffix (_XX) from eventID and sum reads.
+
+        A field sample is often PCR-amplified several times (technical
+        replicates named like ``DAR-2023-0025_01``, ``_02``); this collapses
+        those replicates back to one sample by removing the ``_NN`` suffix and
+        summing the read counts per OTU. The per-sequence contaminant flag is
+        kept as a group key so it survives the aggregation.
+
+        Args:
+            df: Long-format taxonomy table with an ``eventID`` column (possibly
+                replicate-suffixed), ``nb_reads``, and the taxonomic / sequence
+                columns; optionally ``is_contaminant_candidate``.
+
+        Returns:
+            A new DataFrame with the replicate suffix removed from ``eventID``
+            and ``nb_reads`` summed over each (taxonomy, sequence, sample) group.
+        """
         df = df.copy()
         df["sampleID"] = df["eventID"].str.replace(
             r"_\d{2}$", "", regex=True
@@ -367,6 +427,14 @@ class DarwinCoreBuilder:
         ``[WARN]`` is emitted naming the eventID so a possible leaked control is
         visible before GBIF submission rather than silent (no-silent-fallbacks
         policy).
+
+        Args:
+            df: Long-format taxonomy table with an ``eventID`` column.
+
+        Returns:
+            A copy of ``df`` with rows whose ``eventID`` classifies as a control
+            removed and the index reset. Control-looking but unclassifiable
+            eventIDs are kept (and warned about).
         """
         from seednap.config.manifest import classify_control
 
@@ -400,7 +468,19 @@ class DarwinCoreBuilder:
 
     @staticmethod
     def _sum_reads(df: pd.DataFrame) -> pd.DataFrame:
-        """Add nb_reads_total column (total reads per eventID)."""
+        """Add nb_reads_total column (total reads per eventID).
+
+        Computes each sample's total read count across all its OTUs, which GBIF
+        records as ``sampleSizeValue`` (the denominator for relative abundance).
+        The per-OTU ``nb_reads`` is left unchanged.
+
+        Args:
+            df: Long-format table with ``eventID`` and ``nb_reads`` columns.
+
+        Returns:
+            A copy of ``df`` with an added ``nb_reads_total`` column giving the
+            sum of ``nb_reads`` over each ``eventID``.
+        """
         totals = df.groupby("eventID")["nb_reads"].transform("sum")
         df = df.copy()
         df["nb_reads_total"] = totals
@@ -416,6 +496,13 @@ class DarwinCoreBuilder:
         metadata sheet can disagree purely on separator characters. Mapping every
         run of ``.``/``_``/``-`` to a single dash and upper-casing makes the two
         forms compare equal without altering the genuine sample identity.
+
+        Args:
+            value: A raw eventID (any type; NaN/None tolerated).
+
+        Returns:
+            The normalized key: separators collapsed to single dashes, trimmed,
+            upper-cased. Returns "" for a missing value.
         """
         if pd.isna(value):
             return ""
@@ -432,6 +519,21 @@ class DarwinCoreBuilder:
         metadata-match rate is checked: a low rate emits a ``[WARN]`` and a zero
         rate raises -- a join that drops all location/date data must never pass
         silently (no-silent-fallbacks).
+
+        Args:
+            results: Long-format taxonomy table with an ``eventID`` column.
+            sample_meta: Per-sample metadata with an ``eventID`` column and the
+                location/date/environment fields to attach.
+
+        Returns:
+            ``results`` left-joined with ``sample_meta`` (one row per input
+            results row), the ``eventID`` set to the canonical metadata form
+            where matched, and the internal join-key columns dropped.
+
+        Raises:
+            ValueError: If two metadata eventIDs collide after separator
+                normalization (would fan-out reads), or if the join matches zero
+                of the occurrence rows (would blank all spatial/temporal data).
         """
         results = results.copy()
         sample_meta = sample_meta.copy()
@@ -514,6 +616,16 @@ class DarwinCoreBuilder:
         (G5 fix). The previous scheme used a per-run `taxon_seqindex` which
         meant resubmitting the same dataset to GBIF created new occurrences
         instead of replacing the old ones.
+
+        Args:
+            df: Merged occurrence table with ``eventID`` and (ideally)
+                ``sequence`` columns.
+            marker: Marker name, used as the ID prefix.
+
+        Returns:
+            A Series of occurrence IDs ``"{marker}:{eventID}:{hash}"``, where the
+            hash is the first 8 hex chars of the SHA-256 of the upper-cased
+            sequence, or ``"NOSEQ"`` when the sequence is empty.
         """
         seq = df.get("sequence", pd.Series("", index=df.index))
         seq_hash = seq.fillna("").astype(str).apply(
@@ -529,8 +641,21 @@ class DarwinCoreBuilder:
     def _map_env_medium(term: str) -> str:
         """Convert environment medium term to ENVO standard.
 
+        Maps a free-text sample medium (``water``, ``soil``, ``sediment``, ...)
+        to the corresponding ENVO ontology term GBIF expects in ``env_medium``.
         Unrecognised values raise (G3). Previously they silently defaulted to
         'water', which silently mislabelled terrestrial samples in GBIF.
+
+        Args:
+            term: The raw ``env_medium`` value from the sample metadata (NaN
+                tolerated).
+
+        Returns:
+            The matching ENVO term string, or "" for a missing value.
+
+        Raises:
+            ValueError: If ``term`` is non-empty but not one of the recognised
+                media in ``_ENVO_TERMS``.
         """
         if pd.isna(term):
             return ""
@@ -554,8 +679,24 @@ class DarwinCoreBuilder:
     ) -> None:
         """Sanity-check sample metadata before merging.
 
-        Raises ValueError on missing required columns, out-of-range coordinates, or
-        unknown env_medium.
+        Validates the field sample sheet up front so a bad header or
+        out-of-range coordinate fails with a clear message instead of producing a
+        malformed GBIF record. Checks the required columns are present, latitude
+        is in [-90, 90] and longitude in [-180, 180], and every ``env_medium``
+        value maps to a known ENVO term.
+
+        Args:
+            sample_meta: The loaded per-sample metadata DataFrame.
+            sample_metadata_path: Source path of that CSV, used in error
+                messages.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: If a required column (``eventID``, ``eventDate``,
+                ``env_medium``) is missing, a coordinate is out of range, or an
+                ``env_medium`` value is not a recognised ENVO term.
         """
         # env_medium is required: build() maps it to an ENVO term by direct indexing,
         # so a missing column must fail here with a clear message, not a raw KeyError later.
@@ -604,7 +745,27 @@ class DarwinCoreBuilder:
     def _validate_project_metadata(
         project_meta: pd.DataFrame, project_metadata_path: Path
     ) -> None:
-        """Sanity-check project metadata before building the GBIF output."""
+        """Sanity-check project metadata before building the GBIF output.
+
+        The project metadata is a single-row table describing the run (marker,
+        recorder, identification remarks/references). This confirms the required
+        columns exist, that there is exactly one data row, and that none of the
+        required values are blank, so the GBIF submission is not built on missing
+        provenance.
+
+        Args:
+            project_meta: The loaded project-metadata DataFrame (expected one
+                data row).
+            project_metadata_path: Source path of that CSV, used in error
+                messages.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: If a required column is missing, the table has no data
+                row, or any required field is empty/NA.
+        """
         required = ("marker", "recordedby", "identificationRemarks", "identificationReferences")
         missing = [c for c in required if c not in project_meta.columns]
         if missing:
@@ -639,7 +800,23 @@ class DarwinCoreBuilder:
 
     @staticmethod
     def _check_required_fields(out: pd.DataFrame) -> None:
-        """Verify every DwC-required column has data before writing (G1)."""
+        """Verify every DwC-required column has data before writing (G1).
+
+        GBIF rejects an occurrence file whose required DarwinCore fields are
+        blank, so this is the last guard before the CSV is written. It first
+        fails if there are no occurrence rows at all (everything got filtered
+        out), then checks each required field is non-blank in at least one row.
+
+        Args:
+            out: The assembled DarwinCore output DataFrame about to be written.
+
+        Returns:
+            None.
+
+        Raises:
+            ValueError: If ``out`` has zero rows, or if any field in
+                ``_DWC_REQUIRED_FIELDS`` is missing or blank in every row.
+        """
         # Zero-row check FIRST: on an empty frame `(series == "").all()` is True
         # for every column, so the blank-field loop would otherwise report all
         # required fields as 'blank in every row' and misattribute the cause to a

@@ -10,8 +10,10 @@ The `report` step runs when `report` is listed in `pipeline.steps` (it is in the
 
 Reporting only reads artifacts the pipeline already produced. It never alters the run, and a reporting failure is logged as `[WARN]` and never fails the pipeline.
 
+The read-tracking table keys off the feature path that produced the abundance table, so the report step needs a completed `dada2` or `swarm` step in the same run. If neither has completed, the step is skipped with a `[WARN]` (it is not an error).
+
 > [!NOTE]
-> `report.html_report` has no effect unless `report` is in `pipeline.steps`. The whole step is gated first: if `report` is not listed, `run_report` returns early before reading `html_report`.
+> `report.html_report` has no effect unless `report` is in `pipeline.steps`. The run loop only dispatches stages that are listed, so when `report` is absent the report step never runs and `html_report` is never read. The HTML toggle is checked only inside the report step, after the read-tracking table has been written.
 
 ## Artifacts
 
@@ -26,10 +28,12 @@ By default these go to `<paths.output>/04_report/<marker>/`. Set `report.output_
 ## Read-tracking table
 
 The table records per-sample read counts at each stage. The stages depend on
-the clustering path:
+the feature-generation path. SWARM produces OTUs (operational taxonomic units: sequences clustered by similarity); DADA2 produces ASVs (amplicon sequence variants: exact sequences resolved by an error model, no similarity clustering):
 
 - **SWARM:** `raw -> trimmed -> clustered`
 - **DADA2:** `raw -> trimmed -> filtered -> denoised -> merged -> nonchim`
+
+For DADA2, `denoised` is reads after the error model corrects sequencing errors, `merged` is forward/reverse reads joined into one amplicon, and `nonchim` is reads left after chimeras (artefactual sequences formed when two real templates join during PCR) are removed.
 
 | Source | Counts |
 |---|---|
@@ -73,7 +77,7 @@ This is the "reads and ASVs/OTUs lost at each step" table commonly reported in e
 
 A single self-contained `.html` file (no external assets, no CDN, no JavaScript; charts are embedded as base64 PNGs) styled like a typeset scientific paper. A sticky top navigation bar carries one button per section; clicking a button shows that panel (pure-CSS tabs: one panel visible at a time on screen, all panels expanded when printed).
 
-Six sections are always present; four are conditional on their input data being available:
+Seven sections are always present; three are conditional on their input data being available:
 
 | # | Section | Contents | Condition |
 |---|---|---|---|
@@ -85,13 +89,15 @@ Six sections are always present; four are conditional on their input data being 
 | 6 | OTU / feature QC | Chimera classification and sequence-length distribution | Only on the SWARM path (full OTU table present) |
 | 7 | Controls & contamination | Features detected in negative controls | Always |
 | 8 | Run provenance | Per-step status and duration from the run state JSON | Only if state steps are present |
-| 9 | Run log | Complete console transcript, colorized by level | Only if a run log is resolved |
+| 9 | Run log | Complete console transcript, colorized by level | Always (shows an explanatory note if no run log was resolved) |
 | 10 | Notes & methods | Definitions and the thresholds used | Always |
 
-> [!NOTE]
-> The numbering above is the maximum (at-most-ten) layout. The Taxonomic-assignment, OTU/feature-QC, Run-provenance, and Run-log tabs appear only when their inputs exist, so the tab set and its numbering vary between runs.
+A few terms used in these sections: *richness* is the number of distinct features (ASVs or OTUs) detected in a sample; *best-hit identity* is the BLAST percent identity of a feature's top reference match (higher means a closer match to a known sequence); *occupancy* is the number of biological samples a species was detected in. A feature with no usable taxonomy is reported as `Unassigned` and is never counted as a real taxon.
 
-Figures use a publication style (Computer Modern serif via matplotlib, a restrained grey + single sea-green accent palette). For runs with more than 50 samples, the per-sample retention bar chart becomes a retention-distribution histogram (the table still lists every sample).
+> [!NOTE]
+> The numbering above is the maximum (at-most-ten) layout. The Taxonomic-assignment, OTU/feature-QC, and Run-provenance tabs appear only when their inputs exist, so the tab set and its numbering vary between runs. (The Run-log tab is always present; when no log is resolved it shows an explanatory note instead of a transcript.)
+
+Figures use a publication style (Computer Modern serif via matplotlib, a restrained grey + single sea-green accent palette). For runs with more than 50 samples, the per-sample bar charts (retention and richness) become distribution histograms instead, since one bar per sample would be unreadably tall; the tables still list every sample.
 
 > [!WARNING]
 > `matplotlib` is a required runtime dependency (a normal `pip install` always pulls it). If a custom or minimal install lacks it, figure rendering fails: the report still renders with text and tables but no charts, and emits a `[WARN]`. Do not treat matplotlib as optional.
@@ -107,13 +113,13 @@ In an orchestrator run the log is wired automatically. For the standalone `repor
 So scientists can tell what the dataset is and where/when it was collected, the report summarizes provenance from three sources:
 
 - **Pipeline config** (always present in an orchestrator run): dataset name, marker, primers, raw-data path, reference DB.
-- **Field metadata CSV** (optional, `report.sample_metadata`): sampling location (lat/lon centroid + range), distinct sites, site names / basin / ecosystem / water body / environment, sampling-date range, depth, institution, laboratory. Controls (samples named `Blank*`) are excluded from the geography.
+- **Field metadata CSV** (optional, `report.sample_metadata`): sampling location (lat/lon centroid + range), distinct sites, site names / basin / ecosystem / water body / environment, sampling-date range, depth, institution, laboratory. Negative controls (blanks: samples that should contain no biological DNA, used to detect contamination) are excluded from the geography. Controls are recognized by the lab naming conventions in the manifest (`Blank*`, `CNEG`/`CEXT`/`CMET`/`CPCR`, `EXT_NC`/`PCR_NC`, `water*`), not a literal `Blank` prefix alone.
 - **Project metadata CSV** (optional, `report.project_metadata`): recorder, sequencing method, reference DB, assignment method.
 
 If no field/project metadata is provided, the section says so explicitly rather than omitting it silently.
 
 > [!NOTE]
-> When `report.sample_metadata` is set, the run also cross-checks the derived manifest's eventIDs against the abundance table's sample columns. A mismatch (e.g. an unlabelled `Blank-PCR-3` column) emits a `[WARN]`. The check is warn-only and never alters or fails the run.
+> When `report.sample_metadata` is set, the run cross-checks the manifest derived from that field metadata against the abundance table's sample columns. This check runs immediately after the feature step (DADA2 or SWARM) completes, not at report time; an eventID set mismatch (e.g. an unlabelled `Blank-PCR-3` column) emits a `[WARN]`. The check is warn-only and never alters or fails the run.
 
 ## Configuration
 

@@ -1,7 +1,12 @@
 """SWARM clustering algorithm wrapper.
 
-Provides a Python interface around the SWARM binary for OTU clustering
-of dereplicated amplicon sequences.
+Thin Python interface around the external ``swarm`` binary, used by the SWARM
+OTU path (``steps/swarm/``). SWARM clusters dereplicated amplicon sequences
+into OTUs (Operational Taxonomic Units, groups of near-identical sequences
+standing in for putative taxa) using a single-linkage algorithm bounded by a
+small distance threshold ``d``, rather than a fixed global similarity cutoff.
+The SwarmProcessor calls this after vsearch dereplication and before building
+the OTU table.
 """
 
 import logging
@@ -42,7 +47,15 @@ class SwarmClusterer:
         self._check_availability()
 
     def _check_availability(self) -> None:
-        """Check that swarm is installed."""
+        """Verify the swarm binary is installed and runnable.
+
+        Preflights with ``shutil.which`` so a missing binary yields actionable
+        guidance, then runs ``swarm --version`` to confirm it executes.
+
+        Raises:
+            SwarmError: If swarm is not on PATH, or if ``swarm --version``
+                fails to run.
+        """
         # Preflight with shutil.which so a missing binary is reported with
         # actionable guidance regardless of how a given swarm build handles a
         # `--version` exit code (some builds print the version then exit
@@ -100,7 +113,9 @@ class SwarmClusterer:
             - struct_file: Internal cluster structure
 
         Raises:
-            SwarmError: If clustering fails
+            FileNotFoundError: If ``input_fasta`` does not exist.
+            SwarmError: If swarm exits non-zero (commonly a d>1 with
+                fastidious config mismatch, or input missing ;size= annotations).
         """
         input_fasta = Path(input_fasta)
         output_dir = Path(output_dir)

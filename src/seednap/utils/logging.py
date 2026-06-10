@@ -1,4 +1,13 @@
-"""Logging configuration and utilities."""
+"""Logging configuration and utilities.
+
+Central logging setup for the pipeline. Every CLI command and the orchestrator
+route their output through here so a run produces one consistent log stream:
+a Rich-formatted console handler (kept at WARNING+ even in quiet mode so the
+no-silent-fallback [WARN] messages stay visible) and an optional per-marker
+file handler at logs/<marker>_pipeline_run.log. This supports the
+reproducibility requirement that every run be reconstructable from its log.
+Lives in seednap/utils/ alongside the subprocess and R-runner helpers.
+"""
 
 import logging
 from pathlib import Path
@@ -24,13 +33,37 @@ class LogConfig:
     _initialized: bool = False
 
     def __new__(cls) -> "LogConfig":
-        """Ensure only one instance exists."""
+        """Return the single shared LogConfig instance (singleton).
+
+        Args:
+            None.
+
+        Returns:
+            The one cached LogConfig instance, creating it on first call.
+
+        Raises:
+            None.
+        """
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self) -> None:
-        """Initialize logging configuration (only once)."""
+        """Initialize logging configuration, running its body only once.
+
+        Creates the cached stderr Console and sets default level/log-file
+        state on the first construction; subsequent constructions return early
+        (guarded by `_initialized`) so the Console is reused for the process.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+
+        Raises:
+            None.
+        """
         if LogConfig._initialized:
             return
 
@@ -47,16 +80,31 @@ class LogConfig:
         console_output: bool = True,
     ) -> logging.Logger:
         """
-        Configure logging for the application.
+        Configure root logging for the application.
+
+        Resets the root logger's handlers and attaches a fresh Rich console
+        handler (and a file handler when `log_file` is given). May be called
+        more than once; each call re-applies the handlers (last call wins for
+        level and file). The console handler is forced to WARNING+ when
+        `console_output` is False so safety [WARN] messages remain visible
+        under quiet mode while INFO/DEBUG chatter is suppressed.
 
         Args:
-            level: Logging level (DEBUG, INFO, WARNING, ERROR)
-            log_file: Optional path to log file
-            format_style: Log format style (simple, detailed, json)
-            console_output: Whether to output logs to console
+            level: Logging level name (DEBUG, INFO, WARNING, ERROR);
+                unrecognised values fall back to INFO.
+            log_file: Optional path to a log file; its parent directory is
+                created if needed and the file is opened in append mode.
+            format_style: Log format style ('simple', 'detailed', or 'json').
+                'detailed' adds timestamp/path on the console; 'json' uses a
+                JSON-shaped (not escape-safe) file format.
+            console_output: If False, the console handler is limited to
+                WARNING and above; if True it uses `level`.
 
         Returns:
-            Configured root logger
+            The configured root logger.
+
+        Raises:
+            None.
         """
         # Convert string level to logging constant
         numeric_level = getattr(logging, level.upper(), logging.INFO)
@@ -119,11 +167,18 @@ def get_logger(name: str) -> logging.Logger:
     """
     Get a logger with the specified name.
 
+    Thin wrapper over logging.getLogger so modules import logger access from
+    one place; the returned logger inherits the root handlers configured by
+    setup_logging.
+
     Args:
-        name: Logger name (usually __name__ of the module)
+        name: Logger name (usually __name__ of the calling module).
 
     Returns:
-        Logger instance
+        The logging.Logger instance for that name.
+
+    Raises:
+        None.
     """
     return logging.getLogger(name)
 
@@ -135,16 +190,25 @@ def setup_logging(
     console_output: bool = True,
 ) -> logging.Logger:
     """
-    Set up logging configuration (convenience function).
+    Set up logging configuration (module-level convenience function).
+
+    Obtains the shared LogConfig singleton and delegates to its setup_logging.
+    Both cli.py and the orchestrator call this; the singleton ensures the
+    stderr Console is shared while handlers are refreshed on each call.
 
     Args:
-        level: Logging level (DEBUG, INFO, WARNING, ERROR)
-        log_file: Optional path to log file
-        format_style: Log format style (simple, detailed, json)
-        console_output: Whether to output logs to console
+        level: Logging level name (DEBUG, INFO, WARNING, ERROR);
+            unrecognised values fall back to INFO.
+        log_file: Optional path to a log file (append mode; parent created).
+        format_style: Log format style ('simple', 'detailed', or 'json').
+        console_output: Whether INFO/DEBUG logs reach the console; if False,
+            the console handler is limited to WARNING and above.
 
     Returns:
-        Configured root logger
+        The configured root logger.
+
+    Raises:
+        None.
     """
     config = LogConfig()
     return config.setup_logging(
@@ -154,15 +218,25 @@ def setup_logging(
 
 def log_pipeline_step(step_name: str, status: str = "start", logger: Optional[logging.Logger] = None) -> None:
     """
-    Log a pipeline step.
+    Emit a one-line log message marking a pipeline step transition.
+
+    A convenience helper for recording when a step (trimming, DADA2, SWARM,
+    taxonomy, formatting) starts, completes, or errors, so the run log reads as
+    a sequence of step boundaries.
 
     Args:
-        step_name: Name of the pipeline step
+        step_name: Name of the pipeline step.
         status: Status of the step. "start" and "complete" log at INFO,
             "error" logs at ERROR. Any other status string is accepted and
             logged generically at INFO ("Pipeline step <name>: <status>");
             no status value is rejected.
-        logger: Logger instance (uses root if None)
+        logger: Logger instance to use; the root logger is used if None.
+
+    Returns:
+        None.
+
+    Raises:
+        None.
     """
     if logger is None:
         logger = logging.getLogger()

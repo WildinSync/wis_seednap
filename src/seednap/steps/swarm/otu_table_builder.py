@@ -1,11 +1,18 @@
-"""Build OTU contingency table from SWARM clustering outputs.
+"""Build the OTU contingency table from SWARM clustering outputs.
 
-Parses SWARM output files (representatives, stats, swarm membership, chimera
-detection) and per-sample FASTA files to produce a full OTU contingency table
-and DADA2-compatible normalized outputs for downstream taxonomy assignment.
+Final step of the SWARM OTU path (``steps/swarm/``), run after vsearch
+dereplication, SWARM clustering, and chimera detection. Parses the SWARM
+output files (representatives, stats, swarm membership, chimera detection)
+and the per-sample FASTA files, then assembles a full OTU contingency table
+(one row per OTU, one read-count column per sample) and the DADA2-compatible
+normalized outputs (query FASTA + abundance CSV) that feed downstream
+taxonomy assignment.
 
-Implements the OTU contingency table construction from the published SWARM
-amplicon clustering pipeline.
+An OTU (Operational Taxonomic Unit) is a cluster of near-identical amplicon
+sequences standing in for one putative taxon; the contingency table records
+how many reads of each OTU were seen in each sample. The construction follows
+the OTU contingency table approach of the published SWARM amplicon clustering
+pipeline.
 """
 
 import logging
@@ -30,10 +37,15 @@ _RESERVED_METADATA_COLS = (
 
 class OtuTableBuilder:
     """
-    Build OTU contingency table from SWARM clustering results.
+    Build the OTU contingency table from SWARM clustering results.
 
-    Parses all SWARM output files and per-sample abundance data to create
-    a comprehensive OTU table with per-sample read counts.
+    An OTU (Operational Taxonomic Unit) is a cluster of near-identical
+    amplicon sequences treated as one putative taxon. After SWARM groups
+    the dereplicated reads into OTUs, this class stitches the various SWARM
+    output files back together with the per-sample abundance data to produce
+    one wide table: one row per OTU, OTU metadata columns plus one read-count
+    column per sample. That table is the SWARM-path equivalent of a DADA2 ASV
+    table and feeds downstream taxonomy assignment.
     """
 
     def build(
@@ -45,17 +57,40 @@ class OtuTableBuilder:
         sample_fastas: Sequence[Union[str, Path]],
     ) -> pd.DataFrame:
         """
-        Build the full OTU contingency table.
+        Build the full OTU contingency table from the SWARM outputs.
+
+        Joins the four SWARM/vsearch artefacts (representative sequences,
+        per-OTU statistics, cluster membership, chimera calls) with the
+        per-sample dereplicated FASTAs to assemble one row per OTU, ranked
+        by total abundance, with a read count for every sample.
 
         Args:
-            representatives_fasta: Sorted representative sequences FASTA
-            stats_file: SWARM statistics file
-            swarm_file: SWARM cluster membership file
-            uchime_file: UCHIME chimera detection results (None to skip)
-            sample_fastas: Per-sample dereplicated FASTA files
+            representatives_fasta: Path to the abundance-sorted seed
+                (representative) sequences FASTA, one sequence per OTU.
+            stats_file: Path to the SWARM ``-s`` statistics file (per-OTU
+                mass, cloud size, seed ID, seed abundance).
+            swarm_file: Path to the SWARM ``-o`` cluster membership file
+                (seed amplicon followed by its member amplicons).
+            uchime_file: Path to the vsearch UCHIME chimera-detection table,
+                or None to skip chimera annotation (all OTUs get status "NA").
+            sample_fastas: Per-sample dereplicated FASTA files carrying the
+                ``;size=N`` abundance of each amplicon in each sample.
 
         Returns:
-            DataFrame with OTU table (sorted by decreasing total abundance)
+            DataFrame with one row per OTU, sorted by decreasing total
+            abundance. Columns: OTU (1-based rank), total (summed read mass),
+            cloud (count of unique amplicons in the cluster), amplicon (seed
+            ID), length (seed sequence length in bp), abundance (seed read
+            count), chimera (Y/N/?/NA), spread (number of samples the OTU
+            occurs in), sequence (seed nucleotide sequence), and one integer
+            column per sample holding that sample's read count for the OTU.
+
+        Raises:
+            ValueError: If any sample name collides with a reserved OTU-table
+                metadata column (see ``_RESERVED_METADATA_COLS``); such a
+                collision would overwrite metadata and silently drop the
+                sample from the abundance matrix, so it fails loudly instead.
+            FileNotFoundError: If any input file path does not exist.
         """
         representatives = self._parse_representatives(representatives_fasta)
         stats, sorted_seeds, seeds = self._parse_stats(stats_file)
@@ -127,19 +162,31 @@ class OtuTableBuilder:
         """
         Write normalized outputs compatible with the taxonomy assignment step.
 
-        Drops only OTUs flagged as definite chimeras (chimera == "Y").
-        Borderline ("?") and unscored ("NA") OTUs are intentionally KEPT, so
-        tightening this filter would change the clean OTU count. Produces:
-        - query.fasta: representative sequences for taxonomy search
-        - otu_table.csv: abundance matrix (same format as DADA2 seqtab_clean_t.csv)
+        Chimeras are artefactual sequences formed when two distinct templates
+        fuse during PCR; keeping them would inflate the OTU count with false
+        taxa. This drops only OTUs flagged as definite chimeras (chimera ==
+        "Y"). Borderline ("?") and unscored ("NA") OTUs are intentionally
+        KEPT, so tightening this filter would change the clean OTU count.
+        Produces:
+        - query.fasta: representative sequences for the taxonomy search.
+        - otu_table.csv: abundance matrix (same format as DADA2
+          seqtab_clean_t.csv) so downstream steps treat SWARM and DADA2
+          outputs identically.
 
         Args:
-            otu_table: Full OTU table DataFrame from build()
-            query_fasta_path: Output path for representative sequences FASTA
-            abundance_csv_path: Output path for abundance CSV
+            otu_table: Full OTU table DataFrame from build(), including the
+                "chimera", "sequence", "OTU", and per-sample columns.
+            query_fasta_path: Output path for the representative sequences
+                FASTA (one record per kept OTU, header ``>OTU_<n>``).
+            abundance_csv_path: Output path for the abundance CSV (first
+                column "sequence", remaining columns are per-sample counts).
 
         Returns:
-            Tuple of (query_fasta_path, abundance_csv_path)
+            Tuple of (query_fasta_path, abundance_csv_path) as Path objects,
+            pointing at the two files just written.
+
+        Raises:
+            OSError: If either output path cannot be created or written.
         """
         query_fasta_path = Path(query_fasta_path)
         abundance_csv_path = Path(abundance_csv_path)
@@ -189,6 +236,13 @@ class OtuTableBuilder:
         vsearch_runner.py) and swarm ``--seeds`` output is unwrapped. If that
         flag is ever dropped, wrapped sequences would be silently truncated
         to their first line.
+
+        Args:
+            fasta_path: Path to the swarm representative-seeds FASTA (one OTU seed
+                per record, header ``>amplicon;size=N``).
+
+        Returns:
+            Mapping of amplicon ID (the ``;size=`` suffix stripped) to its sequence.
         """
         fasta_path = Path(fasta_path)
         separator = ";size="
@@ -225,6 +279,9 @@ class OtuTableBuilder:
         with ``--usearch-abundance`` (see swarm_runner.py); it is stripped so
         the seed matches IDs from the other parsers.
 
+        Args:
+            stats_path: Path to the SWARM ``-s`` statistics file (one row per OTU).
+
         Returns:
             Tuple of:
             - stats: seed → total mass
@@ -254,7 +311,18 @@ class OtuTableBuilder:
 
     @staticmethod
     def _parse_swarms(swarm_path: Union[str, Path]) -> Dict[str, List[str]]:
-        """Parse SWARM membership file: seed → list of member amplicon IDs."""
+        """Parse the SWARM membership file: seed amplicon -> its member amplicons.
+
+        Each line of the swarm output lists the amplicons clustered into one OTU; the
+        first token is the seed (OTU representative), the rest are members.
+
+        Args:
+            swarm_path: Path to the SWARM cluster-membership file (one OTU per line).
+
+        Returns:
+            Mapping of seed amplicon ID to the list of member amplicon IDs in that OTU
+            (each ID has its ``;size=`` suffix stripped).
+        """
         swarm_path = Path(swarm_path)
         swarms = {}
 
@@ -296,6 +364,14 @@ class OtuTableBuilder:
         Blank lines are skipped quietly; a non-blank line with no query-label
         column is logged with a [WARN] and skipped (never dropped silently); a
         line that has a label but no classification column defaults to "NA".
+
+        Args:
+            uchime_path: Path to the vsearch ``--uchimeout`` table.
+
+        Returns:
+            Mapping of amplicon ID (``;size=`` stripped) to its chimera status:
+            ``"Y"`` (chimera), ``"N"`` (not a chimera), ``"?"`` (borderline), or
+            ``"NA"`` (label present but unscored).
         """
         uchime_path = Path(uchime_path)
         uchime = {}

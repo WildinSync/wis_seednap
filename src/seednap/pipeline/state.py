@@ -26,7 +26,21 @@ logger = logging.getLogger(__name__)
 
 
 def _serialize_outputs(obj: Any) -> Any:
-    """Recursively convert Path objects to strings for JSON serialization."""
+    """Recursively convert Path objects to strings for JSON serialization.
+
+    Step outputs often contain ``Path`` values (output files); the state is
+    persisted as JSON, which has no native path type, so paths are normalized to
+    strings before storage. Walks dicts, lists, and tuples; tuples become lists.
+
+    Args:
+        obj: Any value to serialize. Paths become strings; dicts/lists/tuples are
+            walked recursively; all other values are returned unchanged.
+
+    Returns:
+        The same structure with every ``Path`` replaced by its string form and
+        every tuple replaced by a list. Non-container, non-Path values pass
+        through untouched.
+    """
     if isinstance(obj, Path):
         return str(obj)
     elif isinstance(obj, dict):
@@ -37,7 +51,12 @@ def _serialize_outputs(obj: Any) -> Any:
 
 
 class StepStatus(str, Enum):
-    """Status of a pipeline step."""
+    """Lifecycle status of a single pipeline step.
+
+    A string-valued enum so the value serializes directly into the state JSON.
+    These are the states the orchestrator transitions a step through, and which
+    ``--resume`` reads back to decide what to re-run.
+    """
 
     PENDING = "pending"  # Not yet started
     RUNNING = "running"  # Currently executing
@@ -47,7 +66,13 @@ class StepStatus(str, Enum):
 
 
 class StepState(BaseModel):
-    """State of a single pipeline step."""
+    """Recorded state of a single pipeline step (one stage of one run).
+
+    Captures the step's status, timing, error message, output file paths, and
+    free-form metadata. This is the per-step unit that makes a run auditable and
+    resumable: it records what ran, how long it took, what it produced, and why it
+    failed if it did.
+    """
 
     name: str = Field(..., description="Step name (e.g., 'trim', 'dada2')")
     status: StepStatus = Field(default=StepStatus.PENDING, description="Step status")
@@ -69,17 +94,33 @@ class StepState(BaseModel):
     )
 
     def start(self) -> None:
-        """Mark step as started."""
+        """Mark this step as RUNNING and stamp the start time.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         self.status = StepStatus.RUNNING
         self.started_at = datetime.now()
         logger.info(f"Step '{self.name}' started")
 
     def complete(self, outputs: Optional[Dict[str, Any]] = None) -> None:
         """
-        Mark step as completed.
+        Mark this step as COMPLETED, stamp the time, and record its outputs.
+
+        Sets the completion time, computes the duration from the recorded start time
+        (if any), and stores the step's outputs with Path values normalized to
+        strings for JSON serialization.
 
         Args:
-            outputs: Optional dict of output files/data from the step
+            outputs: Optional dict of output files/data from the step. Path values
+                are converted to strings before storage. If falsy, outputs are left
+                unchanged.
+
+        Returns:
+            None.
         """
         self.status = StepStatus.COMPLETED
         self.completed_at = datetime.now()
@@ -101,10 +142,17 @@ class StepState(BaseModel):
 
     def fail(self, error: Union[str, Exception]) -> None:
         """
-        Mark step as failed.
+        Mark this step as FAILED, stamp the time, and record the error message.
+
+        Sets the completion time, computes the duration from the recorded start time
+        (if any), and stores the error's string form so a resumed run and the audit
+        log can show why this step broke.
 
         Args:
-            error: Error message or exception
+            error: The error message (str) or exception; stored as its string form.
+
+        Returns:
+            None.
         """
         self.status = StepStatus.FAILED
         self.completed_at = datetime.now()
@@ -119,10 +167,14 @@ class StepState(BaseModel):
 
     def skip(self, reason: Optional[str] = None) -> None:
         """
-        Mark step as skipped.
+        Mark this step as SKIPPED, optionally recording why.
 
         Args:
-            reason: Optional reason for skipping
+            reason: Optional human-readable reason for the skip; stored under the
+                ``skip_reason`` metadata key when provided.
+
+        Returns:
+            None.
         """
         self.status = StepStatus.SKIPPED
         if reason:
@@ -131,7 +183,13 @@ class StepState(BaseModel):
 
 
 class PipelineState(BaseModel):
-    """Complete pipeline execution state."""
+    """Complete execution state of one marker's pipeline run.
+
+    The source of truth for "did this run finish, and what did each step do?".
+    Holds the marker, the seednap version that wrote it, config/snapshot paths,
+    overall timing, and the per-step StepState map. Serialized to JSON so a run can
+    be audited after the fact and resumed from the last good step.
+    """
 
     marker: str = Field(..., description="Marker name")
     seednap_version: Optional[str] = Field(
@@ -214,11 +272,14 @@ class PipelineState(BaseModel):
         self, step_name: str, outputs: Optional[Dict[str, Any]] = None
     ) -> None:
         """
-        Mark a step as completed.
+        Mark a named step as completed and clear it as the current step.
 
         Args:
-            step_name: Name of the step
-            outputs: Optional outputs from the step
+            step_name: Name of the step to complete.
+            outputs: Optional dict of output files/data to record on the step.
+
+        Returns:
+            None. No-op if the named step is not present in the state.
         """
         step = self.steps.get(step_name)
         if step:
@@ -228,11 +289,14 @@ class PipelineState(BaseModel):
 
     def fail_step(self, step_name: str, error: Union[str, Exception]) -> None:
         """
-        Mark a step as failed.
+        Mark a named step as failed and clear it as the current step.
 
         Args:
-            step_name: Name of the step
-            error: Error message or exception
+            step_name: Name of the step to fail.
+            error: The error message (str) or exception to record on the step.
+
+        Returns:
+            None. No-op if the named step is not present in the state.
         """
         step = self.steps.get(step_name)
         if step:
@@ -242,11 +306,14 @@ class PipelineState(BaseModel):
 
     def skip_step(self, step_name: str, reason: Optional[str] = None) -> None:
         """
-        Mark a step as skipped.
+        Mark a named step as skipped, adding it to the state first if absent.
 
         Args:
-            step_name: Name of the step
-            reason: Optional reason for skipping
+            step_name: Name of the step to skip.
+            reason: Optional human-readable reason, recorded on the step's metadata.
+
+        Returns:
+            None.
         """
         if step_name not in self.steps:
             self.add_step(step_name)
@@ -305,17 +372,35 @@ class PipelineState(BaseModel):
         ]
 
     def complete_pipeline(self) -> None:
-        """Mark entire pipeline as completed."""
+        """Mark the whole run as finished: stamp completion time, clear current step.
+
+        Note: "completed" here means the orchestrator's step loop ran to the end, not
+        that every step succeeded; under continue-on-error some steps may have failed.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         self.completed_at = datetime.now()
         self.current_step = None
         logger.info("Pipeline completed")
 
     def get_summary(self) -> Dict[str, Any]:
         """
-        Get a summary of pipeline execution.
+        Summarize the run's progress for logging and reporting.
+
+        Args:
+            None.
 
         Returns:
-            Dictionary with pipeline summary statistics
+            Dictionary with: ``marker`` (str); ``started_at`` / ``completed_at``
+            (ISO-8601 strings or None); ``total_duration_seconds`` (float or None);
+            the counts ``total_steps``, ``completed``, ``failed``, ``skipped``,
+            ``pending`` (ints); ``current_step`` (str or None); and ``steps``, a dict
+            keyed by step name, each value holding ``status`` (str),
+            ``duration_seconds`` (float or None), and ``error`` (str or None).
         """
         total_steps = len(self.steps)
         completed = len(self.get_completed_steps())

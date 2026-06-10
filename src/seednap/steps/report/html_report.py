@@ -53,14 +53,41 @@ _UNASSIGNED = MISSING_TAXON_VALUES
 
 
 def _is_assigned(series: pd.Series) -> pd.Series:
-    """Boolean mask: True where the rank value is a real taxon (not a missing-
-    taxonomy sentinel), matched case-insensitively against the canonical set."""
+    """Boolean mask of feature rows that carry a real taxon at a given rank.
+
+    A feature (an ASV or OTU) is "assigned" at a rank only if the cell holds an
+    actual taxon name rather than a missing-taxonomy placeholder such as
+    ``Unassigned``, ``NA``, or an empty string. Matching is case-insensitive
+    against the canonical sentinel set ``_UNASSIGNED`` so that ``Unassigned``,
+    ``unassigned``, and ``UNASSIGNED`` are all treated as unassigned.
+
+    Args:
+        series: A single rank column from the taxonomy table (one cell per
+            feature), values of any dtype (stringified before comparison).
+
+    Returns:
+        A boolean ``pd.Series`` aligned to ``series``: ``True`` where the value
+        is a real taxon, ``False`` where it is a missing-taxonomy sentinel.
+    """
     return ~series.astype(str).str.strip().str.lower().isin(_UNASSIGNED)
 
 
 def _is_unassigned_value(value: object) -> bool:
-    """True if a single (already-stringified) taxon value is a missing-taxonomy
-    sentinel, matched case-insensitively against the canonical set."""
+    """Report whether one taxon value is a missing-taxonomy placeholder.
+
+    Scalar counterpart to :func:`_is_assigned`: used when iterating individual
+    cells (e.g. picking the finest assigned rank of a feature) rather than a
+    whole column. Matching is case-insensitive against the canonical sentinel
+    set ``_UNASSIGNED``.
+
+    Args:
+        value: A single taxon cell value of any type (stringified before the
+            comparison).
+
+    Returns:
+        ``True`` if the value is a missing-taxonomy sentinel (e.g. ``Unassigned``,
+        ``NA``, empty), ``False`` if it is a real taxon name.
+    """
     return str(value).strip().lower() in _UNASSIGNED
 
 # Log levels recognised in the run-log transcript. The file logger writes
@@ -241,7 +268,18 @@ _TEMPLATE = Template(
 
 
 def _esc(v: object) -> str:
-    """HTML-escape any value (stringified first) for safe inline embedding."""
+    """HTML-escape any value for safe inline embedding in the report.
+
+    Stringifies the value first, then escapes the HTML special characters
+    (``&``, ``<``, ``>``, quotes) so arbitrary sample names, taxa, or paths
+    cannot break the page markup.
+
+    Args:
+        v: Any value to embed; stringified via ``str`` before escaping.
+
+    Returns:
+        The HTML-escaped string representation of ``v``.
+    """
     return _html.escape(str(v))
 
 
@@ -254,12 +292,28 @@ def _is_negative_control(name: object) -> bool:
     recognised, not silently counted as biological samples. Positive controls
     and PCR standards are deliberately excluded -- only negative controls matter
     for the report's contamination screening and biological-sample count.
+
+    Args:
+        name: A sample or per-sample column name (stringified before matching).
+
+    Returns:
+        ``True`` if the name classifies as a negative control, ``False`` for a
+        biological sample, a positive control, or a PCR standard.
     """
     return classify_control(str(name)).neg_cont_type is not None
 
 
 class HTMLReportBuilder:
-    """Render a self-contained, paper-styled HTML run report."""
+    """Assemble and render a self-contained, paper-styled HTML run report.
+
+    Collects everything known about one marker run (the per-sample read-tracking
+    table, plus optional taxonomy, OTU, metadata, state, and run-log inputs) and
+    turns it into a single portable ``.html`` file: figures, tables, prose, and a
+    colorized console transcript, all embedded inline. Optional inputs are
+    ``[WARN]``-guarded so a missing source is explained in the report rather than
+    silently omitted. Construct with the run's data, then call :meth:`render` for
+    the HTML string or :meth:`write` to save it to disk.
+    """
 
     def __init__(
         self,
@@ -323,7 +377,19 @@ class HTMLReportBuilder:
     # Optional data sources (lazy, [WARN]-guarded)
     # ------------------------------------------------------------------ #
     def _tax(self) -> Optional[pd.DataFrame]:
-        """Load and cache the taxonomy CSV; ``None`` (with a ``[WARN]``) if absent or unreadable."""
+        """Load and cache the taxonomy table that drives the taxonomy sections.
+
+        The taxonomy CSV holds one row per feature (ASV or OTU) with its
+        assigned rank columns (kingdom..species), per-sample read counts, and
+        often a best-hit ``pident``. Reading is cached on first call so the
+        figure and section builders share one parse. A missing or unreadable
+        file is logged with ``[WARN]`` and yields ``None`` rather than failing,
+        so the taxonomy-dependent sections are simply omitted.
+
+        Returns:
+            The taxonomy table as a ``pd.DataFrame``, or ``None`` if no taxonomy
+            CSV was supplied, the file is missing, or it cannot be read.
+        """
         if self._tax_cache is not None:
             return self._tax_cache
         if self.taxonomy_csv is None:
@@ -341,7 +407,18 @@ class HTMLReportBuilder:
         return self._tax_cache
 
     def _otu_full(self) -> Optional[pd.DataFrame]:
-        """Load the full OTU table CSV; ``None`` (with a ``[WARN]``) if absent or unreadable."""
+        """Load the full OTU table that drives the feature-QC section.
+
+        The full OTU table carries one row per candidate OTU with per-OTU
+        quality-control metadata (e.g. ``length``, ``chimera`` de-novo
+        classification, abundance, spread) in addition to per-sample read
+        counts. A missing or unreadable file is logged with ``[WARN]`` and
+        yields ``None``, so the OTU/feature-QC section is simply omitted.
+
+        Returns:
+            The full OTU table as a ``pd.DataFrame``, or ``None`` if no OTU CSV
+            was supplied, the file is missing, or it cannot be read.
+        """
         if self.otu_table_full is None:
             return None
         if not self.otu_table_full.exists():
@@ -356,13 +433,39 @@ class HTMLReportBuilder:
             return None
 
     def _tax_sample_cols(self, tax: pd.DataFrame) -> List[str]:
-        """Return the per-sample read-count columns of a taxonomy table (dropping meta and rank columns)."""
+        """Identify the per-sample read-count columns of a taxonomy table.
+
+        Everything that is not feature metadata (``_TAX_META``: IDs, ``pident``,
+        sequence, contaminant flag) and not a taxonomic rank (``_RANKS``) is
+        treated as a per-sample read-count column, i.e. one column per sequenced
+        sample.
+
+        Args:
+            tax: The taxonomy table to inspect.
+
+        Returns:
+            The list of column names holding per-sample read counts, in the
+            table's column order.
+        """
         return [c for c in tax.columns if c not in _TAX_META and c not in _RANKS]
 
     def _richness(self) -> Optional[pd.Series]:
-        """Per-sample feature richness (count of features with >0 reads), indexed
-        by sample name. Drawn from the taxonomy table, else the full OTU table;
-        ``None`` if neither carries per-sample columns."""
+        """Compute per-sample feature richness (how many features each sample has).
+
+        Richness here is the number of features (ASVs or OTUs) detected in a
+        sample, i.e. features with more than zero reads in that sample's column;
+        it is the per-sample diversity figure shown in the report. The counts
+        are drawn from the taxonomy table when present, otherwise the full OTU
+        table. Columns are screened against the relevant metadata set and then
+        required to be numeric, so an unexpected string metadata column is never
+        miscounted as a sample (any such dropped column is logged with
+        ``[WARN]``).
+
+        Returns:
+            A ``pd.Series`` of integer feature counts indexed by sample name, or
+            ``None`` if neither source is available or neither carries usable
+            numeric per-sample columns.
+        """
         tax = self._tax()
         if tax is not None:
             cols = self._tax_sample_cols(tax)
@@ -401,7 +504,24 @@ class HTMLReportBuilder:
         return counts.astype(int)
 
     def _read_meta(self, path: Optional[Path], kind: str) -> Optional[pd.DataFrame]:
-        """Load a metadata CSV as all-string columns; ``None`` (with a ``[WARN]``) if absent or unreadable."""
+        """Load a lab metadata CSV (field or project) as all-string columns.
+
+        Field metadata describes sampling (location, dates, sites, depth);
+        project metadata describes the run (recorder, sequencing method,
+        reference DB). Both feed the Dataset section. Columns are read as
+        strings with no NA coercion and a BOM-tolerant encoding, since lab
+        spreadsheets vary. A missing or unreadable file is logged with
+        ``[WARN]`` and yields ``None`` so that section is simply trimmed.
+
+        Args:
+            path: Path to the metadata CSV, or ``None`` if none was supplied.
+            kind: Short label ("field" or "project") used only in the
+                ``[WARN]`` message.
+
+        Returns:
+            The metadata table (all columns ``str`` dtype) as a ``pd.DataFrame``,
+            or ``None`` if ``path`` is ``None``, missing, or unreadable.
+        """
         if path is None:
             return None
         if not path.exists():
@@ -425,7 +545,13 @@ class HTMLReportBuilder:
         Emits a ``[WARN]`` when a non-empty dataset yields zero detected controls,
         so a legacy run whose controls were silently mislabelled as biological
         samples is not mistaken for a control-free run (the no-silent-fallbacks
-        policy)."""
+        policy).
+
+        Returns:
+            The number of negative-control samples in the read-tracking table
+            (``0`` when there is no ``sample`` column or none classify as a
+            control).
+        """
         if "sample" not in self.df.columns:
             return 0
         n = int(self.df["sample"].astype(str).map(_is_negative_control).sum())
@@ -438,7 +564,17 @@ class HTMLReportBuilder:
         return n
 
     def _run_date(self) -> str:
-        """Return the run date (state completion/start timestamp), falling back to the report build date."""
+        """Return the run date for the report header.
+
+        Prefers the pipeline state's ``completed_at`` (else ``started_at``)
+        timestamp, reduced to its date part, so the report is dated by when the
+        run actually executed. Falls back to today's date (clearly labelled as
+        the build date) when no state timestamp is available.
+
+        Returns:
+            A date string in ``YYYY-MM-DD`` form; the fallback is suffixed with
+            ``(report build date)`` to flag that it is not the run date.
+        """
         for key in ("completed_at", "started_at"):
             v = self.state.get(key) if isinstance(self.state, dict) else None
             if v:
@@ -448,7 +584,17 @@ class HTMLReportBuilder:
         return f"{datetime.now().date().isoformat()} (report build date)"
 
     def _descriptor(self) -> str:
-        """Build the one-line run descriptor (sample/control counts, method, feature count)."""
+        """Build the one-line run descriptor shown under the report title.
+
+        Condenses the run to a single comma-separated line: sample count (with
+        the negative-control count in parentheses if any), the clustering method
+        (DADA2 ASV path vs SWARM OTU path), and the feature count (ASVs or OTUs)
+        when a taxonomy table is available.
+
+        Returns:
+            A plain-text descriptor string, e.g.
+            ``"20 samples (2 controls), DADA2 ASV path, 108 ASVs"``.
+        """
         n = len(self.df)
         nc = self._n_controls()
         method = "DADA2 ASV path" if self.is_dada2 else "SWARM OTU path"
@@ -460,7 +606,19 @@ class HTMLReportBuilder:
         return ", ".join(bits)
 
     def _abstract(self) -> str:
-        """Compose the prose run abstract (samples, retention, species assignment, warnings)."""
+        """Compose the prose run abstract that leads the Summary tab.
+
+        Reads like a paper abstract: marker and sample composition (biological
+        vs control); overall read retention from raw input to the final stage;
+        the share of features assigned to species (with median best-hit identity
+        when available); and whether any read-tracking warnings were raised. Each
+        clause is only added when the underlying data is present.
+
+        Returns:
+            An HTML string (italic tags inline) summarising the run, or a single
+            sentence noting an empty read-tracking table when there are no
+            samples.
+        """
         n = len(self.df)
         if n == 0:
             return "No samples were found for this run; the read-tracking table is empty."
@@ -499,7 +657,23 @@ class HTMLReportBuilder:
     # HTML fragment helpers
     # ------------------------------------------------------------------ #
     def _fig(self, b64: Optional[str], caption: str) -> str:
-        """Wrap a base64 PNG in a numbered ``<figure>``; empty string if no image."""
+        """Wrap a base64-encoded PNG in a numbered, captioned ``<figure>``.
+
+        Increments the running figure counter and emits a ``Figure N.`` caption
+        so figures are numbered like a paper. The image is embedded inline as a
+        data URI (no external file). A falsy ``b64`` (figure not rendered, e.g.
+        matplotlib absent) yields an empty string so the caller can simply skip
+        it.
+
+        Args:
+            b64: Base64-encoded PNG bytes, or ``None``/empty if the figure was
+                not produced.
+            caption: HTML caption text placed after the bold ``Figure N.`` label.
+
+        Returns:
+            The ``<figure>`` HTML fragment, or an empty string if ``b64`` is
+            falsy.
+        """
         if not b64:
             return ""
         self._fig_n += 1
@@ -508,7 +682,26 @@ class HTMLReportBuilder:
 
     def _table(self, caption: str, headers: List[str], rows: List[List[str]],
                scroll: bool = False) -> str:
-        """Build a numbered HTML ``<table>`` (cell contents passed through verbatim), optionally scrollable."""
+        """Build a numbered, captioned HTML ``<table>``.
+
+        Increments the running table counter and emits a ``Table N.`` caption so
+        tables are numbered like a paper. Header text is HTML-escaped; cell
+        contents are inserted verbatim, so callers must pre-escape any
+        untrusted text (e.g. via :func:`_esc`) and may pass markup such as the
+        ``<span class="na">`` placeholders deliberately.
+
+        Args:
+            caption: HTML caption text placed after the bold ``Table N.`` label.
+            headers: Column header labels (escaped before rendering).
+            rows: Row data; each inner list is one row of pre-formatted cell
+                HTML strings, aligned to ``headers``.
+            scroll: When ``True``, wrap the table in a scroll box that keeps
+                natural column widths for wide tables; default ``False``.
+
+        Returns:
+            The ``<table>`` HTML fragment, wrapped in a scroll ``<div>`` when
+            ``scroll`` is ``True``.
+        """
         self._tbl_n += 1
         head = "".join(f"<th>{_esc(h)}</th>" for h in headers)
         body = "".join("<tr>" + "".join(f"<td>{c}</td>" for c in r) + "</tr>" for r in rows)
@@ -518,14 +711,40 @@ class HTMLReportBuilder:
 
     @staticmethod
     def _fmt(v: object) -> str:
-        """Format a numeric value as a thousands-separated integer, ``n/a`` if missing."""
+        """Format a count as a thousands-separated integer for table cells.
+
+        Args:
+            v: A numeric value (typically a read or feature count), or ``None``
+                / NaN when the count is unavailable.
+
+        Returns:
+            The value as a comma-grouped integer string (e.g. ``"12,345"``), or
+            ``"n/a"`` when ``v`` is ``None`` or NaN.
+        """
         return "n/a" if v is None or (isinstance(v, float) and pd.isna(v)) else f"{int(cast(float, v)):,}"
 
     # ------------------------------------------------------------------ #
     # Figures (within scoped rc_context; called once)
     # ------------------------------------------------------------------ #
     def _make_figures(self) -> Dict[str, str]:
-        """Render all report figures to base64 PNGs, keyed by name; empty dict if matplotlib is absent."""
+        """Render every report figure once to a base64 PNG, keyed by name.
+
+        Produces the run's publication figures under the paper rc-context:
+        the read funnel (reads surviving each pipeline step), per-sample (or
+        distribution of) read retention, per-sample feature richness, taxonomic
+        assignment by rank, best-hit identity distribution, OTU chimera
+        classification, and OTU sequence-length distribution. Each figure is
+        only built when its underlying data is present. matplotlib is imported
+        lazily; if it is absent a ``[WARN]`` is logged and the report falls back
+        to text and tables only.
+
+        Returns:
+            A mapping from figure key (e.g. ``"funnel"``, ``"retention"``,
+            ``"richness"``, ``"rank"``, ``"pident"``, ``"chimera"``,
+            ``"length"``) to its base64-encoded PNG string. Keys are present
+            only for figures that were actually rendered; an empty dict is
+            returned when matplotlib is unavailable.
+        """
         try:
             import matplotlib as mpl
             mpl.use("Agg")
@@ -537,7 +756,16 @@ class HTMLReportBuilder:
         figs: Dict[str, str] = {}
 
         def emit(fig: Any) -> str:
-            """Save a figure to a PNG buffer, close it, and return the base64 encoding."""
+            """Save a matplotlib figure to PNG, close it, and base64-encode it.
+
+            Args:
+                fig: The matplotlib ``Figure`` to serialise; closed after saving
+                    to release memory.
+
+            Returns:
+                The figure's PNG bytes as a base64-encoded ASCII string, ready
+                to embed as a data URI.
+            """
             buf = io.BytesIO()
             fig.savefig(buf, format="png")
             plt.close(fig)
@@ -652,14 +880,35 @@ class HTMLReportBuilder:
     # Section builders
     # ------------------------------------------------------------------ #
     def _section_dataset(self) -> str:
-        """Dataset identity + provenance, from config facts + field/project metadata."""
+        """Build the Dataset section: identity and provenance of the run.
+
+        Combines pipeline-configuration facts (dataset name, marker, primers,
+        reference DB, raw-data path) with the optional field metadata (sampling
+        location centroid and span, distinct sites, site/basin/ecosystem names,
+        sampling dates, depth, institution) and project metadata (recorder,
+        sequencing method, assignment notes). Geographic summaries are computed
+        over biological samples only, excluding negative controls. When no
+        metadata is supplied, an explanatory note tells the user which CLI flags
+        to pass.
+
+        Returns:
+            The Dataset section as an HTML string: either a provenance table
+            (optionally preceded by a note about missing metadata) or, when no
+            facts at all are available, a single instructional paragraph.
+        """
         prov: Dict[str, object] = cast(Dict[str, object], self.summary.get("provenance") or {})
         field = self._read_meta(self.field_metadata_csv, "field")
         proj = self._read_meta(self.project_metadata_csv, "project")
         rows: List[Tuple[str, str]] = []
 
         def add(label: str, value: object) -> None:
-            """Append a (label, value) row, skipping empty or missing values."""
+            """Append one (label, value) provenance row, skipping blank values.
+
+            Args:
+                label: The field label shown in the left column.
+                value: The field value; the row is skipped if it is ``None``,
+                    empty, or a missing-value sentinel (``"NA"``, ``"nan"``).
+            """
             if value not in (None, "", "NA", "nan"):
                 rows.append((label, str(value)))
 
@@ -726,14 +975,44 @@ class HTMLReportBuilder:
 
     @staticmethod
     def _proj_val(proj: Optional[pd.DataFrame], col: str) -> Optional[str]:
-        """Read a single trimmed value from the first row of the project metadata; ``None`` if absent or blank."""
+        """Read one trimmed value from the first row of the project metadata.
+
+        Project metadata is a single-row table, so a field is just the first
+        row's value for that column.
+
+        Args:
+            proj: The project metadata table, or ``None`` if none was loaded.
+            col: The column name to read.
+
+        Returns:
+            The trimmed cell value as a string, or ``None`` if ``proj`` is
+            ``None``/empty, the column is absent, or the value is blank.
+        """
         if proj is None or col not in proj.columns or proj.empty:
             return None
         v = str(proj[col].iloc[0]).strip()
         return v or None
 
     def _section_read_tracking(self, figs: Dict[str, str]) -> str:
-        """Build the Read tracking section: read funnel, per-sample retention, warnings."""
+        """Build the Read tracking section: where reads were kept and lost.
+
+        Shows how reads flow through the pipeline stages: an optional run-level
+        step summary (total reads and feature count after each step), the read
+        funnel figure, the per-sample retention figure, a per-sample table of
+        read counts at every step (rows below the retention threshold flagged),
+        and the read-tracking warnings rendered as a colorized terminal. Read
+        retention is the fraction of a sample's raw read pairs surviving to the
+        final stage; negative controls are expected to retain almost nothing, so
+        warnings flag where reads were lost, not necessarily errors.
+
+        Args:
+            figs: Mapping of figure key to base64 PNG from :meth:`_make_figures`;
+                the ``"funnel"`` and ``"retention"`` keys are used here and may
+                be absent (the figure is then skipped).
+
+        Returns:
+            The Read tracking section as an HTML string.
+        """
         n = len(self.df)
         parts = []
         parts.append(f"<p>Reads were tracked per sample across the {len(self.steps)} stages of the "
@@ -805,7 +1084,23 @@ class HTMLReportBuilder:
         return "\n".join(p for p in parts if p)
 
     def _section_per_sample(self, figs: Dict[str, str]) -> str:
-        """Per-sample yield: reads retained, feature richness, and % retained."""
+        """Build the Per-sample detail section: sequencing yield per sample.
+
+        Reports, for each sample, the reads retained to the final stage, the
+        number of features (ASVs/OTUs) detected, and the overall retention
+        percentage, plus the richness figure when a per-sample feature table is
+        available. Negative controls are flagged and are expected to yield
+        little. When richness cannot be computed (no feature table), a
+        ``[WARN]`` is logged and the section falls back to reads and retention
+        only.
+
+        Args:
+            figs: Mapping of figure key to base64 PNG from :meth:`_make_figures`;
+                the ``"richness"`` key is used here and may be absent.
+
+        Returns:
+            The Per-sample detail section as an HTML string.
+        """
         feat = "ASVs" if self.is_dada2 else "OTUs"
         rich = self._richness()
         parts = [f"<p>Sequencing yield per sample: reads retained to the {self.final_step} stage, "
@@ -842,7 +1137,28 @@ class HTMLReportBuilder:
         return "\n".join(p for p in parts if p)
 
     def _section_taxonomy(self, figs: Dict[str, str]) -> Optional[str]:
-        """Build the Taxonomy section, or ``None`` if no taxonomy table is available."""
+        """Build the Taxonomic-assignment section from the taxonomy table.
+
+        Summarises how features were identified against the reference database:
+        the share assigned to species, the assignment-by-rank figure and table
+        (how many features carry a real taxon at each rank, coarse to fine), the
+        best-hit BLAST percent-identity distribution over assigned features, the
+        top detected species by read count with occupancy (how many biological
+        samples each appears in), and the genera with the most assigned
+        features. Unassigned features are reported as ``Unassigned`` and never
+        counted as a taxon. A taxonomy table with zero feature rows (an
+        all-chimera or non-amplifying run) yields an explanatory note rather
+        than dividing by zero, logged with ``[WARN]``.
+
+        Args:
+            figs: Mapping of figure key to base64 PNG from :meth:`_make_figures`;
+                the ``"rank"`` and ``"pident"`` keys are used here and may be
+                absent.
+
+        Returns:
+            The Taxonomic-assignment section as an HTML string, or ``None`` if no
+            taxonomy table is available (the section is then omitted).
+        """
         tax = self._tax()
         if tax is None:
             return None
@@ -911,7 +1227,24 @@ class HTMLReportBuilder:
         return "\n".join(p for p in parts if p)
 
     def _section_feature_qc(self, figs: Dict[str, str]) -> Optional[str]:
-        """Build the OTU/feature-QC section, or ``None`` if no full OTU table is available."""
+        """Build the OTU/feature-QC section from the full OTU table.
+
+        Reports sequence quality control of the candidate OTUs: how many were
+        flagged as de-novo chimeras (PCR artefacts formed by joining fragments
+        of two real sequences) and removed versus borderline cases retained,
+        with the chimera-classification figure, plus the OTU sequence-length
+        distribution.
+
+        Args:
+            figs: Mapping of figure key to base64 PNG from :meth:`_make_figures`;
+                the ``"chimera"`` and ``"length"`` keys are used here and may be
+                absent.
+
+        Returns:
+            The OTU/feature-QC section as an HTML string, or ``None`` if no full
+            OTU table is available or the section would be empty (it is then
+            omitted).
+        """
         otu = self._otu_full()
         if otu is None:
             return None
@@ -926,7 +1259,23 @@ class HTMLReportBuilder:
         return "\n".join(p for p in parts if p) or None
 
     def _section_contamination(self) -> str:
-        """Build the controls/contamination section: features carrying reads in negative controls."""
+        """Build the Controls and contamination section.
+
+        Screens features for contamination by listing those that carry reads in
+        the negative-control samples (blanks): reads appearing in a blank
+        indicate lab or reagent contamination rather than true biological
+        signal. Control columns are identified by the manifest control-naming
+        conventions and contamination is computed from the control read counts
+        directly, not a precomputed flag. The top features by total control
+        reads are tabulated with each feature's finest assigned taxon, its reads
+        in each control, and its total reads across biological samples.
+
+        Returns:
+            The Controls and contamination section as an HTML string: a ranked
+            table of control-positive features, or an explanatory paragraph when
+            there is no taxonomy table, no control columns, or no feature carries
+            reads in a control.
+        """
         tax = self._tax()
         if tax is None:
             return ("<p>No taxonomy table was available, so contamination screening against "
@@ -964,7 +1313,18 @@ class HTMLReportBuilder:
                                     ["feature taxon", *ctrl, "total in samples"], rows, scroll=True)
 
     def _section_timeline(self) -> Optional[str]:
-        """Build the run-provenance section: per-step status and duration; ``None`` if no step state."""
+        """Build the Run-provenance section: per-step status and timing.
+
+        Tabulates each pipeline step's status and wall-clock duration from the
+        run state JSON, so a reader can see what ran and how long it took. The
+        report and export steps run after the recorded completion and are not
+        timed here.
+
+        Returns:
+            The Run-provenance section as an HTML string (a note plus a step
+            status/duration table), or ``None`` when the state carries no step
+            records (the section is then omitted).
+        """
         steps = self.state.get("steps") if isinstance(self.state, dict) else None
         if not isinstance(steps, dict) or not steps:
             return None
@@ -986,8 +1346,21 @@ class HTMLReportBuilder:
     # ------------------------------------------------------------------ #
     @staticmethod
     def _line_level(line: str) -> Optional[str]:
-        """Classify a log line by level from the ``| LEVEL |`` field, with a
-        text-heuristic fallback for continuation lines (tracebacks, tool output)."""
+        """Classify one run-log line by its severity level.
+
+        Reads the level from the structured ``TIME | LEVEL | name:lineno |
+        message`` log format. For continuation lines that lack that field
+        (tracebacks, raw tool output), falls back to a text heuristic that spots
+        error/warning markers in the line.
+
+        Args:
+            line: A single line of the run-log transcript.
+
+        Returns:
+            The level name (one of ``_LOG_LEVELS``: ``DEBUG``, ``INFO``,
+            ``WARNING``, ``ERROR``, ``CRITICAL``), or ``None`` if no level can be
+            determined.
+        """
         parts = line.split(" | ", 3)
         if len(parts) >= 2:
             lvl = parts[1].strip().upper()
@@ -1005,8 +1378,16 @@ class HTMLReportBuilder:
 
         Short logs are shown whole. Long logs keep run start/end context and
         *every* warning/error line; intervening routine lines are collapsed into
-        explicit ``… N omitted …`` markers (never silently dropped, the no-silent-fallbacks policy). Returns ``(items, truncated, total_lines)`` where ``items`` is
-        a list of ``(index, text)`` and a marker has index ``-1``.
+        explicit ``… N omitted …`` markers (never silently dropped, the no-silent-fallbacks policy).
+
+        Args:
+            lines: The full run-log transcript split into one string per line.
+
+        Returns:
+            A tuple ``(items, truncated, total_lines)`` where ``items`` is a
+            list of ``(index, text)`` pairs in display order (an omission marker
+            has index ``-1``), ``truncated`` is ``True`` if any lines were
+            collapsed, and ``total_lines`` is the original line count.
         """
         n = len(lines)
         if n <= self.max_log_lines:
@@ -1043,9 +1424,20 @@ class HTMLReportBuilder:
 
     @staticmethod
     def _themed_console() -> Any:
-        """A rich recording console with the bright dark-terminal log palette
-        (info blue, warning amber, error red). Raises ImportError if rich is
-        absent so callers can fall back to plain text."""
+        """Create a rich recording console themed for the dark log terminal.
+
+        The console records its output (rather than printing) and uses the
+        bright dark-terminal log palette (info blue, warning amber, error red)
+        so the embedded transcript matches the live SeeDNAP console exactly.
+
+        Returns:
+            A ``rich.console.Console`` configured with ``record=True``, a fixed
+            wide width, forced terminal mode, and the SeeDNAP log theme.
+
+        Raises:
+            ImportError: If ``rich`` is not installed, so callers can fall back
+                to plain monospace text.
+        """
         import io as _io
 
         from rich.console import Console
@@ -1064,14 +1456,39 @@ class HTMLReportBuilder:
 
     @staticmethod
     def _export(con: Any) -> str:
-        """Export a recording rich console to a self-contained, inline-styled HTML ``<pre>``."""
+        """Export a recording rich console to a self-contained HTML ``<pre>``.
+
+        Styles are written inline so the transcript needs no external CSS and
+        stays portable inside the single-file report.
+
+        Args:
+            con: A ``rich.console.Console`` created with ``record=True`` that has
+                already had the log lines printed to it.
+
+        Returns:
+            The recorded output as an inline-styled ``<pre class="runlog">``
+            HTML string.
+        """
         return cast(str, con.export_html(inline_styles=True,
                                          code_format='<pre class="runlog">{code}</pre>'))
 
     def _render_log_html(self, items: List[Tuple[int, str]]) -> Optional[str]:
-        """Render selected log lines to a self-contained, level-colored ``<pre>``
-        using rich's own HTML export, so the palette matches the live console
-        exactly. Returns ``None`` if rich is unavailable (caller falls back)."""
+        """Render selected run-log lines to a level-colored HTML ``<pre>``.
+
+        Each structured line is split into its time / level / logger / message
+        fields and colored by level via rich's own HTML export, so the palette
+        matches the live console exactly; omission markers are styled as muted
+        italics.
+
+        Args:
+            items: ``(index, text)`` pairs from :meth:`_select_log_lines`; an
+                index of ``-1`` marks an ``… N omitted …`` line.
+
+        Returns:
+            A self-contained, level-colored ``<pre>`` HTML string, or ``None`` if
+            ``rich`` is unavailable (the caller then falls back to plain
+            monospace text); the fallback is logged with ``[WARN]``.
+        """
         try:
             from rich.text import Text
             con = self._themed_console()
@@ -1098,8 +1515,19 @@ class HTMLReportBuilder:
         return self._export(con)
 
     def _render_warn_terminal(self, warnings: List[str]) -> Optional[str]:
-        """Render read-tracking warnings as a colorized CLI transcript (the same
-        terminal palette as the run log). Returns ``None`` if rich is absent."""
+        """Render read-tracking warnings as a colorized CLI transcript.
+
+        Uses the same dark-terminal palette as the run log. Lines matching the
+        ``[WARN] read_tracking <context>: <message>`` format are split and
+        colored by field; other lines are shown whole in warning amber.
+
+        Args:
+            warnings: The read-tracking warning strings to render.
+
+        Returns:
+            A self-contained, colorized ``<pre>`` HTML string, or ``None`` if
+            ``rich`` is unavailable (the caller then falls back to plain text).
+        """
         try:
             import re
 
@@ -1123,10 +1551,23 @@ class HTMLReportBuilder:
 
     def _terminal_window(self, title: str, body_html: str, *,
                          fullscreen: bool = False, compact: bool = False) -> str:
-        """Wrap pre-rendered terminal HTML in window chrome (dots + title bar).
+        """Wrap pre-rendered terminal HTML in macOS-style window chrome.
 
-        ``fullscreen`` adds a pure-CSS maximize toggle; ``compact`` caps the
-        body height (for short transcripts such as the warnings list)."""
+        Adds the traffic-light dots and a titled bar so the embedded transcript
+        reads as a real terminal window.
+
+        Args:
+            title: Window title text (HTML-escaped before insertion).
+            body_html: The pre-rendered transcript HTML to place in the window
+                body (e.g. a ``<pre class="runlog">`` from rich export).
+            fullscreen: When ``True``, add a pure-CSS Fullscreen toggle button.
+            compact: When ``True``, cap the body height for short transcripts
+                (e.g. the warnings list) instead of using the tall terminal
+                body.
+
+        Returns:
+            The complete terminal-window HTML fragment.
+        """
         body_cls = "term-body compact" if compact else "term-body"
         toggle, button = "", ""
         if fullscreen:
@@ -1144,10 +1585,21 @@ class HTMLReportBuilder:
         )
 
     def _section_run_log(self) -> Optional[str]:
-        """Embed the full pipeline run log, colorized by level like the console.
+        """Build the Run-log section: the colorized console transcript.
 
-        A missing/disabled/unreadable log yields an explanatory sentence rather
-        than vanishing silently (the no-silent-fallbacks policy)."""
+        Embeds the pipeline's full console transcript inside a terminal window,
+        colorized by log level exactly as the live console renders it, with a
+        per-level line-count summary. Long logs are truncated by
+        :meth:`_select_log_lines` (keeping every warning/error plus run
+        start/end). A missing, disabled, or unreadable log yields an explanatory
+        sentence rather than vanishing silently (the no-silent-fallbacks
+        policy); absence and read failures are also logged with ``[WARN]``.
+
+        Returns:
+            The Run-log section as an HTML string. This method always returns a
+            string (it explains absence in prose), so the section is included
+            whenever ``render`` reaches it.
+        """
         if self.log_file is None:
             return ("<p>No run-log file was passed to the report (logging to file may have been "
                     "disabled), so the console transcript is not embedded here.</p>")
@@ -1204,7 +1656,18 @@ class HTMLReportBuilder:
         return intro + meta + terminal
 
     def _summary_table_html(self) -> str:
-        """Build Table 1: the run-summary key/value table (counts, retention, assignment, chimeras)."""
+        """Build Table 1, the run-summary key/value table that leads the report.
+
+        Collects the headline numbers as quantity/value rows: sample and control
+        counts, raw and final read totals, mean retention, feature (ASV/OTU)
+        count, per-rank assignment counts and percentages, median best-hit
+        identity, and chimeras removed. Each row is only added when its
+        underlying data is present.
+
+        Returns:
+            The run-summary table as an HTML string (a two-column quantity/value
+            table).
+        """
         df = self.df
         n = len(df)
         rows = [["samples", f"{n:,}"]]
@@ -1237,7 +1700,17 @@ class HTMLReportBuilder:
         return self._table("Run summary.", ["quantity", "value"], rows)
 
     def _methods(self) -> str:
-        """Build the notes/methods section: control conventions, retention thresholds, footer."""
+        """Build the Notes and methods section explaining the report's conventions.
+
+        States how negative controls are identified, that contamination is
+        computed from control read counts (not a precomputed flag), how
+        unassigned features and median identity are handled, and the configured
+        retention thresholds used to flag samples and steps. Appends the
+        optional run footer and a generated-by line.
+
+        Returns:
+            The Notes and methods section as an HTML string.
+        """
         s = self.summary
         parts = [
             "<p>Negative controls are identified by the manifest control-naming "
@@ -1262,7 +1735,15 @@ class HTMLReportBuilder:
         """Render the full report to a single self-contained HTML string.
 
         Builds every section (skipping optional ones whose data is absent) and
-        renders them into the tabbed page template.
+        renders them into the tabbed page template. Always present: Summary,
+        Dataset, Read tracking, Per-sample detail, Controls and contamination,
+        and Notes and methods; the Taxonomic-assignment, OTU/feature-QC,
+        Run-provenance, and Run-log sections are added only when their input
+        data was supplied.
+
+        Returns:
+            The complete report as a single self-contained HTML string (no
+            external assets), ready to write to a ``.html`` file.
         """
         self._fig_n = 0
         self._tbl_n = 0
@@ -1297,7 +1778,16 @@ class HTMLReportBuilder:
         )
 
     def _section_summary(self, summary_table: str) -> str:
-        """Lead tab: a one-line descriptor, the run abstract, and Table 1."""
+        """Build the Summary tab: descriptor line, run abstract, and Table 1.
+
+        Args:
+            summary_table: The pre-built run-summary table HTML (Table 1) from
+                :meth:`_summary_table_html`.
+
+        Returns:
+            The Summary section as an HTML string: the one-line descriptor and
+            run date, the prose abstract, then the summary table.
+        """
         return (f'<p class="descriptor">{self._descriptor()}. {_esc(self._run_date())}.</p>'
                 f'<p class="summary-lead">{self._abstract()}</p>'
                 f'{summary_table}')
@@ -1305,10 +1795,18 @@ class HTMLReportBuilder:
     def write(self, output_path: Union[str, Path]) -> Path:
         """Render the report and write it to ``output_path``.
 
-        Creates parent directories as needed.
+        Creates parent directories as needed and writes the report as UTF-8.
+
+        Args:
+            output_path: Destination file path for the ``.html`` report; parent
+                directories are created if missing.
 
         Returns:
-            The path the report was written to.
+            The path the report was written to, as a ``Path``.
+
+        Raises:
+            OSError: If the parent directory cannot be created or the file
+                cannot be written.
         """
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)

@@ -31,6 +31,22 @@ class SeednapError(Exception):
         code: Optional[str] = None,
         docs: Optional[str] = None,
     ) -> None:
+        """Store the error parts and initialise the base Exception with the rendered message.
+
+        The rendered multi-line message (see :meth:`render`) is what the user sees on the
+        console; the individual parts are retained as attributes so callers (or
+        ``seednap explain``) can inspect them separately.
+
+        Args:
+            summary: One line stating what went wrong (no trailing period needed).
+            why: Why it happened / the root cause, in plain language. Optional.
+            fix: The concrete, declarative remedy (an instruction, not a question). Optional.
+            code: Stable error code (e.g. ``SDN-CFG-001``) for ``seednap explain``. Optional.
+            docs: Pointer to a docs section to read for context. Optional.
+
+        Returns:
+            None. Constructs the exception in place.
+        """
         self.summary = summary
         self.why = why
         self.fix = fix
@@ -39,7 +55,16 @@ class SeednapError(Exception):
         super().__init__(self.render())
 
     def render(self) -> str:
-        """Render the what / why / fix triad as a single multi-line message."""
+        """Render the what / why / fix triad as a single multi-line message.
+
+        Assembles the stored parts into the console message: the summary first, then
+        indented ``Why:``, ``Fix:``, ``See:``, and ``[code]`` lines for whichever of
+        those parts were supplied.
+
+        Returns:
+            The full multi-line error message as a single string. Omitted optional
+            parts contribute no line.
+        """
         lines = [self.summary]
         if self.why:
             lines.append(f"  Why: {self.why}")

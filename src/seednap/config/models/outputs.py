@@ -14,14 +14,26 @@ from seednap.config.models.base import StrictModel
 
 
 class GbifExportConfig(StrictModel):
-    """GBIF export configuration (the 'export' step runs iff listed in pipeline.steps)."""
+    """GBIF / DarwinCore export options (the 'export' step runs iff listed in pipeline.steps).
+
+    GBIF (the Global Biodiversity Information Facility) is where these occurrence datasets are
+    published; export reshapes the taxonomy-annotated table into a DarwinCore-aligned form.
+
+    Attributes:
+        add_rank: Add a column naming the lowest taxonomic rank that was resolved per feature.
+        add_taxon: Add a column carrying the lowest available taxon name per feature.
+    """
 
     add_rank: bool = Field(default=True, description="Add taxonomic rank column")
     add_taxon: bool = Field(default=True, description="Add lowest available taxon column")
 
 
 class ExportConfig(StrictModel):
-    """Output export configuration."""
+    """Export step configuration.
+
+    Attributes:
+        gbif: GBIF / DarwinCore export options.
+    """
 
     gbif: GbifExportConfig = Field(
         default_factory=GbifExportConfig, description="GBIF export settings"
@@ -66,5 +78,12 @@ class ReportConfig(StrictModel):
     @field_validator("output_dir", "sample_metadata", "project_metadata")
     @classmethod
     def expand_optional_path(cls, v: Optional[Path]) -> Optional[Path]:
-        """Expand ~ and resolve the path when set; leave None unchanged."""
+        """Expand ``~`` and resolve the path when set; leave None unchanged.
+
+        Args:
+            v: A configured output_dir / sample_metadata / project_metadata path, or None.
+
+        Returns:
+            The path with ``~`` expanded and resolved to absolute, or None unchanged.
+        """
         return v.expanduser().resolve() if v is not None else v

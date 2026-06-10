@@ -1,4 +1,19 @@
-"""Command-line interface for seednap pipeline."""
+"""Command-line interface for the seednap eDNA metabarcoding pipeline.
+
+This is the single Click entrypoint a user types at the shell. It exposes the whole
+pipeline as a set of subcommands: the end-to-end ``run-pipeline`` plus per-step
+commands (``trim``, ``demultiplex``, ``dada2``, ``swarm``, ``assign-taxonomy``),
+config helpers (``init``, ``validate``, ``explain``), and post-processing commands
+(``format-gbif``, ``create-gbif``, ``report``, ``manifest``, ``clean``, ``monitor``).
+
+In pipeline terms this module is the thin user-facing shell. Each command parses
+options, sets up logging, then delegates the actual biology (primer trimming, ASV
+denoising with DADA2, OTU clustering with SWARM, BLAST/ecotag/DECIPHER taxonomy,
+DarwinCore/GBIF export) to the processors and runners under ``seednap.steps`` and the
+orchestrator under ``seednap.pipeline``. No biological computation happens here; this
+file only wires arguments, reports progress to the console, persists [WARN] safety
+messages to a per-command log file, and turns exceptions into actionable error text.
+"""
 
 import sys
 from pathlib import Path
@@ -47,6 +62,21 @@ def _add_command_log_file(output_dir: Optional[Path], name: str) -> None:
     A failure to set up the file handler must not abort the command, but it also must not
     be silent (CLAUDE.md no-silent-fallback rule): on error we warn and keep logging to the
     console only.
+
+    Args:
+        output_dir: The command's run-output directory; the log goes to
+            ``<output_dir>/logs/<name>.log``. Pass ``None`` for commands that have no
+            output tree, in which case the log goes to ``logs/<name>.log`` under the
+            current working directory.
+        name: Base name for the log file (no extension), typically the command name or
+            ``<command>_<marker>``.
+
+    Returns:
+        None. Reconfigures the root logger in place to add the file handler.
+
+    Raises:
+        Nothing. An ``OSError`` while creating the log file is caught and downgraded to a
+        printed [WARN]; logging then continues to the console only.
     """
     base = Path(output_dir) if output_dir is not None else Path("logs")
     log_dir = base / "logs" if output_dir is not None else base
@@ -62,7 +92,16 @@ def _add_command_log_file(output_dir: Optional[Path], name: str) -> None:
 
 
 def _maybe_traceback() -> None:
-    """Print the current exception's traceback only in verbose (-v) mode."""
+    """Print the current exception's full Python traceback, but only in verbose (-v) mode.
+
+    Lets command error handlers show the actionable message (often the external tool's own
+    stderr) by default, and surface the buried stack trace only when the user asked for it.
+    Must be called from within an ``except`` block, as it reads the active exception.
+
+    Returns:
+        None. Writes the formatted traceback to the console when ``_VERBOSE`` is set;
+        otherwise does nothing.
+    """
     if _VERBOSE:
         import traceback
 
@@ -70,12 +109,27 @@ def _maybe_traceback() -> None:
 
 
 def print_error(message: str) -> None:
-    """Print error message in red."""
+    """Print an error message to the console, prefixed and styled in red.
+
+    Args:
+        message: The human-readable error text to show. Console-only; this does not
+            persist to the log file and does not exit the process.
+
+    Returns:
+        None.
+    """
     console.print(f"[bold red]Error:[/bold red] {message}")
 
 
 def print_success(message: str) -> None:
-    """Print success message in green."""
+    """Print a success message to the console with a green check mark.
+
+    Args:
+        message: The human-readable success text to show. Console-only.
+
+    Returns:
+        None.
+    """
     console.print(f"[bold green]✓[/bold green] {message}")
 
 
@@ -87,6 +141,13 @@ def print_warning(message: str) -> None:
     rule: warnings must be captured, not console-only). The root logger's console handler keeps
     it visible to the user; the "[WARN]" prefix matches the convention used elsewhere in the
     codebase (CLAUDE.md section 4) so all warning channels read consistently in the log file.
+
+    Args:
+        message: The warning text. A "[WARN] " prefix is prepended before logging, so do
+            not include one in the caller's message.
+
+    Returns:
+        None.
     """
     logger.warning(f"[WARN] {message}")
 
@@ -101,6 +162,26 @@ def _assign_kwargs_from_config(config: Any, method: str) -> Dict[str, Any]:
     standalone command otherwise leaves at the assigner defaults -- the divergence this
     fixes. `contaminants` is the marker-level list, applied to every method just as the
     orchestrator does. Caller layers explicit CLI overrides on top of this dict.
+
+    Args:
+        config: A loaded ``PipelineConfig`` for the marker. Only its ``taxonomy`` block is
+            read (the selected database config and the marker-level ``contaminants`` list).
+        method: Which taxonomy method's parameter block to extract: one of ``"blast"``,
+            ``"dada2"``, ``"ecotag"``, or ``"decipher"``.
+
+    Returns:
+        A dict of keyword arguments for ``TaxonomicAssigner.assign_taxonomy`` matching the
+        requested method (e.g. reference paths, per-rank percent-identity thresholds and
+        LCA parameters for BLAST; RDP and species DB paths for DADA2). Returns an empty
+        dict for any unrecognized method. ``contaminants`` is included for every known
+        method. Names of taxa to treat as laboratory contaminants and drop from results.
+
+    Raises:
+        AttributeError: If the resolved database config has no attribute one of the
+            method branches reads (e.g. the method's database block is missing or only a
+            partial dict, so ``db.fasta`` and similar accesses fail).
+        pydantic.ValidationError: Propagated from ``get_database_config()`` if the
+            method's database block in the config is malformed.
     """
     db = config.taxonomy.get_database_config()
     contaminants = config.taxonomy.contaminants
@@ -168,6 +249,21 @@ def main(ctx: click.Context, verbose: bool, quiet: bool) -> None:
 
     A pipeline for processing eDNA metabarcoding data with support
     for multiple taxonomic assignment methods.
+
+    This is the top-level Click group: it runs before any subcommand to capture the global
+    verbosity flags, stash them on the Click context and in module globals (so command error
+    handlers and per-command log setup can read them), and configure logging once. Each
+    subcommand may add its own file handler on top.
+
+    Args:
+        ctx: The Click context. Used to ensure and populate ``ctx.obj`` (a dict carrying
+            ``verbose`` and ``quiet`` for subcommands).
+        verbose: ``-v/--verbose``. Enable DEBUG-level logging and full tracebacks on error.
+        quiet: ``-q/--quiet``. Suppress console output below WARNING level. ``verbose``
+            takes precedence over ``quiet`` for the log level.
+
+    Returns:
+        None.
     """
     # Store options in context for subcommands
     ctx.ensure_object(dict)
@@ -197,6 +293,23 @@ def validate(ctx: click.Context, config_file: Path) -> None:
     - All required fields are present
     - Field types and values are correct
     - Referenced paths and files exist (where applicable)
+
+    A "valid" config that loads but points at missing inputs (raw FASTQ, a taxonomy
+    database file) is still rejected here, via a read-only preflight check, so the user
+    learns about a broken path before launching a long run rather than mid-run.
+
+    Args:
+        ctx: The Click context (carries the global verbose/quiet flags).
+        config_file: Path to the marker configuration YAML to validate. Must already exist
+            (enforced by Click).
+
+    Returns:
+        None. Exits the process with status 0 if the config is well-formed and all
+        referenced inputs are usable, or status 1 otherwise.
+
+    Raises:
+        SystemExit: Always, via ``sys.exit``. Code 0 on success; code 1 if the schema is
+            invalid or preflight finds unusable referenced inputs.
     """
     console.print(f"\n[bold]Validating configuration:[/bold] {config_file}\n")
 
@@ -228,7 +341,15 @@ def validate(ctx: click.Context, config_file: Path) -> None:
             # path missing on disk (a config can be valid yet point at a file that is not there).
             # Read-only checks; nothing is created.
             def _exists(p: Path) -> str:
-                """Return a colored found/MISSING status string for a path on disk."""
+                """Return a colored found/MISSING status string for a path on disk.
+
+                Args:
+                    p: Filesystem path to check.
+
+                Returns:
+                    A rich-markup string: green "found" if the path exists, else red
+                    "MISSING".
+                """
                 return "[green]found[/green]" if Path(p).exists() else "[red]MISSING[/red]"
 
             try:
@@ -303,6 +424,26 @@ def init(output: Path, marker: str, minimal: bool, force: bool) -> None:
 
     By default this writes a minimal config containing only the required fields (everything
     else uses built-in defaults); pass --full for the fully-annotated reference template.
+
+    A marker config is the per-marker YAML that drives a whole run (primers, paths,
+    trimming/DADA2/SWARM parameters, the taxonomy method and its reference databases). This
+    command scaffolds one to edit rather than writing it by hand.
+
+    Args:
+        output: Path to write the example config to. Defaults to
+            ``config/markers/example.yaml``.
+        marker: Marker name to seed the example with (e.g. ``teleo``). Sets the marker
+            block in the generated config.
+        minimal: If True (``--minimal``, the default), emit only required fields; if False
+            (``--full``), emit the fully-annotated reference template.
+        force: If True (``--force``), overwrite an existing file at ``output``.
+
+    Returns:
+        None. Writes the config file and prints next-step hints on success.
+
+    Raises:
+        SystemExit: Code 1 if ``output`` already exists and ``force`` is not set, or if
+            creating the example config raises ``ConfigError``.
     """
     if output.exists() and not force:
         print_error(f"File already exists: {output}")
@@ -345,6 +486,29 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
     Transforms the wide-format table to long-format GBIF-compatible output.
     Adds 'rank' and 'taxon' columns, filters zero counts, and renames columns
     to match GBIF standards (eventID instead of filter_code).
+
+    GBIF is the Global Biodiversity Information Facility, the public repository the lab's
+    occurrence records are submitted to. This is the first of the two export steps: it
+    reshapes one method's taxonomy+counts table into the long, per-observation form GBIF
+    expects (one row per taxon per sample), keeping only non-zero read counts.
+
+    Args:
+        ctx: The Click context (carries the global verbose flag, read for traceback depth).
+        input_file: Path to the taxonomic assignment CSV produced by an ``assign-taxonomy``
+            run. Must already exist (enforced by Click).
+        format_type: Which producing method wrote ``input_file``: one of ``"dada2"``,
+            ``"ecotag"``, ``"blast"``, or ``"decipher"``. Selects the matching reshape
+            logic and must match the method that generated the file.
+        output: Path for the long-format GBIF CSV. If ``None``, defaults to the input
+            file's directory with a ``_gbif_input`` suffix.
+
+    Returns:
+        None. Writes the reshaped CSV and prints record/eventID counts and a rank
+        distribution on success.
+
+    Raises:
+        SystemExit: Code 1 if the input file is not found, if its columns do not match the
+            chosen ``format_type``, or on any other conversion failure.
     """
     from seednap.steps.formatting.gbif_formatter import GBIFFormatter
 
@@ -442,6 +606,35 @@ def create_gbif(
     \b
     Set the NCBI_API_KEY environment variable (or in a .env file) to enable
     automatic kingdom/phylum enrichment via NCBI Entrez and WORMS.
+
+    DarwinCore is the standardized biodiversity-data vocabulary GBIF ingests. This is the
+    second export step: it joins the long-format taxonomy table with per-sample field
+    metadata (where, when, how each water sample was taken) and per-project metadata
+    (marker, sequencing method, reference DB), optionally enriching higher taxonomy
+    (kingdom/phylum) from NCBI/WORMS, into one occurrence CSV ready for submission.
+
+    Args:
+        ctx: The Click context (carries the global verbose flag, read for traceback depth).
+        taxonomy_results: Long-format taxonomy CSV from the ``format-gbif`` step (columns
+            class, order, family, genus, species, taxon, rank, sequence, nb_reads,
+            eventID). Must exist.
+        sample_metadata: Per-sample (field) metadata CSV keyed by eventID, with lat/lon,
+            eventDate, env_medium, samp_size, depth and size_frac. Must exist.
+        project_metadata: Per-project metadata CSV with marker, recordedby, seqmet and the
+            identification/OTU/chimera provenance fields. Must exist.
+        output: Path for the output DarwinCore occurrence CSV.
+        summarise_pcr: If True (``--summarise-pcr``), collapse PCR replicates to one row per
+            sample before building. PCR replicates are repeat amplifications of the same
+            sample. Defaults to False.
+        skip_enrichment: If True (``--skip-enrichment``), do not look up kingdom/phylum via
+            NCBI Entrez / WORMS. Defaults to False.
+
+    Returns:
+        None. Writes the DarwinCore CSV and prints its path on success.
+
+    Raises:
+        SystemExit: Code 1 if an input file is missing, on a metadata validation error, or
+            on any other build failure.
     """
     from seednap.steps.formatting.darwincore_builder import DarwinCoreBuilder
 
@@ -617,6 +810,52 @@ def blast(
        order/class), resolve ambiguous hits with the selected LCA algorithm,
        and left-merge taxonomy onto the ASV abundance table.
     3. Finalize: write the taxonomy+counts CSV and print a resolution summary.
+
+    BLAST aligns each query sequence (an ASV/OTU representative) against a reference
+    database; LCA (lowest common ancestor) resolution then assigns a sequence to the most
+    specific rank its top hits agree on, so an ambiguous match is reported at, say, genus
+    rather than guessing a single species. The per-rank percent-identity thresholds gate
+    how high a sequence's similarity to references must be before that rank is accepted.
+
+    Args:
+        ctx: The Click context (carries the global verbose flag, read for traceback depth).
+        query_fasta: Path to the query sequences (ASV representatives from DADA2). Must
+            exist.
+        ref_fasta: Path to the reference database FASTA. Must exist. The BLAST DB is built
+            from it if not already present.
+        asv_count: Path to the ASV count table CSV (e.g. ``seqtab_clean.csv`` from DADA2).
+            Must exist. Taxonomy is left-merged onto these abundances.
+        output: Path for the taxonomy+counts CSV. If ``None``, defaults to the query
+            FASTA's directory with a ``_blast_taxonomy`` suffix.
+        perc_identity: Minimum percent identity for a BLAST hit to be kept (blastn search
+            filter). Percent.
+        qcov_hsp_perc: Minimum query coverage per HSP for a hit to be kept. Percent.
+        evalue: Maximum e-value (expected number of chance hits) for a BLAST hit.
+        threshold_species: Minimum percent identity to assign at species rank.
+        threshold_genus: Minimum percent identity to assign at genus rank.
+        threshold_family: Minimum percent identity to assign at family rank.
+        threshold_order: Minimum percent identity to assign at order rank.
+        threshold_class: Minimum percent identity to assign at class rank.
+        top_bitscore_pct: Cascade LCA: include hits whose bitscore is within this percent
+            of the best hit's bitscore (MEGAN-LR-style band).
+        lca_pident_delta: Cascade LCA: in-band hits must be within this percent identity of
+            the best in-band hit to be considered.
+        task: The blastn task/algorithm: one of ``megablast``, ``blastn``,
+            ``dc-megablast``, or ``blastn-short``.
+        lca_algorithm: Which LCA algorithm to use: ``cascade`` (per-rank thresholds) or
+            ``collapsed_taxonomy`` (eDNAFlow/OceanOmics percent-identity-window collapse).
+        lca_pid: collapsed_taxonomy only: hard percent-identity floor below which hits are
+            discarded.
+        lca_diff: collapsed_taxonomy only: width (percent identity) of the window of hits
+            collapsed down to their LCA.
+
+    Returns:
+        None. Writes the taxonomy CSV and prints per-rank resolution percentages on
+        success.
+
+    Raises:
+        SystemExit: Code 1 if a required file is missing or if the BLAST search or
+            assignment fails.
     """
     from seednap.steps.taxonomic_assignment import BlastRunner, BlastTaxonomicAssigner
 
@@ -749,6 +988,24 @@ def trim(
     Performs two-pass primer trimming:
     1. Remove 5' primers (anchored search)
     2. Remove 3' primers from pass 1 output
+
+    Primers are the short fixed oligonucleotides that flank the amplified marker region;
+    they are PCR artefacts, not biological sequence, so they must be stripped before
+    denoising or clustering. This standalone command runs the same two-pass cutadapt
+    trimming the pipeline uses, over every R1/R2 read pair in a directory.
+
+    Args:
+        input_dir: Directory of raw FASTQ files as R1/R2 pairs. Must exist.
+        forward_primer: Forward primer sequence, 5' to 3'.
+        reverse_primer: Reverse primer sequence, 5' to 3'.
+        output_dir: Directory to write trimmed reads to.
+        cores: Number of CPU cores cutadapt may use.
+
+    Returns:
+        None. Writes trimmed FASTQs and prints the number of samples processed on success.
+
+    Raises:
+        SystemExit: Code 1 on any trimming failure.
     """
     from seednap.steps.trimming import StandardTrimmer
 
@@ -838,6 +1095,30 @@ def demultiplex(
     2. Demultiplex reads by tags
     3. Detect primers (both orientations)
     4. Merge and realign reads
+
+    In a ligation-based library, many samples are pooled into one sequencing run, each
+    sample marked by a short tag (barcode) ligated to its reads. Demultiplexing splits the
+    pooled FASTQs back into per-sample reads by those tags before primer trimming, so each
+    sample can be analysed separately downstream.
+
+    Args:
+        raw_reads_dir: Directory containing the pooled raw library FASTQ files. Must exist.
+        library_name: Library identifier; matches the FASTQ filename prefix for this
+            library.
+        metadata_csv: Metadata CSV with eventID, tag_demultiplex and library columns,
+            mapping tags to samples. Must exist.
+        forward_primer: Forward primer sequence.
+        reverse_primer: Reverse primer sequence.
+        output_dir: Base output directory for the demultiplexed/realigned reads.
+        cores: Number of CPU cores to use.
+        no_gunzip: If True (``--no-gunzip``), leave the output files gzipped; otherwise the
+            outputs are gunzipped.
+
+    Returns:
+        None. Writes the realigned per-sample reads and prints their directory on success.
+
+    Raises:
+        SystemExit: Code 1 on any demultiplexing failure.
     """
     from seednap.steps.trimming import LigationTrimmer
 
@@ -951,6 +1232,42 @@ def dada2(
     8. Metrics collection and reporting
 
     Optional: Taxonomic assignment using DADA2's naive Bayesian classifier
+
+    DADA2 turns trimmed reads into ASVs (amplicon sequence variants): exact, denoised
+    sequences inferred by modelling per-run sequencing error, as opposed to the fixed-%
+    clusters that OTU methods produce. Along the way it filters by expected error,
+    merges the paired forward/reverse reads into full amplicons, and removes chimeras
+    (artefactual sequences fused from two real templates during PCR).
+
+    Args:
+        marker: Marker name (e.g. ``teleo``, ``amph``). Names the output subtree.
+        trimmed_reads_dir: Directory of primer-trimmed FASTQ files (R1/R2 pairs). Must
+            exist.
+        output_dir: Base output directory. Defaults to ``outputs``.
+        max_ee: Maximum expected errors allowed per read during filtering; reads above
+            this are discarded.
+        trunc_q: Truncate each read at the first base whose quality score falls below this
+            value.
+        min_overlap: Minimum number of overlapping bases required to merge a forward and
+            reverse read.
+        assign_taxonomy: If True (``--assign-taxonomy``), run DADA2's naive Bayesian
+            taxonomy after denoising; requires ``rdp_db`` and ``species_db``.
+        rdp_db: Path to the RDP-formatted (genus-level) taxonomy database. Required when
+            ``assign_taxonomy`` is set. Must exist if given.
+        species_db: Path to the species-level taxonomy database. Required when
+            ``assign_taxonomy`` is set. Must exist if given.
+        library_map: Optional CSV with ``sample,library`` columns. When 2+ libraries are
+            present, errors are learned per library and identical ASVs are then collapsed
+            (DADA2-by-library); omit it (or use a single library) for the standard
+            single-batch path. Must exist if given.
+
+    Returns:
+        None. Writes the sequence table, query FASTA, ASV correspondence and metrics (and,
+        if requested, the taxonomy table) and prints their paths on success.
+
+    Raises:
+        SystemExit: Code 1 if a required file is missing, if ``--assign-taxonomy`` is set
+            without both DB paths, or on any other DADA2 failure.
     """
     from seednap.steps.dada2 import Dada2Processor
 
@@ -1080,6 +1397,34 @@ def swarm(
     5. Sort representatives by abundance
     6. De novo chimera detection (vsearch UCHIME)
     7. OTU contingency table generation
+
+    SWARM is an alternative to DADA2: instead of denoising to exact variants, it clusters
+    near-identical sequences into OTUs (operational taxonomic units) by single-linkage
+    growth at a small distance threshold ``d``, which avoids the arbitrary global %-identity
+    cutoff of classic OTU pickers. Paired reads are merged first; the de novo chimera step
+    (vsearch UCHIME) drops PCR-fused artefacts before the per-sample OTU count table is
+    built. OTU counts legitimately differ from DADA2 ASV counts; that is not a bug.
+
+    Args:
+        marker: Marker name (e.g. ``teleo``, ``amph``). Names the output subtree.
+        trimmed_reads_dir: Directory of primer-trimmed FASTQ files (R1/R2 pairs). Must
+            exist.
+        output_dir: Base output directory. Defaults to ``outputs``.
+        distance: SWARM clustering distance threshold ``d`` (max nucleotide differences for
+            single-linkage growth). Defaults to 1.
+        threads: Number of threads to use. Defaults to 4.
+        no_fastidious: If True (``--no-fastidious``), disable SWARM's fastidious singleton
+            refinement; otherwise fastidious mode is on.
+        no_chimera_filter: If True (``--no-chimera-filter``), skip de novo chimera
+            detection; otherwise chimeras are removed.
+
+    Returns:
+        None. Writes the query FASTA, OTU tables and merged reads, and prints their paths
+        on success.
+
+    Raises:
+        SystemExit: Code 1 if no R1/R2 FASTQ pairs are found in ``trimmed_reads_dir`` or on
+            any other SWARM failure.
     """
     from seednap.steps.swarm import SwarmProcessor
 
@@ -1299,6 +1644,56 @@ def assign_taxonomy(
     block (database path plus method parameters, e.g. BLAST evalue/task/thresholds)
     so the standalone result matches run-pipeline. Any explicit option above
     overrides the corresponding config value.
+
+    Taxonomic assignment is the step that names each ASV/OTU sequence by comparing it to a
+    reference database. The four methods differ in approach: BLAST (alignment + LCA),
+    DADA2 (naive Bayesian classifier), ecotag (OBITools tree-based assignment), and
+    DECIPHER (IdTaxa classifier). This command is the standalone counterpart to the
+    taxonomy step of ``run-pipeline``.
+
+    Args:
+        ctx: The Click context, used both for the global verbose flag and to detect which
+            options the user actually typed (so config values are only overridden by
+            explicit CLI flags, not by click defaults).
+        method: Assignment method: one of ``"blast"``, ``"dada2"``, ``"ecotag"``,
+            ``"decipher"``.
+        marker: Marker name (e.g. ``teleo``, ``amph``). Names the output subtree.
+        query_fasta: Query FASTA of ASV/OTU sequences to assign. Must exist.
+        asv_count_csv: ASV/OTU count table (``seqtab_clean.csv`` or ``_t.csv``). Must
+            exist.
+        config_file: Optional marker YAML; if given, its ``taxonomy.databases.<method>``
+            block supplies DB paths and method parameters. Its ``taxonomy.method`` must
+            equal ``method``. Must exist if given.
+        output_dir: Base output directory. Defaults to ``outputs``.
+        reference_fasta: Reference database FASTA (BLAST method). Must exist if given.
+        rdp_db: RDP-formatted taxonomy database (DADA2 method). Must exist if given.
+        species_db: Species-level taxonomy database (DADA2 method). Must exist if given.
+        taxonomy_db: NCBI taxonomy database (ecotag method). Must exist if given.
+        reference_db: Reference sequence database (ecotag method). Must exist if given.
+        trained_classifier: Trained DECIPHER classifier ``.rds`` file (DECIPHER method).
+            Must exist if given.
+        threshold_species: BLAST: minimum percent identity to assign at species rank.
+        threshold_genus: BLAST: minimum percent identity to assign at genus rank.
+        threshold_family: BLAST: minimum percent identity to assign at family rank.
+        threshold_order: BLAST: minimum percent identity to assign at order rank.
+        threshold_class: BLAST: minimum percent identity to assign at class rank.
+        top_bitscore_pct: BLAST cascade LCA: bitscore band as a percent of the best hit.
+        lca_pident_delta: BLAST cascade LCA: in-band hits must be within this percent
+            identity of the best in-band hit.
+        lca_algorithm: BLAST LCA algorithm: ``cascade`` or ``collapsed_taxonomy``.
+        lca_pid: BLAST collapsed_taxonomy: hard percent-identity floor.
+        lca_diff: BLAST collapsed_taxonomy: identity-window width collapsed to the LCA.
+        confidence_threshold: DECIPHER confidence threshold (0-100) for accepting a rank.
+        processors: Number of CPU cores (used by DECIPHER).
+
+    Returns:
+        None. Writes the taxonomy outputs for the chosen method and prints their paths on
+        success.
+
+    Raises:
+        SystemExit: Code 1 if ``--config`` is for a different method than ``method``, if a
+            method's required DB option is neither passed nor present in the config, if an
+            input file is missing, on a value error, or on any other assignment failure.
     """
     from seednap.steps.taxonomic_assignment import TaxonomicAssigner
 
@@ -1344,6 +1739,18 @@ def assign_taxonomy(
         # then let any EXPLICITLY-passed CLI option override its config counterpart;
         # _given() distinguishes a user-typed flag from a value left at its click default.
         def _given(param_name: str) -> bool:
+            """Return whether a CLI option was explicitly typed by the user.
+
+            Distinguishes a user-typed flag from a value left at its click default, so a
+            config-derived value is overridden only by an explicit CLI flag.
+
+            Args:
+                param_name: The Click parameter name (the function argument name) to check.
+
+            Returns:
+                True if the option's source is the command line; False if it came from a
+                default, environment, or other source.
+            """
             from click.core import ParameterSource
 
             return ctx.get_parameter_source(param_name) == ParameterSource.COMMANDLINE
@@ -1503,6 +1910,28 @@ def run_pipeline(
 
         # Use custom state file
         seednap run-pipeline config/markers/teleo.yaml --state-file my_state.json
+
+    This is the main entrypoint: it loads the marker config, runs a read-only preflight to
+    fail fast on missing inputs, then hands control to the orchestrator, which executes each
+    step and records its status, duration and outputs in a state JSON so the run can be
+    resumed. A summary table of per-step status is printed at the end.
+
+    Args:
+        config: Path to the pipeline configuration YAML. Must exist (enforced by Click).
+        resume: If True (``--resume``), continue from a previous run's state file, skipping
+            already-completed steps.
+        state_file: Path to the run-state JSON. If ``None``, the orchestrator
+            auto-generates one in the output directory.
+        stop_on_error: If True (``--stop-on-error``, the default), abort on the first failed
+            step; if False (``--continue-on-error``), keep running subsequent steps.
+
+    Returns:
+        None. Prints a completion summary on success.
+
+    Raises:
+        SystemExit: Code 1 if preflight finds unusable inputs, on a config error, on a
+            pipeline-step value error, on a missing required file, or on any other
+            unexpected failure.
     """
     from seednap.pipeline.orchestrator import PipelineOrchestrator
 
@@ -1635,6 +2064,36 @@ def report(
     Rebuilds the per-step read-loss table (raw -> trimmed -> ... -> final) from
     the on-disk Cutadapt logs and the DADA2/SWARM outputs. Pass --html for the
     full self-contained visual report.
+
+    Read tracking is the per-sample audit of how many reads survive each step (raw,
+    trimmed, filtered, merged, non-chimeric, and so on). A sample that loses most of its
+    reads at one step signals a quality or parameter problem, so this table is a key
+    sanity check before trusting downstream abundances. The command only reads existing
+    outputs; it never modifies the run and can be regenerated any time.
+
+    Args:
+        marker: Marker name (e.g. ``teleo``, ``mam07``). Selects the run's output subtree.
+        output_dir: Base output directory of the run to report on. Defaults to ``outputs``.
+        html_report: If True (``--html``), also write the self-contained HTML report.
+        warn_retention: Warn when a sample's overall retention falls below this percent.
+            Defaults to 30.
+        warn_step_loss: Warn when any single step drops more than this percent of reads.
+            Defaults to 70.
+        field_metadata: Optional per-sample field metadata CSV for the HTML Dataset
+            section. Auto-located near the output if omitted. Must exist if given.
+        project_metadata: Optional project metadata CSV for the HTML Dataset section.
+            Auto-located near the output if omitted. Must exist if given.
+        log_file: Optional pipeline run log to embed in the HTML report. Auto-located from
+            ``logs/`` if omitted. Must exist if given.
+
+    Returns:
+        None. Writes the read-tracking and step-summary CSVs (and, with ``--html``, the
+        HTML report), prints the tables to the console, and emits [WARN]s for missing
+        inputs or data-loss thresholds.
+
+    Raises:
+        SystemExit: Code 1 if no samples are found for the marker under ``output_dir``, or
+            on any other reporting failure.
     """
     import pandas as pd
 
@@ -1811,7 +2270,13 @@ def report(
 
 @main.command()
 def version() -> None:
-    """Show version information."""
+    """Show version information.
+
+    Prints the installed seednap version string and the repository URL to the console.
+
+    Returns:
+        None.
+    """
     console.print(f"\n[bold]seednap[/bold] version [cyan]{__version__}[/cyan]\n")
     console.print("eDNA metabarcoding pipeline with DADA2")
     console.print("Repository: https://github.com/WildinSync/wis_seednap\n")
@@ -1823,6 +2288,19 @@ def explain(code: Optional[str]) -> None:
     """Explain a seednap error code in depth.
 
     CODE: a code shown in an error message, e.g. SDN-CFG-001. With no CODE, lists all codes.
+
+    seednap tags many of its errors with a stable code so a user can look up a fuller
+    what/why/fix explanation than fits in the original message. This command is that lookup.
+
+    Args:
+        code: An error code (e.g. ``SDN-CFG-001``) to explain in detail. If ``None`` or
+            empty, the command lists every known code with its short title instead.
+
+    Returns:
+        None. Prints either the full explanation for ``code`` or the list of all codes.
+
+    Raises:
+        SystemExit: Code 1 if ``code`` is given but is not a known error code.
     """
     from seednap.errors import all_codes
     from seednap.errors.catalog import explain as explain_code
@@ -1893,6 +2371,42 @@ def manifest(
     Every assumption (a synthesised seq_run_id, an ambiguous control, a dropped column,
     an orphan eventID) is logged as a [WARN]; ambiguous dates and a missing sample key
     raise. Pass -o to write the manifest CSV.
+
+    A manifest is the single authoritative per-sample-library table that ties an eventID
+    (one biological sample, or a negative control) to its sequencing run, tags, dates and
+    location, in the FAIRe convention. With ``--abundance`` it doubles as an up-front guard
+    against the silent ID-mismatch bug: it checks that every sample column in an
+    abundance/OTU table has a matching manifest row before that table is trusted downstream.
+
+    Args:
+        ctx: The Click context (carries the global verbose flag, read for traceback depth).
+        field_metadata: Per-sample field metadata CSV (``metadata_field_*.csv``), or a
+            legacy demux lab CSV (``metadata_lab_*.csv``) carrying library/tag columns.
+            Must exist.
+        project_metadata: Optional project metadata CSV supplying the marker ->
+            target_gene/assay_name mapping. Must exist if given.
+        lab_metadata: Optional legacy demux metadata CSV supplying seq_run_id/library and
+            tag barcodes. Must exist if given.
+        seq_run_id: Optional sequencing-run id for the whole dataset; overrides any
+            lab-derived value.
+        target_gene: Optional marker / target_gene; overrides the project metadata.
+        date_order: Optional forced eventDate field order (``ymd``, ``dmy`` or ``mdy``) for
+            genuinely-ambiguous dotted dates; without it such files raise rather than be
+            guessed.
+        output: Optional path to write the canonical manifest CSV to.
+        abundance: Optional abundance/OTU table to cross-check the manifest's eventIDs
+            against. Must exist if given.
+        strict: If True (``--strict``), raise when the abundance table has sample columns
+            absent from the manifest; otherwise warn. Defaults to False.
+
+    Returns:
+        None. Prints row/sample/control/run counts, writes the manifest CSV if ``output``
+        is given, and prints the abundance cross-check result if ``abundance`` is given.
+
+    Raises:
+        SystemExit: Code 1 if an input file is missing, on an ambiguous date or missing
+            sample-key value error, on an abundance cross-check value error, or on any
+            other build failure.
     """
     from seednap.config.manifest import validate_against_abundance
     from seednap.config.manifest_migrate import migrate_to_manifest
@@ -2005,6 +2519,36 @@ def clean(
     ABUNDANCE_CSV:  OTU/ASV x sample table (e.g. 02_swarm/<marker>/otu_table.csv).
     FIELD_METADATA: per-sample field metadata CSV (metadata_field_*.csv).
     OUTPUT:         path for the cleaned abundance CSV.
+
+    Negative controls (blanks) are samples carried through extraction or PCR with no
+    biological template; any reads they accumulate are contamination, so they mark which
+    OTUs/reads to distrust in real samples. Extraction blanks clean only their own
+    extraction batch; PCR blanks clean the whole dataset. ``flag`` annotates suspect OTUs,
+    ``subtract`` removes the control read counts.
+
+    Args:
+        ctx: The Click context (carries the global verbose flag, read for traceback depth).
+        abundance_csv: OTU/ASV-by-sample abundance table to decontaminate. Must exist.
+        field_metadata: Per-sample field metadata CSV (``metadata_field_*.csv``) from which
+            control identity and extraction batches are derived. Must exist.
+        output: Path for the cleaned abundance CSV.
+        mode: ``flag`` (annotate suspect OTUs, the default) or ``subtract`` (remove control
+            read counts). Case-insensitive.
+        project_metadata: Optional project metadata CSV (marker -> target_gene). Must exist
+            if given.
+        id_col: OTU/ASV identifier column name in the abundance table. Defaults to the
+            first column if omitted.
+        report_path: Optional path for the per-sample cleaning report CSV. Defaults to the
+            output stem with a ``_report.csv`` suffix.
+
+    Returns:
+        None. Writes the cleaned abundance CSV and the per-sample report, and prints
+        control/sample/flagged-OTU counts (and reads removed in ``subtract`` mode).
+
+    Raises:
+        SystemExit: Code 1 if an input file is missing, on a value error (e.g. the id
+            column or a required metadata column is absent), or on any other cleaning
+            failure.
     """
     import pandas as pd
 
@@ -2077,6 +2621,28 @@ def monitor(ctx: click.Context, marker: str, output_dir: Path, state_file: Optio
     monitoring_summary.csv. Standalone and read-only -- regenerable any time, no re-run.
 
     MARKER: marker name (e.g. teleo, mam07).
+
+    The state JSON is the source of truth for "did this run finish?": the orchestrator
+    writes it after every step with that step's status, duration and outputs. This command
+    renders it as a status table and a read-tracking headline, so a user can check on a
+    run (finished or still going) without re-executing anything.
+
+    Args:
+        ctx: The Click context (carries the global verbose/quiet flags).
+        marker: Marker name (e.g. ``teleo``, ``mam07``). Used to locate the default state
+            file and name the per-sample summary output.
+        output_dir: Base output directory of the run. Defaults to ``outputs``.
+        state_file: Path to the run-state JSON. Defaults to
+            ``<output_dir>/.<marker>_state.json``. Must exist (at the resolved path) for
+            the command to proceed.
+
+    Returns:
+        None. Prints the per-step status/duration table and read-tracking headline, and
+        writes ``monitoring_summary.csv`` when per-sample counts are present in the state.
+
+    Raises:
+        SystemExit: Code 1 if the state file is not found at the resolved path, or if it
+            cannot be loaded (truncated or incompatible schema).
     """
     from seednap.pipeline.state import PipelineState
 

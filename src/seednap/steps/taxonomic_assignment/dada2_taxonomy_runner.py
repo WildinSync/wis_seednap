@@ -29,7 +29,7 @@ class Dada2TaxonomyRunner(RScriptRunner):
 
     _error_class = Dada2TaxonomyError
 
-    def __init__(self, timeout: int = 7200):
+    def __init__(self, timeout: int = 7200) -> None:
         """
         Initialize DADA2 taxonomy runner.
 

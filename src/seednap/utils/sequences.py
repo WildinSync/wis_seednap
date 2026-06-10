@@ -1,4 +1,12 @@
-"""Sequence manipulation utilities."""
+"""Sequence manipulation utilities.
+
+Small Biopython-backed helpers shared across the pipeline for DNA sequence
+handling and FASTA <-> DataFrame conversion. ASV/OTU sequences move between
+tabular form (counts and taxonomy tables) and FASTA (the input expected by
+vsearch, swarm, and blastn), so these helpers bridge the two and provide
+reverse-complementing for primer/orientation handling. FASTA I/O is delegated
+to Biopython's SeqIO rather than a hand-rolled parser. Lives in seednap/utils/.
+"""
 
 from pathlib import Path
 from typing import Union
@@ -11,15 +19,23 @@ from Bio.SeqRecord import SeqRecord
 
 def reverse_complement(sequence: str) -> str:
     """
-    Calculate reverse complement of a DNA sequence.
+    Calculate the reverse complement of a DNA sequence.
 
-    Handles IUPAC ambiguity codes correctly.
+    The reverse complement is the sequence read on the opposite strand in the
+    5'->3' direction (each base swapped for its pairing partner and the order
+    reversed); needed when a marker's primer or read can arrive in either
+    orientation. Uppercases the input and handles IUPAC ambiguity codes (e.g.
+    R, Y, N) correctly via Biopython.
 
     Args:
-        sequence: DNA sequence string (can include IUPAC ambiguity codes)
+        sequence: DNA sequence string (may include IUPAC ambiguity codes);
+            case-insensitive (uppercased internally).
 
     Returns:
-        Reverse complement of the input sequence
+        The reverse complement of the input sequence, in uppercase.
+
+    Raises:
+        TypeError: If `sequence` is not a string (it has no .upper()).
 
     Examples:
         >>> reverse_complement("ATCG")
@@ -39,18 +55,26 @@ def df_to_fasta(
     description_col: Union[str, None] = None,
 ) -> None:
     """
-    Convert DataFrame to FASTA file.
+    Write a DataFrame of sequences out to a FASTA file.
+
+    Each row becomes one FASTA record (header = id_col, body = seq_col), the
+    form the downstream tools (vsearch, swarm, blastn) read. The output
+    directory is created if missing.
 
     Args:
-        df: DataFrame containing sequences
-        output_path: Path to output FASTA file
-        id_col: Name of column containing sequence IDs (default: 'id')
-        seq_col: Name of column containing sequences (default: 'sequence')
-        description_col: Optional column name for sequence descriptions
+        df: DataFrame containing sequences, one per row.
+        output_path: Path to the FASTA file to write.
+        id_col: Name of the column holding sequence IDs (default: 'id').
+        seq_col: Name of the column holding sequences (default: 'sequence').
+        description_col: Optional column whose value becomes each record's
+            FASTA description; ignored if None or absent from the DataFrame.
+
+    Returns:
+        None. The FASTA file is written to `output_path` as a side effect.
 
     Raises:
-        ValueError: If required columns are missing from DataFrame
-        IOError: If output file cannot be written
+        ValueError: If `id_col` or `seq_col` is missing from the DataFrame.
+        IOError: If the output file cannot be written.
 
     Examples:
         >>> df = pd.DataFrame({'id': ['seq1', 'seq2'], 'sequence': ['ATCG', 'GCTA']})
@@ -92,14 +116,21 @@ def df_to_fasta(
 
 def fasta_to_df(fasta_path: Union[str, Path], include_description: bool = False) -> pd.DataFrame:
     """
-    Read FASTA file into DataFrame.
+    Read a FASTA file into a DataFrame.
+
+    The inverse of df_to_fasta: parses ASV/OTU (or reference) sequence records
+    into tabular form for merging with count/taxonomy tables. Empty or
+    non-FASTA input is rejected with a descriptive error rather than returning
+    an empty frame.
 
     Args:
-        fasta_path: Path to FASTA file
-        include_description: Whether to include description column (default: False)
+        fasta_path: Path to the FASTA file to read.
+        include_description: Whether to add a 'description' column carrying
+            each record's full header line (default: False).
 
     Returns:
-        DataFrame with columns: 'id', 'sequence', and optionally 'description'
+        DataFrame with one row per record and columns 'id', 'sequence', and
+        optionally 'description'.
 
     Raises:
         FileNotFoundError: If FASTA file does not exist

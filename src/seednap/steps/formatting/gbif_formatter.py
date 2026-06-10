@@ -1,4 +1,16 @@
-"""GBIF formatter for converting taxonomic assignments to GBIF-compatible format."""
+"""GBIF formatter for converting taxonomic assignments to GBIF-compatible format.
+
+First step of the formatting stage, run by the ``format-gbif`` command. Each
+taxonomic-assignment method (DADA2 RDP, ecotag, BLAST, DECIPHER) writes its
+result as a wide table: one row per OTU/ASV (the clustered or denoised sequence
+variant standing in for a taxon) with the taxonomy columns plus one numeric
+column per sample holding that OTU's read count. This module normalises the
+differing column names into one schema and reshapes the table to GBIF's long
+"occurrence" layout: one row per (OTU, sample) pair with a single ``nb_reads``
+count, dropping the zero counts that a wide table necessarily contains. It also
+derives the lowest confidently assigned rank and the matching taxon name for
+each row. The long table it produces is the input to ``DarwinCoreBuilder``.
+"""
 
 import logging
 from pathlib import Path
@@ -28,13 +40,20 @@ class GBIFFormatter:
         """
         Add taxonomic rank column based on lowest available taxonomic level.
 
-        For DADA2 outputs, "/" in species column indicates ambiguous hits at genus level.
+        Records, for each OTU, the finest rank at which the assignment is
+        considered reliable. A species name containing "/" is a tie between
+        several species (an ambiguous hit, common with short markers) and is
+        treated as resolved only to genus; the "/" species string is then blanked
+        on rows whose rank is coarser than species.
 
         Args:
-            df: DataFrame with taxonomic columns
+            df: DataFrame with taxonomic columns (``species``, ``genus``,
+                ``family`` are read; others may be present).
 
         Returns:
-            DataFrame with added 'rank' column and cleaned 'species' column
+            A copy of ``df`` with an added ``rank`` column (one of ``species``,
+            ``genus``, ``family``, ``higher``) and the ``species`` column cleaned
+            of "/"-ambiguous values on non-species rows.
 
         Logic:
             - species: If species column has no "/" and is not NA
@@ -45,7 +64,14 @@ class GBIFFormatter:
         df = df.copy()
 
         def determine_rank(row: pd.Series) -> str:
-            """Return the lowest taxonomic rank with a valid assignment for one row."""
+            """Return the lowest taxonomic rank with a valid assignment for one row.
+
+            Args:
+                row: One OTU row; read keys ``species``, ``genus``, ``family``.
+
+            Returns:
+                The rank label ``species``, ``genus``, ``family``, or ``higher``.
+            """
             # Check if species is valid (no "/" and not NA)
             species_valid = pd.notna(row.get("species")) and "/" not in str(
                 row.get("species")
@@ -75,11 +101,17 @@ class GBIFFormatter:
         """
         Add taxon column containing the lowest available taxonomic assignment.
 
+        Picks the single name that best labels each OTU: the value at the row's
+        ``rank``, or for ``higher`` rows the first populated rank walking down
+        from order. This becomes ``scientificName`` in the DarwinCore output.
+
         Args:
-            df: DataFrame with 'rank' and taxonomic columns
+            df: DataFrame with a ``rank`` column (as added by ``_add_rank``) and
+                taxonomic columns.
 
         Returns:
-            DataFrame with added 'taxon' column
+            A copy of ``df`` with an added ``taxon`` column (the chosen name, or
+            None if no rank is populated).
 
         Logic:
             - If rank is 'species': use species column
@@ -90,7 +122,17 @@ class GBIFFormatter:
         df = df.copy()
 
         def get_taxon(row: pd.Series) -> Optional[str]:
-            """Return the taxon name at the row's rank, or the lowest filled higher rank."""
+            """Return the taxon name at the row's rank, or the lowest filled higher rank.
+
+            Args:
+                row: One OTU row; read keys ``rank`` plus the taxonomic columns
+                    ``species``/``genus``/``family``/``order``/``class``/
+                    ``phylum``/``kingdom``.
+
+            Returns:
+                The taxon name string, or None if the relevant rank columns are
+                all empty.
+            """
             rank = row.get("rank")
 
             if rank == "species":
@@ -116,12 +158,31 @@ class GBIFFormatter:
         """
         Transform wide format (samples as columns) to long format (samples as rows).
 
+        Reshapes the OTU-by-sample read-count matrix into one row per
+        (OTU, sample) pair: each sample's numeric column becomes an ``eventID``
+        value and its count a ``nb_reads`` value, which is GBIF's expected
+        occurrence layout. Sample columns are detected as the numeric columns
+        that are neither taxonomy nor per-OTU annotation columns. Per-OTU
+        annotations (``ASV_ID``, ``pident``, ``is_contaminant_candidate``) are
+        carried onto every resulting sample row, and rows with zero reads are
+        dropped (a wide matrix is mostly zeros: an OTU is absent from most
+        samples).
+
         Args:
-            df: DataFrame in wide format
-            taxonomic_cols: List of taxonomic column names
+            df: DataFrame in wide format (taxonomy columns plus one numeric
+                read-count column per sample).
+            taxonomic_cols: Taxonomic column names to keep as identifier columns
+                during the reshape.
 
         Returns:
-            DataFrame in long format with 'eventID' and 'nb_reads' columns
+            DataFrame in long format: the ``taxonomic_cols``, any present
+            annotation columns, plus ``eventID`` (sample name) and ``nb_reads``
+            (integer read count > 0).
+
+        Raises:
+            ValueError: If no per-sample numeric read-count columns can be found
+                (i.e. every non-taxonomy, non-annotation column is non-numeric),
+                which usually means the wrong table was passed.
         """
         # Sample columns are everything that's NOT a known non-sample column.
         # The post-Commit-F BLAST schema includes per-OTU annotations (ASV_ID,
@@ -516,6 +577,10 @@ class GBIFFormatter:
         """
         Convert BLAST output to GBIF format.
 
+        BLAST taxonomy output already shares the DADA2 wide-table schema (the
+        post-processor emits the same columns), so this simply delegates to
+        ``from_dada2_rdp`` with a ``blast`` source label for the log.
+
         Args:
             input_path: Path to BLAST output CSV file
             output_path: Optional path to output GBIF CSV file
@@ -524,6 +589,11 @@ class GBIFFormatter:
 
         Returns:
             DataFrame in GBIF-compatible long format
+
+        Raises:
+            FileNotFoundError: If the input file does not exist.
+            ValueError: If the CSV is empty/invalid or required columns are
+                missing.
         """
         # BLAST output should already be in a similar format to DADA2
         return self.from_dada2_rdp(
@@ -540,6 +610,10 @@ class GBIFFormatter:
         """
         Convert DECIPHER output to GBIF format.
 
+        DECIPHER (IdTaxa) taxonomy output shares the DADA2 wide-table schema, so
+        this delegates to ``from_dada2_rdp`` with a ``decipher`` source label for
+        the log.
+
         Args:
             input_path: Path to DECIPHER output CSV file
             output_path: Optional path to output GBIF CSV file
@@ -548,6 +622,11 @@ class GBIFFormatter:
 
         Returns:
             DataFrame in GBIF-compatible long format
+
+        Raises:
+            FileNotFoundError: If the input file does not exist.
+            ValueError: If the CSV is empty/invalid or required columns are
+                missing.
         """
         # DECIPHER output should be similar to DADA2
         return self.from_dada2_rdp(

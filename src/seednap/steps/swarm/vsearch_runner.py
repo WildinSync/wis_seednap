@@ -1,6 +1,14 @@
 """vsearch wrapper for read merging, dereplication, sorting, and chimera detection.
 
-Provides Python methods around vsearch CLI commands used in the SWARM pipeline.
+Thin Python interface around the external ``vsearch`` binary, used throughout
+the SWARM OTU path (``steps/swarm/``). Wraps the four vsearch operations the
+SWARM pipeline relies on: merging overlapping R1/R2 paired-end reads into single
+amplicon sequences, dereplicating to unique sequences with ``;size=N`` abundance
+annotations, sorting representatives by abundance, and de novo UCHIME chimera
+detection (flagging artefactual sequences formed when two templates fuse during
+PCR). The runner parses the installed vsearch version at init because some flags
+changed between releases (e.g. v2.28 dropped FASTQ input from
+``--derep_fulllength``).
 """
 
 import logging
@@ -43,14 +51,34 @@ class VsearchRunner:
 
     @staticmethod
     def _parse_version(text: str) -> Tuple[int, ...]:
-        """Extract (major, minor, patch) from vsearch --version output."""
+        """Extract the (major, minor, patch) version from vsearch output.
+
+        Args:
+            text: Raw text of ``vsearch --version`` (vsearch prints this to
+                stderr), e.g. "vsearch v2.30.5_linux_x86_64, ...".
+
+        Returns:
+            The version as a (major, minor, patch) tuple of ints, or
+            (0, 0, 0) if no version string can be matched.
+        """
         m = re.search(r"vsearch\s+v?(\d+)\.(\d+)\.(\d+)", text)
         if m:
             return tuple(int(x) for x in m.groups())
         return (0, 0, 0)
 
     def _check_availability(self) -> Tuple[int, ...]:
-        """Check that vsearch is installed and return its version tuple."""
+        """Verify vsearch is installed and return its version tuple.
+
+        Runs ``vsearch --version`` and parses the version so later methods can
+        switch command paths for version-sensitive flags.
+
+        Returns:
+            The installed vsearch version as a (major, minor, patch) tuple,
+            or (0, 0, 0) if the version string could not be parsed.
+
+        Raises:
+            VsearchError: If the vsearch binary is not found on PATH.
+        """
         try:
             result = subprocess.run(
                 ["vsearch", "--version"],

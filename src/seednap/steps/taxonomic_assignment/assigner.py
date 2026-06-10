@@ -44,14 +44,21 @@ class TaxonomicAssigner:
         method: Union[str, TaxonomyMethod],
         marker: str,
         output_dir: Union[str, Path],
-    ):
+    ) -> None:
         """
         Initialize taxonomic assigner.
 
+        Creates the per-marker taxonomy output directory (output_dir/03_taxo/<marker>/)
+        so the chosen method has somewhere to write its intermediate files.
+
         Args:
-            method: Assignment method ('blast', 'dada2', 'ecotag', or 'decipher')
-            marker: Marker name (e.g., 'teleo', 'amph')
-            output_dir: Base output directory
+            method: Assignment method ('blast', 'dada2', 'ecotag', or 'decipher'),
+                as a string or TaxonomyMethod enum.
+            marker: Marker name (e.g., 'teleo', 'amph'); lower-cased internally.
+            output_dir: Base output directory under which per-marker outputs are written.
+
+        Raises:
+            ValueError: If method is a string that is not a recognised TaxonomyMethod.
         """
         if isinstance(method, str):
             method = TaxonomyMethod(method.lower())
@@ -164,7 +171,13 @@ class TaxonomicAssigner:
             task: blastn task passed to the runner (default: 'megablast')
 
         Returns:
-            Dictionary with 'blast_output' and 'final_table' keys
+            Dictionary with 'blast_output' (the raw blastn TSV) and 'final_table'
+            (the merged per-OTU taxonomy+abundance CSV) path keys.
+
+        Raises:
+            ValueError: If reference_fasta is None, or task/lca_algorithm is invalid.
+            FileNotFoundError: If the reference FASTA does not exist.
+            BlastError: If makeblastdb/blastn fails or BLAST output processing fails.
         """
         if reference_fasta is None:
             raise ValueError("reference_fasta is required for BLAST method")
@@ -252,7 +265,13 @@ class TaxonomicAssigner:
             contaminants: Species names to flag as is_contaminant_candidate (never removed)
 
         Returns:
-            Dictionary with 'taxonomy' and 'final_table' keys
+            Dictionary with 'taxonomy' (per-sequence taxonomy CSV) and 'final_table'
+            (merged taxonomy+abundance CSV) path keys.
+
+        Raises:
+            ValueError: If rdp_db_path or species_db_path is None.
+            FileNotFoundError: If a database or the query FASTA does not exist.
+            Dada2TaxonomyError: If the DADA2 R taxonomy step fails.
         """
         if rdp_db_path is None or species_db_path is None:
             raise ValueError("rdp_db_path and species_db_path are required for DADA2 method")
@@ -308,7 +327,13 @@ class TaxonomicAssigner:
             contaminants: Optional list of species to flag as contaminants
 
         Returns:
-            Dictionary with 'taxonomy_tsv' and 'final_table' keys
+            Dictionary with 'ecotag_fasta', 'cleaned_fasta', 'taxonomy_tsv', and
+            'final_table' (the merged taxonomy+abundance CSV) path keys.
+
+        Raises:
+            ValueError: If taxonomy_db or reference_db is None.
+            FileNotFoundError: If a database or the query FASTA does not exist.
+            EcotagError: If OBITools cannot be located or any ecotag step fails.
         """
         if taxonomy_db is None or reference_db is None:
             raise ValueError("taxonomy_db and reference_db are required for ecotag method")
@@ -365,7 +390,13 @@ class TaxonomicAssigner:
             contaminants: Optional list of species to flag as contaminants
 
         Returns:
-            Dictionary with 'taxonomy' and 'final_table' keys
+            Dictionary with 'taxonomy' (per-sequence taxonomy CSV) and 'final_table'
+            (merged taxonomy+abundance CSV) path keys.
+
+        Raises:
+            ValueError: If trained_classifier_path is None.
+            FileNotFoundError: If the classifier or the query FASTA does not exist.
+            DecipherError: If the DECIPHER R assignment step fails.
         """
         if trained_classifier_path is None:
             raise ValueError("trained_classifier_path is required for DECIPHER method")
@@ -410,10 +441,13 @@ class TaxonomicAssigner:
         contaminants). Consult the _assign_<method> signature for the full set.
 
         Args:
-            method: Assignment method
+            method: Assignment method, as a string or TaxonomyMethod enum.
 
         Returns:
-            Dictionary mapping selected parameter names to descriptions
+            Dictionary mapping selected parameter names to human-readable descriptions.
+
+        Raises:
+            ValueError: If method is a string that is not a recognised TaxonomyMethod.
         """
         if isinstance(method, str):
             method = TaxonomyMethod(method.lower())

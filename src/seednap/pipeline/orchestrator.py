@@ -1,11 +1,31 @@
-"""Pipeline orchestrator for end-to-end workflow execution.
+"""Pipeline orchestrator for end-to-end eDNA metabarcoding workflow execution.
 
-This module orchestrates the complete seednap pipeline:
-1. Demultiplexing (optional)
-2. Primer trimming (cutadapt)
-3. Denoising/clustering (DADA2 or SWARM)
-4. Taxonomic assignment
-5. Export to GBIF format
+This module is the top-level conductor for a single marker's run. eDNA
+metabarcoding takes raw amplicon sequencing reads (PCR products of a short
+"marker" gene region, e.g. teleo or MiFish for fish) and turns them into a
+table of which taxa were detected in which water/soil samples. The
+orchestrator runs the stages of that conversion in order, records what
+happened so a run can be reconstructed, and lets a failed run resume from the
+step that broke.
+
+The stages, in pipeline order, are:
+1. Demultiplexing (optional): split one multiplexed library FASTQ into
+   per-sample files using sample-specific tags.
+2. Primer trimming (cutadapt): remove the PCR primer sequences that flank
+   every read so only the biological marker region remains.
+3. Denoising/clustering: collapse millions of reads into biological features.
+   DADA2 produces ASVs (Amplicon Sequence Variants, exact denoised sequences);
+   SWARM produces OTUs (Operational Taxonomic Units, clusters of similar
+   sequences). Both remove chimeras (artefactual sequences made of two parents).
+4. Taxonomic assignment: label each ASV/OTU with a species/genus/family name
+   by comparing it to a reference database (BLAST, DADA2 RDP, DECIPHER, ecotag).
+5. Cleaning (optional): subtract contamination seen in negative controls.
+6. Export: reshape the table into the GBIF / Darwin Core format for submission.
+7. Reporting: read-tracking table and a self-contained HTML run report.
+
+This file sits at ``src/seednap/pipeline/orchestrator.py`` and is driven by the
+Click CLI; it delegates the heavy lifting to the processors under
+``src/seednap/steps/`` and tracks progress via ``pipeline/state.py``.
 """
 
 from pathlib import Path
@@ -43,16 +63,28 @@ class PipelineOrchestrator:
         resume: bool = False,
     ):
         """
-        Initialize pipeline orchestrator.
+        Initialize pipeline orchestrator: load config, set up logging, state, dispatch.
+
+        Loads (or accepts) the marker configuration, creates the output directory
+        tree, configures logging, and either resumes from an existing run's state
+        JSON or starts a fresh run with every configured step marked pending. Also
+        builds the step-name -> handler dispatch table and snapshots the effective
+        merged config into the output tree for reproducibility.
 
         Args:
-            config: Pipeline configuration (YAML path or PipelineConfig object)
-            state_file: Path to state file for tracking progress (default: auto-generated)
-            resume: Whether to resume from previous run (default: False)
+            config: Pipeline configuration, either a path (str/Path) to a marker
+                YAML file to load, or an already-built PipelineConfig object.
+            state_file: Path to the JSON state file tracking per-step progress. If
+                None, defaults to ``<paths.output>/.<marker>_state.json``.
+            resume: If True, re-read an existing state file and continue from where
+                a previous run of this marker left off; if False, start fresh.
 
         Raises:
-            FileNotFoundError: If config file doesn't exist
-            ValueError: If resume=True but no state file exists
+            FileNotFoundError: If a config path is given but the file does not exist
+                (raised by load_config).
+            ValueError: If resume=True but no state file exists at the resolved path.
+            RuntimeError: If the step dispatch table is missing a handler for any
+                stage in operational.VALID_STEPS (the two have drifted).
         """
         # Load configuration
         self.config_path: Optional[Path]
@@ -149,7 +181,19 @@ class PipelineOrchestrator:
         self._write_config_snapshot()
 
     def _setup_logging(self) -> None:
-        """Configure logging using existing logging utilities."""
+        """Configure the run logger from the config's logging section.
+
+        Wires up console and (when ``logging.file`` is set) file logging via the
+        shared logging utility, naming the log file per marker and run timestamp so
+        every run leaves a re-readable transcript. Also stashes the log file path on
+        the instance so the HTML report can embed the transcript later.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         log_config = self.config.logging
 
         # Determine log file path
@@ -179,7 +223,19 @@ class PipelineOrchestrator:
             logger.info(f"Logging to file: {log_file}")
 
     def _create_directories(self) -> None:
-        """Create output directory structure."""
+        """Create the per-marker output directory tree (idempotent).
+
+        Pre-creates the numbered stage directories under ``paths.output``
+        (``01_trim``, ``02_dada2``, ``02_swarm``, ``03_taxo``) and the logs
+        directory so downstream steps can write without checking for parents.
+        Existing directories are left untouched.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         marker = self.config.marker.name
         base = self.config.paths.output
 
@@ -195,7 +251,17 @@ class PipelineOrchestrator:
         logger.debug(f"Created output directory structure in {base}")
 
     def _save_state(self) -> None:
-        """Save current pipeline state."""
+        """Persist the current pipeline state to the run's state JSON.
+
+        Writes ``self.state`` to ``self.state_file`` so progress survives an
+        interruption and ``--resume`` can pick up from the last recorded step.
+
+        Args:
+            None.
+
+        Returns:
+            None.
+        """
         self.state.save(self.state_file)
 
     def _write_config_snapshot(self) -> None:
@@ -207,6 +273,13 @@ class PipelineOrchestrator:
         original YAML still existing unchanged. The snapshot lives next to the state
         file at ``<paths.output>/.<marker>_config.snapshot.yaml`` and its path is stored
         on the state so the state JSON references it.
+
+        Args:
+            None.
+
+        Returns:
+            None. Side effects: writes the snapshot YAML, sets
+            ``self.state.config_snapshot_path``, and saves the state.
         """
         snapshot_path = (
             self.config.paths.output
@@ -270,6 +343,11 @@ class PipelineOrchestrator:
 
         Returns:
             The step's outputs dict (or the previously recorded outputs when skipped).
+
+        Raises:
+            Exception: Re-raises whatever ``body`` raises, after recording the
+                failure in the state and logging it. The state save and error log
+                happen first so the failure is durable before propagation.
         """
         if not self._should_run_step(step_name):
             step = self.state.get_step(step_name)
@@ -305,6 +383,18 @@ class PipelineOrchestrator:
         _run_ligation_demux), but nothing consumes it: the ``trim`` step re-runs over
         raw_data and produces the directory used here. The demux ``trimmed_dir`` is
         effectively unused in the dada2/swarm data flow.
+
+        Args:
+            None.
+
+        Returns:
+            Path to the directory of primer-trimmed FASTQs that DADA2/SWARM read
+            from. Equals the completed trim step's ``trimmed_dir`` output, or
+            ``paths.raw_data`` only if no trim step ran.
+
+        Raises:
+            ValueError: If the trim step is marked completed but recorded no
+                ``trimmed_dir`` in its outputs (a corrupt or stale state file).
         """
         if self.state.is_step_completed("trim"):
             trim_step = self.state.get_step("trim")
@@ -316,17 +406,33 @@ class PipelineOrchestrator:
 
     def run_demultiplex(self) -> Dict[str, Path]:
         """
-        Run demultiplexing step.
+        Run the demultiplexing step: split a multiplexed library into per-sample FASTQs.
+
+        In a multiplexed sequencing library, many samples are pooled into one set of
+        FASTQ files, each read carrying a short sample-specific tag. Demultiplexing
+        reads those tags and writes one FASTQ pair per sample so the rest of the
+        pipeline can treat each sample independently. The protocol
+        (``demultiplex.protocol``) selects ligation- vs standard-tag handling.
 
         Returns:
-            Dictionary with output paths
+            Dictionary of output paths. For the ligation protocol: ``demux_dir`` (the
+            per-sample output directory) and ``trimmed_dir`` (the trimmer's per-sample
+            result). On skip (already completed), the previously recorded outputs.
 
         Raises:
-            ValueError: If demultiplex is enabled but metadata is missing
+            ValueError: If the configured ``demultiplex.protocol`` is unknown, or (for
+                the ligation protocol) if the required sample-tag metadata CSV is not
+                set in the config.
+            NotImplementedError: If protocol is 'standard' (not yet wired end-to-end).
         """
         # This step runs iff "demultiplex" is listed in pipeline.steps. If your raw inputs are
         # already demultiplexed (one FASTQ per sample), simply omit "demultiplex" from steps.
         def body() -> Dict[str, Any]:
+            """Do this step's work and return its output paths (invoked by _execute_step).
+
+            Returns:
+                Dict mapping this step's output names to their file paths.
+            """
             logger.info(f"Running demultiplexing: {self.config.demultiplex.protocol}")
 
             if self.config.demultiplex.protocol == "ligation":
@@ -341,7 +447,25 @@ class PipelineOrchestrator:
         return self._execute_step("demultiplex", body)
 
     def _run_ligation_demux(self) -> Dict[str, Path]:
-        """Run ligation-based demultiplexing."""
+        """Demultiplex a ligation-protocol library and trim primers in one pass.
+
+        Ligation-protocol libraries carry the sample tag ligated onto the read; a
+        single multiplexed FASTQ is split into per-sample files using the
+        tag-to-sample mapping in the metadata CSV, and primers are trimmed at the
+        same time via LigationTrimmer. A sample failing to meet the configured
+        failure-rate threshold aborts the step (enforced inside the trimmer).
+
+        Args:
+            None.
+
+        Returns:
+            Dictionary with ``demux_dir`` (the per-sample output directory under
+            ``01_trim/<marker>/demux``) and ``trimmed_dir`` (the trimmer's returned
+            per-sample result).
+
+        Raises:
+            ValueError: If ``demultiplex.metadata`` (the sample-tag CSV) is not set.
+        """
         if self.config.demultiplex.metadata is None:
             raise ValueError(
                 "Ligation demultiplexing requires a sample-tag metadata CSV, but "
@@ -397,13 +521,30 @@ class PipelineOrchestrator:
 
     def run_trim(self) -> Dict[str, Any]:
         """
-        Run primer trimming step.
+        Run the primer trimming step over every sample (cutadapt).
+
+        Every read still begins/ends with the PCR primer sequences used to amplify
+        the marker; these are technical, not biological, and must be removed before
+        denoising or clustering or they corrupt feature inference. This step locates
+        each sample's R1/R2 FASTQ pair under ``paths.raw_data`` and runs the
+        StandardTrimmer (cutadapt) to strip the forward/reverse primers, writing the
+        trimmed pairs under ``01_trim/<marker>``.
 
         Returns:
-            Dictionary with the trimmed-reads directory and the per-sample
-            trim outputs (under the ``"samples"`` key).
+            Dictionary with ``trimmed_dir`` (the output directory consumed by
+            DADA2/SWARM) and ``samples`` (a dict mapping each sample name to its
+            per-sample trim output tuple). On skip, the previously recorded outputs.
+
+        Raises:
+            FileNotFoundError: If the raw data directory or a sample's R1/R2 file
+                cannot be found (raised by the sample-discovery helpers).
         """
         def body() -> Dict[str, Any]:
+            """Do this step's work and return its output paths (invoked by _execute_step).
+
+            Returns:
+                Dict mapping this step's output names to their file paths.
+            """
             logger.info("Running primer trimming")
 
             trimmer = StandardTrimmer(
@@ -448,12 +589,31 @@ class PipelineOrchestrator:
 
     def run_dada2(self) -> Dict[str, Path]:
         """
-        Run DADA2 processing step.
+        Run the DADA2 denoising step: turn trimmed reads into ASVs.
+
+        DADA2 is the ASV (Amplicon Sequence Variant) path: it models per-run
+        sequencing error to infer the exact biological sequences present, merges
+        read pairs, builds a sample-by-sequence count table, and removes chimeras
+        (artefactual sequences spliced from two real templates during PCR). All the
+        filter/merge/chimera knobs come from the config's dada2 section. After the
+        step completes, a post-hook cross-checks the manifest eventIDs against the
+        abundance table to catch silent sample-ID mismatches.
 
         Returns:
-            Dictionary with output paths
+            Dictionary of output paths from the DADA2 processor (includes the query
+            FASTA of ASV sequences and the transposed clean count table). On skip,
+            the previously recorded outputs.
+
+        Raises:
+            Exception: Re-raises any failure from the DADA2 processor or the R
+                subprocess it drives (recorded in the state before propagation).
         """
         def body() -> Dict[str, Any]:
+            """Do this step's work and return its output paths (invoked by _execute_step).
+
+            Returns:
+                Dict mapping this step's output names to their file paths.
+            """
             logger.info("Running DADA2 processing")
 
             trimmed_reads_dir = self._get_trimmed_reads_dir()
@@ -488,12 +648,31 @@ class PipelineOrchestrator:
 
     def run_swarm(self) -> Dict[str, Path]:
         """
-        Run SWARM OTU clustering step.
+        Run the SWARM clustering step: turn trimmed reads into OTUs.
+
+        SWARM is the OTU (Operational Taxonomic Unit) path: read pairs are merged
+        and dereplicated (via vsearch), then SWARM agglomerates near-identical
+        sequences into clusters using a single-linkage local threshold ``d``
+        (optionally with fastidious mode), and chimeras are removed when the config
+        requests it. OTUs are a coarser feature than DADA2's ASVs, so their count
+        legitimately differs. The same manifest-vs-abundance post-hook runs to catch
+        silent sample-ID mismatches.
 
         Returns:
-            Dictionary with output paths
+            Dictionary of output paths from the SWARM processor (includes the query
+            FASTA of OTU representative sequences and the OTU count table). On skip,
+            the previously recorded outputs.
+
+        Raises:
+            Exception: Re-raises any failure from the SWARM processor or the vsearch/
+                swarm subprocesses it drives (recorded in the state before propagation).
         """
         def body() -> Dict[str, Any]:
+            """Do this step's work and return its output paths (invoked by _execute_step).
+
+            Returns:
+                Dict mapping this step's output names to their file paths.
+            """
             logger.info("Running SWARM OTU clustering")
 
             trimmed_reads_dir = self._get_trimmed_reads_dir()
@@ -535,6 +714,15 @@ class PipelineOrchestrator:
         Returns the CSV path, or None when per_library is off or no grouping source exists
         (the R script then runs the standard single-batch path). A single-library grouping is
         a no-op there too, so writing the map is always safe.
+
+        Args:
+            None.
+
+        Returns:
+            Path to the written ``library_map.csv`` (columns: ``sample``, ``library``)
+            under ``02_dada2/<marker>``, or None when ``dada2.per_library`` is off, no
+            grouping source is configured, or building the map fails (a ``[WARN]`` is
+            logged in the latter two cases and DADA2 falls back to single-batch).
         """
         if not self.config.dada2.per_library:
             return None
@@ -583,6 +771,13 @@ class PipelineOrchestrator:
 
         Honors ``report.output_dir`` (a per-marker subdirectory is created
         inside it); otherwise defaults to ``<paths.output>/04_report/<marker>``.
+
+        Args:
+            None.
+
+        Returns:
+            Path to the marker's report directory. Not created here; callers create
+            it before writing.
         """
         marker = self.config.marker.name
         base = self.config.report.output_dir
@@ -591,11 +786,26 @@ class PipelineOrchestrator:
         return self.config.paths.output / "04_report" / marker
 
     def _build_read_tracking_report(self, method: str) -> None:
-        """Build the read-tracking table (+ optional HTML report) after a
-        clustering step.
+        """Build the per-sample read-tracking table after a feature step.
+
+        The read-tracking table records how many reads each sample retained at each
+        stage (raw -> trimmed -> denoised/clustered), so a biologist can spot a
+        sample that lost most of its reads (a failed PCR, a dirty blank) before
+        trusting its detections. This writes the table and a run-level step summary,
+        evaluates retention warnings, and stores a compact per-sample summary into
+        the step's state metadata so it survives ``--resume`` and feeds the FAIRe
+        manifest's ``reads_*`` columns.
 
         Non-fatal: a reporting failure logs a ``[WARN]`` and never fails the
         run (the no-silent-fallbacks policy -- the report is observational only).
+
+        Args:
+            method: The feature step that produced the table, ``"dada2"`` or
+                ``"swarm"``; selects which directory/table the builder reads.
+
+        Returns:
+            None. Side effects: writes the tracking table and step summary under the
+            report directory and mutates the matching step's ``metadata``.
         """
         try:
             import pandas as pd
@@ -665,6 +875,15 @@ class PipelineOrchestrator:
         columns -- the up-front silent-ID-mismatch guard (the no-silent-fallbacks policy), catching e.g. an
         unlabelled ``Blank-PCR-3`` column. Warn-only and non-fatal: it never alters or fails
         the run.
+
+        Args:
+            method: The feature step whose abundance table to check, ``"dada2"``
+                (reads ``seqtab_clean_t.csv``) or ``"swarm"`` (reads ``otu_table.csv``).
+
+        Returns:
+            None. Returns early without checking when no field metadata is
+            configured or the inputs are missing; any mismatch surfaces as a
+            ``[WARN]`` log inside the validator.
         """
         field_csv = self.config.report.sample_metadata
         if field_csv is None:
@@ -701,6 +920,13 @@ class PipelineOrchestrator:
         Called by the ``report`` step; gated by ``report.html_report`` (default on, set
         ``false`` to write only the read-tracking table). Non-fatal: failures log a ``[WARN]``
         and never affect the run (the no-silent-fallbacks policy).
+
+        Args:
+            None.
+
+        Returns:
+            None. Side effects: writes ``report.html`` under the report directory
+            when enabled; returns early (no-op) when ``report.html_report`` is off.
         """
         if not self.config.report.html_report:
             return
@@ -773,12 +999,34 @@ class PipelineOrchestrator:
 
     def run_taxonomy(self) -> Dict[str, Path]:
         """
-        Run taxonomic assignment step.
+        Run the taxonomic assignment step: label each ASV/OTU with a taxon name.
+
+        Each ASV/OTU is just an anonymous DNA sequence until it is matched against a
+        reference database of known sequences to assign a taxonomy (species, genus,
+        family, ...). This step picks up the query FASTA and count table from the
+        completed feature step (DADA2 or SWARM), selects the method-specific
+        parameters and reference database from the config (``blast``, ``dada2`` RDP,
+        ``ecotag``, or ``decipher``), and delegates to the TaxonomicAssigner, which
+        writes a merged taxonomy+abundance table.
 
         Returns:
-            Dictionary with output paths
+            Dictionary of output paths from the assigner, including ``final_table``
+            (the merged taxonomy+abundance CSV consumed by clean/export). On skip,
+            the previously recorded outputs.
+
+        Raises:
+            ValueError: If neither dada2 nor swarm is marked completed in this run's
+                state, or if the completed feature step recorded no ``query_fasta``
+                or count table.
+            Exception: Re-raises any failure from the assigner or its subprocesses
+                (recorded in the state before propagation).
         """
         def body() -> Dict[str, Any]:
+            """Do this step's work and return its output paths (invoked by _execute_step).
+
+            Returns:
+                Dict mapping this step's output names to their file paths.
+            """
             logger.info(f"Running taxonomic assignment: {self.config.taxonomy.method}")
 
             # Get outputs from clustering step (DADA2 or SWARM)
@@ -879,7 +1127,23 @@ class PipelineOrchestrator:
         controls (list ``clean`` in pipeline.steps, after a feature step). Needs
         ``report.sample_metadata`` (the control-identity source). Non-fatal: a problem skips
         cleaning with a ``[WARN]`` rather than failing the run (export falls back to the
-        uncleaned table)."""
+        uncleaned table).
+
+        Negative controls (extraction blanks, PCR blanks) capture contamination that
+        leaked in during lab handling; cleaning subtracts what those controls saw
+        from the real samples so reported detections are not lab artefacts. The
+        cleaning ``mode`` comes from the config's cleaning section.
+
+        Returns:
+            Dictionary with ``cleaned_table`` (the decontaminated CSV) and
+            ``cleaning_report`` (the per-feature cleaning report CSV), or an empty
+            dict when cleaning is skipped (no control metadata) or errors out. On a
+            prior skip/completion, the previously recorded outputs.
+
+        Raises:
+            None. All failures are caught and recorded as a skipped step with a
+            ``[WARN]``; the run is never failed over cleaning.
+        """
         step_name = "clean"
         if not self._should_run_step(step_name):
             step = self.state.get_step(step_name)
@@ -967,6 +1231,15 @@ class PipelineOrchestrator:
         returns False and export is not re-run, so the GBIF CSV silently stays
         stale. Surface this per the no-silent-fallbacks policy; the user must
         re-run export to pick up the cleaned table.
+
+        Args:
+            export_step: The export step's StepState (or None). Only triggers a
+                warning when it is a completed export that finished before a later
+                completed clean step that produced a cleaned table.
+
+        Returns:
+            None. Side effect: logs a ``[WARN]`` when the existing export is stale
+            relative to the cleaned table; otherwise a no-op.
         """
         if export_step is None or export_step.completed_at is None:
             return
@@ -989,10 +1262,24 @@ class PipelineOrchestrator:
 
     def run_export(self) -> Dict[str, Path]:
         """
-        Run export step (GBIF formatting).
+        Run the export step: reshape the final table into GBIF / Darwin Core format.
+
+        GBIF (the Global Biodiversity Information Facility) and the Darwin Core
+        standard define how occurrence records must be structured for submission and
+        sharing. This step reads the merged taxonomy+abundance table from the
+        taxonomy step (preferring the decontaminated table if the clean step produced
+        one) and writes a GBIF-formatted CSV, optionally adding rank/taxon columns.
 
         Returns:
-            Dictionary with output paths
+            Dictionary with ``gbif_csv`` (path to the GBIF-formatted output CSV). On
+            skip, the previously recorded outputs (with a staleness warning if a
+            later clean step has since produced a cleaned table).
+
+        Raises:
+            ValueError: If the taxonomy step did not complete, is missing from the
+                state, or recorded no ``final_table`` to format.
+            Exception: Re-raises any failure from the GBIF formatter (recorded in the
+                state before propagation).
         """
         step_name = "export"
 
@@ -1087,7 +1374,18 @@ class PipelineOrchestrator:
     def run_report(self) -> Dict[str, Path]:
         """Reporting step: write the per-step read/sequence tracking table + step summary, and
         (when ``report.html_report`` is on) the self-contained HTML run report. Observational:
-        a reporting failure logs a ``[WARN]`` and never fails the run (the no-silent-fallbacks policy)."""
+        a reporting failure logs a ``[WARN]`` and never fails the run (the no-silent-fallbacks policy).
+
+        Returns:
+            Empty dict. Side effects: writes the read-tracking table, step summary,
+            and (when enabled) the HTML report. Marks the step skipped (with a
+            ``[WARN]``) when no completed dada2/swarm step exists to report on. On a
+            prior skip/completion, the previously recorded outputs.
+
+        Raises:
+            None. Reporting failures are caught downstream and logged as ``[WARN]``;
+            the run is never failed over the report.
+        """
         step_name = "report"
         if not self._should_run_step(step_name):
             step = self.state.get_step(step_name)
@@ -1199,10 +1497,20 @@ class PipelineOrchestrator:
 
     def _get_sample_list(self) -> List[str]:
         """
-        Get list of sample names from raw data directory.
+        Discover sample names by scanning the raw data directory for R1 FASTQs.
+
+        Globs ``paths.raw_data`` for forward-read (R1) files under several common
+        naming conventions and derives each sample name as the text before the
+        ``_R1``/``.R1`` marker, so the trim step knows which samples to process.
+
+        Args:
+            None.
 
         Returns:
-            List of sample names
+            Sorted list of unique sample names found in the raw data directory.
+
+        Raises:
+            FileNotFoundError: If ``paths.raw_data`` does not exist.
         """
         import re
 

@@ -61,6 +61,13 @@ def _canon_header(raw: str) -> str:
     Strips a BOM, a trailing ``[unit]`` suffix, collapses internal whitespace, and
     lower-cases. Used only to *match* a header to a canonical manifest field; the
     canonical (camelCase) name is taken from :data:`_FIELD_ALIASES`.
+
+    Args:
+        raw: A raw column header exactly as it appears in the source CSV (may carry
+            a BOM, mixed casing, a bracketed unit such as ``[m]`` or ``[uS]``).
+
+    Returns:
+        The normalised lowercase match key (no BOM, no unit suffix, single spaces).
     """
     h = raw.lstrip("﻿").strip()
     h = _UNIT_SUFFIX.sub("", h)
@@ -69,8 +76,18 @@ def _canon_header(raw: str) -> str:
 
 
 def _cell(value: object) -> Optional[str]:
-    """Strip a raw cell and map missing-value tokens (``NA``, empty, INSDC tokens) to None,
-    so the migrator's bookkeeping never treats ``NA`` as a real value."""
+    """Strip a raw cell and map missing-value tokens to None.
+
+    Missing-value tokens (``NA``, empty string, INSDC placeholders) collapse to None so the
+    migrator's bookkeeping never treats ``NA`` as a real value (e.g. an extraction blank whose
+    ``extraction_ID`` reads ``"NA"`` must not register a fabricated extraction batch).
+
+    Args:
+        value: A raw cell value as read from the CSV (any type; coerced to str).
+
+    Returns:
+        The stripped string, or None if it is empty or a recognised missing-value token.
+    """
     s = str(value).strip()
     return None if s.lower() in MISSING_VALUE_TOKENS else s
 
@@ -138,11 +155,21 @@ def _build_header_map(
 ) -> Tuple[Dict[str, str], List[str], List[str], List[Tuple[str, str, str]]]:
     """Map raw field-metadata headers to canonical fields.
 
-    Returns ``(canonical_field -> raw_column, dropped_known, dropped_unexpected, collisions)``.
     A ``pcr_code_*`` column is recognised (carried in ``dropped_known``) regardless of its
     marker token. If two raw columns canonicalise to the same field the first wins and the
-    second is recorded in ``collisions`` (as ``(dropped_raw, kept_raw, canonical)``) so the
-    caller can ``[WARN]`` -- never a silent discard (the no-silent-fallbacks policy).
+    second is recorded in ``collisions`` so the caller can ``[WARN]`` rather than silently
+    discard it (the no-silent-fallbacks policy).
+
+    Args:
+        columns: The raw column headers of the field-metadata CSV, in file order.
+
+    Returns:
+        A 4-tuple ``(field_to_raw, dropped_known, dropped_unexpected, collisions)``:
+        ``field_to_raw`` maps each canonical manifest field to the raw column it came from;
+        ``dropped_known`` lists recognised columns with no FAIRe slot (expected drops);
+        ``dropped_unexpected`` lists unrecognised columns (possible shifted/garbled file);
+        ``collisions`` lists ``(dropped_raw, kept_raw, canonical)`` for fields that two raw
+        columns both mapped to.
     """
     field_to_raw: Dict[str, str] = {}
     dropped_known: List[str] = []
@@ -190,25 +217,35 @@ def normalise_event_dates(
 ) -> Dict[str, str]:
     """Build a verbatim-token -> ISO-8601 map for one file's eventDate column.
 
-    Handles ISO (``YYYY-MM-DD``), dotted/slashed 3-part dates in any of YYYY.MM.DD,
+    ``eventDate`` is the field-collection date for each sample; it must reach GBIF in
+    ISO-8601 form, but source CSVs use inconsistent dotted/slashed orders. This normaliser
+    handles ISO (``YYYY-MM-DD``), dotted/slashed 3-part dates in any of YYYY.MM.DD,
     YYYY.DD.MM, DD.MM.YYYY and MM.DD.YYYY orders, an optional trailing clock time, and
     partial year / year-month forms. The 4-digit year fixes which end is the year; the
-    day/month order of the remaining two fields is then resolved **per file** from any
+    day/month order of the remaining two fields is then resolved per file from any
     unambiguous token (a field > 12 is the day). Missing-value tokens (``NA``, empty, INSDC
-    tokens) are skipped, not parsed.
+    tokens) are skipped, not parsed. The guiding principle is to raise rather than guess, so
+    a silently mis-parsed collection date never reaches a biodiversity dataset.
 
     Args:
-        order: optional explicit field order ``YMD``/``DMY``/``MDY`` to use when the dates
+        values: The raw eventDate cell values for one file (duplicates and blanks allowed;
+            they are de-duplicated and missing-value tokens are dropped before parsing).
+        context: Label for error and warning messages (typically ``"<file>:eventDate"``).
+        order: Optional explicit field order ``YMD``/``DMY``/``MDY`` to use when the dates
             are genuinely ambiguous (every token has day and month both <= 12). When given,
             it is applied to every 3-part token and the choice is logged; when ``None`` the
-            order is auto-detected and an ambiguous file *raises* rather than being guessed.
-
-    Raises -- never guesses -- when a file mixes year-first and year-last tokens, when the
-    day/month order is contradictory, when it is ambiguous and no ``order`` was supplied,
-    when a year is only two digits, or when a field is out of range.
+            order is auto-detected and an ambiguous file raises rather than being guessed.
 
     Returns:
-        Map from each distinct verbatim token to its ISO-8601 form.
+        A dict mapping each distinct verbatim token to its ISO-8601 form (``YYYY-MM-DD``,
+        or ``YYYY-MM`` / ``YYYY`` for partial dates). Empty if there are no parseable tokens.
+
+    Raises:
+        ValueError: if ``order`` is not one of YMD/DMY/MDY; if a file mixes year-first and
+            year-last tokens; if the day/month order is contradictory; if the order is
+            ambiguous and no ``order`` was supplied; if a year is only two digits; if a token
+            is inconsistent with the supplied ``order``; or if a month/day field is out of
+            range. The error names the offending token and the file.
     """
     if order is not None and order.upper() not in _DATE_ORDERS:
         raise ValueError(f"{context}: unknown date order {order!r}; expected one of {list(_DATE_ORDERS)}")
@@ -290,7 +327,18 @@ def normalise_event_dates(
 
     # The two non-year fields, in positional order (a, b).
     def _nonyear(f0: int, f1: int, f2: int) -> Tuple[int, int]:
-        """Return the two non-year positional fields (a, b), dropping whichever holds the year."""
+        """Return the two non-year positional fields (a, b), dropping whichever holds the year.
+
+        Closes over ``year_pos`` (0 = year first, 2 = year last) decided for this file.
+
+        Args:
+            f0: The first positional field of a 3-part date.
+            f1: The middle positional field.
+            f2: The last positional field.
+
+        Returns:
+            The two fields that are not the year, in positional order (a, b).
+        """
         return (f1, f2) if year_pos == 0 else (f0, f1)
 
     day_first_evidence = any(_nonyear(f0, f1, f2)[0] > 12 for _, f0, f1, f2 in three)   # a is day
@@ -343,8 +391,18 @@ _LEADING_NUMBER = re.compile(r"^(-?\d+(?:\.\d+)?)\s*\S.*$")  # "17 L" -> "17"
 def _clean_numeric(field: str, value: str, event_id: str) -> Optional[str]:
     """Coerce one numeric cell to a clean float-string, or None, never crashing the row.
 
-    Strips a trailing unit ("17 L" -> "17"), range-checks, and on any failure returns None
-    with a ``[WARN]`` rather than letting one bad cell abort the whole dataset's migration.
+    Strips a trailing unit ("17 L" -> "17"), range-checks against :data:`_NUMERIC_RANGES`
+    (e.g. latitude in [-90, 90]), and on any failure returns None with a ``[WARN]`` rather
+    than letting one bad cell abort the whole dataset's migration.
+
+    Args:
+        field: The canonical manifest field name (selects the sanity range, if any).
+        value: The raw cell value as a string (may carry a trailing unit or be blank/NA).
+        event_id: The sample's eventID, named in any warning so the bad cell is locatable.
+
+    Returns:
+        The cleaned numeric value as a string (the original digits, unit stripped), or None
+        if the cell is missing, non-numeric, non-finite, or out of the sanity range.
     """
     v = (value or "").strip()
     if not v or v.lower() in MISSING_VALUE_TOKENS:
@@ -397,7 +455,18 @@ _TAG_LIKE = re.compile(r"(tag|mid|barcode|demult|demlt|index|i7|i5)", re.I)
 def _resolve_lab_columns(columns: List[str]) -> Dict[str, Optional[str]]:
     """Locate the eventID, library, and forward/reverse tag columns in a demux lab CSV.
 
-    Unrecognised tag-looking columns emit a ``[WARN]`` rather than being silently dropped.
+    A legacy demultiplexing lab CSV carries the per-sample barcode ("tag"/MID) sequences and
+    the ``library`` (sequencing-run) grouping. This resolves those columns by name across
+    eras, including the documented ``tag_demltiplex`` typo. Unrecognised tag-looking columns
+    emit a ``[WARN]`` rather than being silently dropped, so a renamed barcode column is
+    noticed instead of producing samples with no MID.
+
+    Args:
+        columns: The raw column headers of the demux lab CSV.
+
+    Returns:
+        A dict with keys ``"eventID"``, ``"library"``, ``"mid_forward"``, ``"mid_reverse"``,
+        each mapping to the matching raw column name or None if absent.
     """
     by_key = {_canon_header(c): c for c in columns}
     fwd = next((by_key[k] for k in _TAG_FORWARD if k in by_key), None)
@@ -427,7 +496,23 @@ def _resolve_lab_columns(columns: List[str]) -> Dict[str, Optional[str]]:
 
 
 def _load_lab_metadata(lab_csv: Path) -> Dict[str, Dict[str, Optional[str]]]:
-    """Read a demux lab CSV into ``{eventID: {seq_run_id, mid_forward, mid_reverse}}``."""
+    """Read a demux lab CSV into a per-sample run-id + barcode index.
+
+    Used to recover the sequencing-run grouping (``seq_run_id``) and the per-sample
+    forward/reverse barcodes (MIDs) when they are not present in the modern field metadata.
+
+    Args:
+        lab_csv: Path to a legacy demultiplexing lab CSV (``metadata_lab_*.csv``).
+
+    Returns:
+        A dict keyed by eventID, each value a dict with keys ``"seq_run_id"``,
+        ``"mid_forward"``, ``"mid_reverse"`` (values are strings or None).
+
+    Raises:
+        ValueError: if the CSV has no eventID column, or no ``library`` column (the latter
+            means it is really a pre-demultiplexed field-metadata CSV and should be passed as
+            the field metadata instead).
+    """
     df = pd.read_csv(lab_csv, dtype=str, keep_default_na=False, encoding="utf-8-sig")
     cols = _resolve_lab_columns(list(df.columns))
     if cols["eventID"] is None:
@@ -455,7 +540,18 @@ def _load_lab_metadata(lab_csv: Path) -> Dict[str, Dict[str, Optional[str]]]:
 # Project metadata
 # --------------------------------------------------------------------------- #
 def _read_marker(project_csv: Path) -> Optional[str]:
-    """Pull the marker/target_gene from a one-row project metadata CSV."""
+    """Pull the marker/target_gene from a one-row project metadata CSV.
+
+    The marker (e.g. teleo, MiFish, 16S) is the metabarcoding assay; it is propagated into
+    the manifest as ``target_gene``/``assay_name``.
+
+    Args:
+        project_csv: Path to a one-row project metadata CSV (``metadata_proj_*.csv``).
+
+    Returns:
+        The marker string from the ``marker``/``target_gene`` column, or None (with a
+        ``[WARN]``) if that column is absent or the CSV is empty.
+    """
     df = pd.read_csv(project_csv, dtype=str, keep_default_na=False, encoding="utf-8-sig")
     by_key = { _canon_header(c): c for c in df.columns }
     col = by_key.get("marker") or by_key.get("target_gene")
@@ -473,7 +569,17 @@ def _read_marker(project_csv: Path) -> Optional[str]:
 # Migration
 # --------------------------------------------------------------------------- #
 def _dataset_from_filename(field_csv: Path) -> str:
-    """``metadata_field_<dataset>.csv`` -> ``<dataset>`` (else the file stem)."""
+    """Derive a dataset label from a field-metadata filename.
+
+    Strips the ``metadata_field_`` / ``metadata_`` prefix from the stem; used to synthesise a
+    default ``seq_run_id`` for pre-demultiplexed datasets when no grouping source is supplied.
+
+    Args:
+        field_csv: Path to the field-metadata CSV (``metadata_field_<dataset>.csv``).
+
+    Returns:
+        The ``<dataset>`` token, or the bare file stem if neither prefix is present.
+    """
     stem = field_csv.stem
     for prefix in ("metadata_field_", "metadata_"):
         if stem.startswith(prefix):
@@ -503,13 +609,19 @@ def migrate_to_manifest(
         target_gene: explicit marker (overrides the project CSV).
         dataset: dataset label used to derive a default ``seq_run_id`` when none is
             available (modern pre-demultiplexed data); defaults to the field filename.
+        date_order: optional explicit eventDate field order ``YMD``/``DMY``/``MDY``, passed
+            through to :func:`normalise_event_dates` to resolve genuinely ambiguous dates;
+            None auto-detects and raises on ambiguity.
 
     Returns:
-        A validated :class:`SampleManifest`.
+        A validated :class:`SampleManifest` (one row per sample-library), after running its
+        control and completeness checks.
 
     Raises:
-        FileNotFoundError / ValueError: missing file, missing sample key, unresolvable
-            date order, or any row failing the canonical model (errors aggregated).
+        FileNotFoundError: if ``field_csv`` does not exist.
+        ValueError: if the field metadata is empty, has no eventID/samp_name column, has an
+            unresolvable eventDate order, or produces any row that fails the canonical
+            :class:`SampleManifestRow` model (all row errors are aggregated into one message).
     """
     field_csv = Path(field_csv)
     if not field_csv.exists():

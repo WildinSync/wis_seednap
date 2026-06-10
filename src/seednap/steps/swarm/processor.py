@@ -1,7 +1,15 @@
 """SWARM OTU clustering workflow orchestration.
 
-Coordinates the full SWARM pipeline: vsearch merge → dereplicate →
-SWARM cluster → chimera detection → OTU table building.
+Drives the SWARM OTU path end to end for one marker, sitting between the
+primer-trimming step and taxonomy assignment in the pipeline. Coordinates the
+vsearch and SWARM wrappers in sequence: per-sample paired-end read merging ->
+per-sample dereplication -> global dereplication -> SWARM clustering ->
+abundance sorting -> chimera detection -> OTU contingency-table building ->
+DADA2-compatible outputs for taxonomy.
+
+The output of this step is an OTU table (clusters of near-identical amplicons
+standing in for putative taxa) plus a representative-sequence FASTA, the
+SWARM-path counterpart to the DADA2 ASV path.
 """
 
 import logging
@@ -18,10 +26,14 @@ logger = logging.getLogger(__name__)
 
 class SwarmProcessor:
     """
-    Orchestrate complete SWARM OTU clustering workflow.
+    Orchestrate the complete SWARM OTU clustering workflow for one marker.
 
-    Coordinates vsearch (merging, dereplication, sorting, chimera detection)
-    and SWARM (clustering) to produce an OTU table from trimmed paired-end reads.
+    Coordinates vsearch (read merging, dereplication, abundance sorting,
+    chimera detection) and SWARM (clustering) to turn primer-trimmed
+    paired-end reads into an OTU table and representative-sequence FASTA.
+    A marker is the target gene region amplified for metabarcoding (e.g.
+    teleo for fish, mam07 for mammals); each marker is processed in its own
+    output subtree.
     """
 
     def __init__(
@@ -32,13 +44,26 @@ class SwarmProcessor:
         timeout: int = 3600,
     ):
         """
-        Initialize SWARM processor.
+        Initialize the SWARM processor and create its output directory.
+
+        Validates that the trimmed-reads directory exists and constructs the
+        vsearch/SWARM wrappers (which themselves verify their binaries are on
+        PATH). Output is written under ``<output_base_dir>/02_swarm/<marker>/``.
 
         Args:
-            marker: Marker name (e.g., 'teleo', 'amph')
-            trimmed_reads_dir: Directory with primer-trimmed FASTQ files
-            output_base_dir: Base output directory
-            timeout: Timeout for external commands in seconds (default: 1 hour)
+            marker: Marker name (e.g., 'teleo', 'amph'); lowercased and used
+                as the per-marker output subdirectory name.
+            trimmed_reads_dir: Directory holding the primer-trimmed paired-end
+                FASTQ files to cluster (R1/R2 pairs).
+            output_base_dir: Base output directory; the SWARM step writes to
+                the ``02_swarm/<marker>/`` subtree beneath it.
+            timeout: Timeout in seconds for each external command (vsearch and
+                SWARM invocations), default 3600 (1 hour).
+
+        Raises:
+            FileNotFoundError: If ``trimmed_reads_dir`` does not exist.
+            SwarmError: If the swarm binary is not on PATH (from SwarmClusterer).
+            VsearchError: If the vsearch binary is not on PATH (from VsearchRunner).
         """
         self.marker = marker.lower()
         self.trimmed_reads_dir = Path(trimmed_reads_dir)
@@ -82,7 +107,14 @@ class SwarmProcessor:
         chimera_detection: bool = True,
     ) -> Dict[str, Path]:
         """
-        Run complete SWARM clustering workflow.
+        Run the complete SWARM clustering workflow for this marker.
+
+        Executes the full SWARM OTU path: paired-end reads are merged into
+        single amplicon sequences, dereplicated to unique sequences with
+        abundances, clustered into OTUs by SWARM, screened for PCR chimeras,
+        and tabulated into a per-sample OTU contingency table. Samples that
+        yield no merged or dereplicated sequences (commonly blanks/negative
+        controls) are skipped with a warning rather than aborting the run.
 
         Steps:
         1. Find trimmed R1/R2 pairs
@@ -96,15 +128,23 @@ class SwarmProcessor:
         9. Write normalized outputs for taxonomy
 
         Args:
-            d: SWARM distance threshold (default: 1)
-            fastidious: Enable fastidious mode (default: True)
-            boundary: Fastidious boundary value (default: 3)
-            threads: Number of threads (default: 4)
-            fastq_maxdiffs: Max differences in overlap for merging (default: 10)
-            fastq_minovlen: Min overlap length for merging (default: 10)
-            allow_stagger: Allow staggered read merging (default: False)
-            min_sequence_length: Min sequence length after merging (default: 20)
-            chimera_detection: Run chimera detection (default: True)
+            d: SWARM clustering distance threshold in nucleotide differences
+                (default: 1). Fastidious mode requires d=1.
+            fastidious: Enable SWARM fastidious mode, which grafts small OTUs
+                onto larger ones to reduce over-splitting (default: True).
+            boundary: Mass threshold separating small from large OTUs in
+                fastidious mode (default: 3).
+            threads: Number of threads for vsearch/SWARM (default: 4).
+            fastq_maxdiffs: Max mismatches allowed in the read overlap when
+                merging pairs (default: 10).
+            fastq_minovlen: Minimum R1/R2 overlap length, in bp, required to
+                merge a pair (default: 10).
+            allow_stagger: Allow merging of staggered reads where the 3' ends
+                extend past each other (default: False).
+            min_sequence_length: Minimum merged-read length, in bp, to keep
+                (default: 20).
+            chimera_detection: Run de novo chimera detection on the OTU
+                representatives (default: True).
 
         Returns:
             Dictionary with output paths (keys match DADA2 output convention):
@@ -112,6 +152,17 @@ class SwarmProcessor:
             - seqtab_clean_t: OTU abundance table CSV (for taxonomy)
             - otu_table_full: Full OTU table with metadata
             - merged_dir: Directory with merged reads
+
+        Raises:
+            FileNotFoundError: If no R1/R2 FASTQ pairs are found in the trimmed
+                reads directory.
+            ValueError: If every sample is empty after read merging
+                (nothing left to cluster), or if a sample name collides with a
+                reserved OTU-table metadata column (from the table builder).
+            VsearchError: If any vsearch step (merge, dereplicate, sort,
+                chimera) fails.
+            SwarmError: If SWARM clustering fails (commonly a d>1 with
+                fastidious enabled config mismatch).
         """
         logger.info(f"Starting SWARM workflow for {self.marker}")
         logger.info(f"Parameters: d={d}, fastidious={fastidious}, threads={threads}")

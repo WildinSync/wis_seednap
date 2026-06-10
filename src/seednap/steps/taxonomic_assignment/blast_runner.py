@@ -45,7 +45,13 @@ class BlastError(Exception):
 
 
 class BlastRunner:
-    """Run BLAST commands (makeblastdb, blastn) via subprocess."""
+    """Run BLAST commands (makeblastdb, blastn) via subprocess.
+
+    Thin wrapper that builds and executes the NCBI BLAST+ command line. It turns a
+    set of query sequences (the marker amplicons recovered from a sample, i.e. the
+    ASVs/OTUs) into a table of best matches against a reference sequence database,
+    which downstream code converts into taxonomic calls.
+    """
 
     VALID_TASKS = ("megablast", "blastn", "dc-megablast", "blastn-short")
 
@@ -56,18 +62,21 @@ class BlastRunner:
         evalue: float = 1e-25,
         max_target_seqs: int = 5,
         task: str = "megablast",
-    ):
+    ) -> None:
         """
         Initialize BLAST runner with search parameters.
 
         Args:
-            perc_identity: Minimum percent identity for hits (default: 80.0)
-            qcov_hsp_perc: Minimum query coverage per HSP (default: 80.0)
-            evalue: Maximum e-value for hits (default: 1e-25)
-            max_target_seqs: Maximum number of target sequences to keep (default: 5)
+            perc_identity: Minimum percent identity (0-100) for a hit to be kept (default: 80.0)
+            qcov_hsp_perc: Minimum query coverage per HSP, in percent (default: 80.0)
+            evalue: Maximum e-value (expected number of chance hits) for a hit (default: 1e-25)
+            max_target_seqs: Maximum number of target sequences to keep per query (default: 5)
             task: blastn task. 'megablast' (word_size 28) is the right default for
                 short, high-identity vertebrate amplicons; 'blastn' (word_size 11)
                 is more sensitive for divergent matches. Default: 'megablast'.
+
+        Raises:
+            ValueError: If task is not one of VALID_TASKS.
         """
         if task not in self.VALID_TASKS:
             raise ValueError(
@@ -253,7 +262,7 @@ class BlastOutputFormatter:
 
     TAXONOMIC_RANKS = list(TAXONOMIC_RANKS)
 
-    def __init__(self, reference_fasta: Union[str, Path]):
+    def __init__(self, reference_fasta: Union[str, Path]) -> None:
         """
         Initialize BLAST output formatter.
 
@@ -273,8 +282,14 @@ class BlastOutputFormatter:
         """
         Load phylogenetic information from reference FASTA headers.
 
+        Reads every FASTA header in the reference database once and keeps the full
+        header line keyed by its sequence ID. The lineage (kingdom..species) is later
+        parsed out of these headers so each BLAST hit can be given a taxonomic name.
+
         Returns:
-            Dictionary mapping sequence IDs to full header lines
+            Dictionary mapping each reference sequence ID (the first whitespace-
+            separated token of the header, with the leading '>' stripped) to the
+            full, stripped header line.
         """
         phylo_dict = {}
         with open(self.reference_fasta, "r") as f:
@@ -484,7 +499,7 @@ class BlastLCAResolver:
 
     TAXONOMIC_RANKS = list(TAXONOMIC_RANKS)
 
-    def __init__(self, top_bitscore_pct: float = 10.0, lca_pident_delta: float = 1.0):
+    def __init__(self, top_bitscore_pct: float = 10.0, lca_pident_delta: float = 1.0) -> None:
         """
         Initialize LCA resolver.
 
@@ -499,6 +514,9 @@ class BlastLCAResolver:
                 worm next to 100% Bos hits) inside the bitscore band; without this
                 floor that one hit collapses the LCA all the way to kingdom. 0
                 disables the floor (bitscore band only).
+
+        Raises:
+            ValueError: If top_bitscore_pct or lca_pident_delta is outside [0, 100].
         """
         if top_bitscore_pct < 0 or top_bitscore_pct > 100:
             raise ValueError(
@@ -553,7 +571,16 @@ class BlastLCAResolver:
 
         # Helper: keep exactly one row by label
         def _keep_one(group_df: pd.DataFrame, keep_label: int) -> pd.DataFrame:
-            """Set keep_for_analysis True on the single row at keep_label, False elsewhere."""
+            """Mark a single hit as the one to keep for this query.
+
+            Args:
+                group_df: The query's hits (one row per BLAST hit).
+                keep_label: Index label of the single row to retain.
+
+            Returns:
+                group_df with a new boolean `keep_for_analysis` column: True only on
+                the row at keep_label, False on all others.
+            """
             keep_mask = pd.Series(False, index=group_df.index)
             keep_mask.loc[keep_label] = True
             group_df["keep_for_analysis"] = keep_mask
@@ -623,7 +650,7 @@ class CollapsedTaxonomyLCAResolver:
 
     TAXONOMIC_RANKS = list(TAXONOMIC_RANKS)
 
-    def __init__(self, lca_pid: float = 90.0, lca_diff: float = 1.0):
+    def __init__(self, lca_pid: float = 90.0, lca_diff: float = 1.0) -> None:
         """
         Initialize the collapsed-taxonomy LCA resolver.
 
@@ -646,9 +673,19 @@ class CollapsedTaxonomyLCAResolver:
 
     @staticmethod
     def _distinct(series: pd.Series) -> List[str]:
-        """Distinct real-taxon values of a lineage column. The formatter already normalizes the
-        CRABS "NA" sentinel to None; this also drops it defensively (frames built directly in
-        tests bypass the formatter), using the module-level MISSING_RANK_SENTINELS."""
+        """Return the distinct real-taxon values of a single lineage column.
+
+        Drops NaN and the CRABS "NA" missing-rank sentinel so they are never counted
+        as taxa. The formatter already normalizes the sentinel to None; this also
+        drops it defensively (frames built directly in tests bypass the formatter),
+        using the module-level MISSING_RANK_SENTINELS.
+
+        Args:
+            series: One rank column (e.g. all `genus` values) of the windowed hits.
+
+        Returns:
+            List of the unique non-missing values present, in first-seen order.
+        """
         return [
             v
             for v in series.dropna().unique()
@@ -656,8 +693,26 @@ class CollapsedTaxonomyLCAResolver:
         ]
 
     def resolve_ambiguous_hits(self, group: pd.DataFrame) -> pd.DataFrame:
-        """Collapse one OTU's hits to their LCA over the top-identity window. Returns the
-        group plus a synthetic combined row with ``keep_for_analysis=True`` (the LCA)."""
+        """Collapse one OTU's hits to their lowest common ancestor (LCA).
+
+        Keeps hits clearing the identity floor (lca_pid), takes the top-identity
+        window [best - lca_diff, best], and walks kingdom->species keeping a rank
+        while every windowed hit agrees on a single value; at the first disagreeing
+        rank that rank and all finer ranks are nulled. This is how a sequence that
+        matches several closely related references equally well is reported only as
+        deep as the references actually agree.
+
+        Args:
+            group: DataFrame of BLAST hits for a single query OTU. Must contain a
+                numeric-coercible `pident` column and the taxonomic rank columns.
+
+        Returns:
+            The input group with a boolean `keep_for_analysis` column (False on all
+            original rows) plus one appended synthetic row holding the collapsed LCA
+            lineage and `keep_for_analysis=True`. The combined row's `pident` is the
+            best in-window identity, or the best below-floor identity (or None) when
+            nothing cleared the floor.
+        """
         group = group.reset_index(drop=True).copy()
         if len(group) == 0:
             group["keep_for_analysis"] = False
@@ -702,7 +757,14 @@ class CollapsedTaxonomyLCAResolver:
 
 
 class BlastTaxonomicAssigner:
-    """Complete BLAST-based taxonomic assignment pipeline."""
+    """Complete BLAST-based taxonomic assignment pipeline.
+
+    Ties the BLAST building blocks together: it formats raw BLAST output into a
+    lineage table, filters/collapses ambiguous hits to an LCA, and left-joins the
+    resulting taxonomy onto the per-OTU abundance table so every OTU in the sample
+    reaches the final, GBIF-ready output (those without a usable hit are labelled
+    'Unassigned' rather than dropped).
+    """
 
     UNASSIGNED_LABEL = "Unassigned"
     CONTAMINANT_FLAG_COL = "is_contaminant_candidate"
@@ -721,7 +783,7 @@ class BlastTaxonomicAssigner:
         lca_pid: float = 90.0,
         lca_diff: float = 1.0,
         contaminants: Optional[List[str]] = None,
-    ):
+    ) -> None:
         """
         Initialize BLAST taxonomic assigner.
 
@@ -743,6 +805,13 @@ class BlastTaxonomicAssigner:
                 (default 1.0).
             contaminants: List of species names (CRABS underscore format) to flag as
                 candidate contaminants. Rows are NEVER deleted; only flagged.
+
+        Raises:
+            FileNotFoundError: If reference_fasta does not exist (via BlastOutputFormatter).
+            ValueError: If lca_algorithm is unknown, or if a resolver's parameters
+                (e.g. top_bitscore_pct, lca_pident_delta, lca_pid, lca_diff) are out
+                of range.
+            NotImplementedError: If lca_algorithm='fishbase_tiered' (not implemented).
         """
         self.formatter = BlastOutputFormatter(reference_fasta)
         self.filter = BlastPhyloFilter(
@@ -766,12 +835,33 @@ class BlastTaxonomicAssigner:
         algorithm: str, *, top_bitscore_pct: float, lca_pident_delta: float,
         lca_pid: float = 90.0, lca_diff: float = 1.0,
     ) -> Union["BlastLCAResolver", "CollapsedTaxonomyLCAResolver"]:
-        """Resolver factory keyed on lca_algorithm.
+        """Build the LCA resolver named by lca_algorithm.
 
         'cascade' (default) = the header-derived per-rank/MEGAN-LR resolver. 'collapsed_taxonomy'
         = the eDNAFlow/OceanOmics identity-window collapse-to-LCA (also header-based, offline).
         'fishbase_tiered' (Fishbase->WoRMS->NCBI) is not implemented (fish-specific, needs the
         bundled WoRMS file + staged Fishbase parquet) and raises until provisioned.
+
+        Args:
+            algorithm: LCA strategy name: 'cascade', 'collapsed_taxonomy', or
+                'fishbase_tiered'.
+            top_bitscore_pct: Bitscore band width for the 'cascade' resolver, in
+                percent of the best hit.
+            lca_pident_delta: In-band identity tolerance for the 'cascade' resolver,
+                in percent-identity points.
+            lca_pid: Hard identity floor for the 'collapsed_taxonomy' resolver
+                (default 90.0).
+            lca_diff: Top-identity window width for the 'collapsed_taxonomy' resolver
+                (default 1.0).
+
+        Returns:
+            A configured BlastLCAResolver ('cascade') or CollapsedTaxonomyLCAResolver
+            ('collapsed_taxonomy').
+
+        Raises:
+            NotImplementedError: If algorithm is 'fishbase_tiered'.
+            ValueError: If algorithm is none of the recognised names, or if the chosen
+                resolver rejects its parameters (out-of-range identities/percents).
         """
         if algorithm == "cascade":
             return BlastLCAResolver(
@@ -812,11 +902,19 @@ class BlastTaxonomicAssigner:
             output_path: Optional path to save final table
 
         Returns:
-            DataFrame with taxonomic assignments and ASV counts. The row count
-            equals the number of OTUs in the abundance table (no silent drops).
+            DataFrame with one row per OTU (so its row count equals the number of
+            OTUs shared by the abundance table and the query FASTA, with no silent
+            drops). Columns, in order: ASV_ID, pident, the taxonomic ranks
+            (kingdom..species; 'Unassigned' where no usable hit), the
+            is_contaminant_candidate flag, one column per sample (abundances), and
+            Sequence.
 
         Raises:
-            FileNotFoundError: If input files do not exist
+            FileNotFoundError: If blast_tsv or the reference FASTA does not exist.
+            BlastError: If a BLAST hit references a sequence ID absent from the
+                reference headers (mismatched DB), or if the ASV/OTU count table is
+                empty/truncated/not parseable.
+            ValueError: If a reference header is malformed or has too few ranks.
         """
         phylo_cols = BlastLCAResolver.TAXONOMIC_RANKS
 

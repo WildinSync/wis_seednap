@@ -20,7 +20,22 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ASVMetrics:
-    """Metrics for Amplicon Sequence Variants (ASVs)."""
+    """Summary statistics for a DADA2 run's Amplicon Sequence Variants (ASVs).
+
+    An ASV is an exact, denoised amplicon sequence (DADA2's single-nucleotide
+    resolution alternative to an OTU). These fields summarize the final
+    chimera-free sequence table: how many ASVs and samples it holds, the total
+    read count, and the spread of ASV sequence lengths and per-ASV abundances.
+
+    Attributes:
+        num_asvs: Number of ASVs (rows in the sequence table).
+        num_samples: Number of samples (columns in the sequence table).
+        total_abundance: Sum of all read counts across the whole table.
+        min_length: Shortest ASV sequence length in base pairs (0 if unknown).
+        max_length: Longest ASV sequence length in base pairs (0 if unknown).
+        mean_length: Mean ASV sequence length in base pairs (0.0 if unknown).
+        median_abundance: Median total read count per ASV (summed across samples).
+    """
 
     num_asvs: int = 0
     num_samples: int = 0
@@ -31,7 +46,11 @@ class ASVMetrics:
     median_abundance: float = 0.0
 
     def to_dict(self) -> Dict:
-        """Convert to dictionary."""
+        """Return the metrics as a plain dict (field name -> value).
+
+        Returns:
+            Dictionary mapping each ASVMetrics field name to its current value.
+        """
         return asdict(self)
 
 
@@ -44,7 +63,7 @@ class MetricsCollector:
     report (read_tracking.csv / step_summary.csv).
     """
 
-    def __init__(self, marker: str, output_dir: Union[str, Path]):
+    def __init__(self, marker: str, output_dir: Union[str, Path]) -> None:
         """
         Initialize metrics collector.
 
@@ -63,11 +82,32 @@ class MetricsCollector:
         self, seqtab_path: Union[str, Path], corresp_seq_path: Optional[Union[str, Path]] = None
     ) -> None:
         """
-        Collect metrics from ASV table.
+        Compute and store ASV summary statistics from the sequence table.
+
+        Reads the transposed chimera-free sequence table (one row per ASV, one
+        column per sample) and records the ASV count, sample count, total read
+        abundance, and median per-ASV abundance on ``self.asv_metrics``. If a
+        correspondence file is given, sequence-length statistics (min/max/mean
+        in base pairs) are derived from its ``sequence`` column.
+
+        A missing sequence table is logged as a warning and returns without
+        updating metrics; an empty/zero-ASV table is treated as an error,
+        because every sequence having been dropped during filtering, merging,
+        or chimera removal is a meaningful failure to surface.
 
         Args:
-            seqtab_path: Path to sequence table CSV (transposed)
-            corresp_seq_path: Optional path to ASV correspondence CSV
+            seqtab_path: Path to the transposed chimera-free sequence table CSV
+                (ASVs as rows, samples as columns; first column is the index).
+            corresp_seq_path: Optional path to the ASV correspondence CSV; when
+                it has a ``sequence`` column, ASV length statistics are computed
+                from it.
+
+        Returns:
+            None. Results are stored on ``self.asv_metrics``.
+
+        Raises:
+            SeednapError: If the sequence table file exists but is empty
+                (0 bytes / no columns) or contains zero ASV rows.
         """
         logger.info("Collecting ASV metrics")
 

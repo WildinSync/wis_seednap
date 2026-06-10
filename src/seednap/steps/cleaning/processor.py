@@ -66,14 +66,47 @@ class CleaningResult(BaseModel):
 
 
 def _is_extraction_neg(neg_cont_type: Optional[str]) -> bool:
-    """Return True if ``neg_cont_type`` names an extraction negative (extraction blank)."""
+    """Return True if ``neg_cont_type`` names an extraction negative (extraction blank).
+
+    An extraction blank is a no-template control taken through DNA extraction
+    alongside its batch of samples; it scopes its decontamination to the samples
+    that share its ``extraction_ID`` (unlike a PCR blank, which is whole-dataset).
+    The test is a case-insensitive substring match on the FAIRe ``neg_cont_type``.
+
+    Args:
+        neg_cont_type: FAIRe negative-control type string (e.g. "extraction
+            negative", "PCR negative"), or None when the manifest row carries no
+            control type.
+
+    Returns:
+        True if ``neg_cont_type`` is non-None and contains "extraction"
+        (case-insensitive); False otherwise.
+    """
     return neg_cont_type is not None and "extraction" in neg_cont_type.lower()
 
 
 class CleaningProcessor:
-    """Decontaminate an abundance table against its negative controls."""
+    """Decontaminate an abundance (OTU/ASV x sample) table against its negative controls.
 
-    def __init__(self, mode: str = "flag"):
+    Implements the lab's presence-based control-cleaning standard: an OTU/ASV
+    seen in an applicable negative control is treated as contamination in the
+    associated biological samples. In ``mode="flag"`` it is only annotated
+    (counts untouched); in ``mode="subtract"`` its reads are zeroed in those
+    samples. Extraction blanks clean only their own ``extraction_ID`` batch;
+    PCR blanks clean the whole dataset.
+    """
+
+    def __init__(self, mode: str = "flag") -> None:
+        """Initialize the cleaning processor with a decontamination mode.
+
+        Args:
+            mode: Either "flag" (annotate control-positive OTUs, leave counts
+                unchanged) or "subtract" (zero control-positive OTU reads in the
+                associated samples). Defaults to "flag".
+
+        Raises:
+            ValueError: If ``mode`` is not one of ("flag", "subtract").
+        """
         if mode not in _CLEANING_MODES:
             raise ValueError(f"mode must be one of {_CLEANING_MODES}; got {mode!r}")
         self.mode = mode
@@ -88,6 +121,13 @@ class CleaningProcessor:
     ) -> Tuple[pd.DataFrame, pd.DataFrame, CleaningResult]:
         """Clean ``abundance`` (one row per OTU, numeric sample columns) using ``manifest``.
 
+        Classifies each sample column as a negative control or a biological
+        sample (consulting the manifest, falling back to name-based control
+        classification with a ``[WARN]`` when a column is absent from the
+        manifest), then flags and optionally subtracts any OTU/ASV that appears
+        in an applicable control. Extraction blanks act only on their own
+        ``extraction_ID`` batch; PCR/whole-dataset blanks act on every sample.
+
         Args:
             abundance: OTU x sample table; ``id_col`` is the OTU identifier column.
             manifest: provides per-eventID samp_category / neg_cont_type / extraction_ID.
@@ -101,9 +141,21 @@ class CleaningProcessor:
                 list, and is also correct for a pure OTU/ASV count matrix.
 
         Returns:
-            (cleaned_df, report_df, result). ``cleaned_df`` is a copy with a
-            ``in_negative_control`` OTU flag column and, in subtract mode, control reads
-            zeroed in the associated samples. ``report_df`` has one row per biological sample.
+            A tuple ``(cleaned_df, report_df, result)``:
+
+            * ``cleaned_df`` (pd.DataFrame): a copy of ``abundance`` with an added
+              boolean ``in_negative_control`` OTU flag column (True if the OTU has
+              reads in any control) and, in subtract mode, control-positive reads
+              zeroed in the associated samples.
+            * ``report_df`` (pd.DataFrame): one row per biological sample, columns
+              ``eventID``, ``reads_before``, ``reads_after``, ``n_otus_removed``,
+              ``n_reads_removed`` (all 0 in flag mode), and ``driving_controls``
+              ("|"-joined names of the controls applied to that sample).
+            * ``result`` (CleaningResult): run-level counts (mode, n_controls,
+              n_samples, n_otus_flagged, total_reads_removed).
+
+        Raises:
+            ValueError: If ``id_col`` is not a column of ``abundance``.
         """
         if id_col not in abundance.columns:
             raise ValueError(f"id_col {id_col!r} not in abundance columns")

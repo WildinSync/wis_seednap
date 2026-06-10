@@ -19,7 +19,18 @@ from seednap.errors.base import SeednapError
 
 
 def _is_path_field(annotation: Any) -> bool:
-    """True if the field annotation is Path or Optional[Path]."""
+    """Return True if the field annotation is ``Path`` or ``Optional[Path]``.
+
+    Used to pick out the filesystem-path fields of a taxonomy database block (reference
+    FASTA, RDP/species databases, and the like) so only those get an existence check.
+
+    Args:
+        annotation: A type annotation taken from a Pydantic field.
+
+    Returns:
+        True if the annotation is ``Path`` or a Union that includes ``Path`` (e.g.
+        ``Optional[Path]``); False otherwise.
+    """
     if annotation is Path:
         return True
     if typing.get_origin(annotation) is typing.Union:
@@ -28,7 +39,26 @@ def _is_path_field(annotation: Any) -> bool:
 
 
 def preflight_checks(config: PipelineConfig) -> List[SeednapError]:
-    """Return structured problems for referenced inputs that do not exist (empty == all good)."""
+    """Check that the inputs a config references actually exist on disk.
+
+    Pydantic confirms the config's shape but never opens the filesystem, so a wrong
+    path passes ``seednap validate`` and only fails partway through a run. This catches
+    those before any trimming or clustering: it verifies the raw-data directory exists,
+    confirms the selected ``taxonomy.method``'s database block resolves, and checks that
+    every reference-database file that block points at is present (the reference FASTA
+    or RDP/species databases the classifier reads to assign taxonomy). Each ``SeednapError``
+    is collected and returned (not raised) so the caller can report all problems at once.
+
+    Args:
+        config: The fully validated ``PipelineConfig`` whose referenced paths and
+            taxonomy database block are to be existence-checked.
+
+    Returns:
+        A list of ``SeednapError`` objects, one per problem found, each carrying a
+        what/why/fix triad and an ``SDN-CFG-007``/``SDN-CFG-008`` code. An empty list
+        means every referenced input was found. If the taxonomy database block fails to
+        resolve, the list is returned immediately with only that single problem.
+    """
     problems: List[SeednapError] = []
 
     raw = Path(config.paths.raw_data)

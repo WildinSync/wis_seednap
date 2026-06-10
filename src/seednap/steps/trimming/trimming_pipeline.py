@@ -9,7 +9,7 @@ import gzip
 import logging
 import shutil
 from pathlib import Path
-from typing import List, Union
+from typing import List, Tuple, Union
 
 from seednap.steps.trimming.cutadapt_runner import CutadaptRunner
 from seednap.steps.trimming.tag_generator import TagFileGenerator
@@ -32,7 +32,7 @@ class StandardTrimmer:
         error_rate: float = 0.1,
         min_length: int = 20,
         overlap: int = 3,
-    ):
+    ) -> None:
         """
         Initialize standard trimmer.
 
@@ -57,17 +57,23 @@ class StandardTrimmer:
         reverse_primer: str,
         keep_untrimmed: bool = False,
         discard_untrimmed: bool = True,
-    ) -> tuple:
+    ) -> Tuple[Path, Path]:
         """
-        Perform two-pass primer trimming on a single sample.
+        Perform two-pass primer trimming on a single paired-end sample.
+
+        The two passes remove the amplification primers that flank the target
+        barcode: pass 1 strips the forward/reverse primers from the 5' ends, and
+        pass 2 strips their reverse complements from the 3' ends (read-through
+        when the amplicon is shorter than the read). Pass-1 temp files are always
+        cleaned up, even if a pass fails.
 
         Args:
-            r1_input: Input R1 FASTQ file
-            r2_input: Input R2 FASTQ file
-            output_dir: Output directory
-            sample_name: Sample name (for output file naming)
-            forward_primer: Forward primer sequence
-            reverse_primer: Reverse primer sequence
+            r1_input: Input R1 FASTQ file (may be gzipped).
+            r2_input: Input R2 FASTQ file (may be gzipped).
+            output_dir: Directory for the trimmed output and per-sample logs.
+            sample_name: Sample name, used to name output and log files.
+            forward_primer: Forward primer sequence (5'->3', IUPAC).
+            reverse_primer: Reverse primer sequence (5'->3', IUPAC).
             keep_untrimmed: Route reads lacking the 5' primer to a side file for
                 inspection (default: False). When True they are written aside and
                 removed from the main output (overrides ``discard_untrimmed``).
@@ -79,7 +85,13 @@ class StandardTrimmer:
                 through regardless).
 
         Returns:
-            Tuple of (r1_output_path, r2_output_path)
+            Tuple ``(r1_output_path, r2_output_path)`` of the final trimmed
+            FASTQ paths (``<output_dir>/<sample_name>.R1.fastq`` and ``.R2.fastq``).
+
+        Raises:
+            FileNotFoundError: If an input FASTQ file does not exist (from the
+                underlying cutadapt call).
+            CutadaptError: If either cutadapt pass fails.
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -168,24 +180,32 @@ class StandardTrimmer:
         reverse_primer: str,
         keep_untrimmed: bool = False,
         discard_untrimmed: bool = True,
-    ) -> List[tuple]:
+    ) -> List[Tuple[Path, Path]]:
         """
-        Trim all samples in a directory.
+        Trim all paired-end samples found in a directory.
 
-        Automatically detects paired R1/R2 files and processes them.
+        Globs for ``*_R1.fastq.gz`` (then ``*_R1.fastq``) files, pairs each with
+        its matching ``_R2`` mate, and runs two-pass primer trimming on each.
+        Samples whose R2 mate is missing are skipped with a warning rather than
+        aborting the batch.
 
         Args:
-            raw_reads_dir: Directory containing raw FASTQ files
-            output_dir: Output directory for trimmed reads
-            forward_primer: Forward primer sequence
-            reverse_primer: Reverse primer sequence
-            keep_untrimmed: Save untrimmed reads (default: False)
+            raw_reads_dir: Directory containing raw paired-end FASTQ files.
+            output_dir: Output directory for trimmed reads.
+            forward_primer: Forward primer sequence (5'->3', IUPAC).
+            reverse_primer: Reverse primer sequence (5'->3', IUPAC).
+            keep_untrimmed: Save untrimmed reads to side files (default: False).
             discard_untrimmed: When True (default), pass-1 cutadapt drops reads in
                 which the 5' primer was not found; when False they are kept. Passed
                 through to trim_sample for each sample. See trim_sample for details.
 
         Returns:
-            List of (r1_output, r2_output) tuples for each sample
+            List of ``(r1_output, r2_output)`` path tuples, one per successfully
+            trimmed sample. Empty if no R1 FASTQ files were found.
+
+        Raises:
+            FileNotFoundError: If ``raw_reads_dir`` does not exist.
+            CutadaptError: If a cutadapt pass fails for a sample.
         """
         raw_reads_dir = Path(raw_reads_dir)
         if not raw_reads_dir.exists():
@@ -252,7 +272,7 @@ class LigationTrimmer:
         error_rate: float = 0.1,
         min_length: int = 20,
         min_tag_overlap: int = 8,
-    ):
+    ) -> None:
         """
         Initialize ligation trimmer.
 

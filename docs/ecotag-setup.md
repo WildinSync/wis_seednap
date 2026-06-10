@@ -2,7 +2,9 @@
 
 How to install and configure OBITools v1 so seednap can run the `ecotag` taxonomy method.
 
-ecotag assigns taxonomy with OBITools v1, which has Python 2 dependencies and therefore lives in its own conda env, separate from the main `seednap` env. This doc covers the install, how seednap discovers it, and the config keys it needs.
+ecotag is the taxonomic-assignment program from OBITools, a long-standing DNA-metabarcoding toolkit. It compares each query sequence (an ASV or OTU, the per-marker sequence variants the pipeline produces) against a reference database and assigns it to the lowest taxonomic rank still consistent with its closest matches. When several references tie, it falls back to their last (lowest) common ancestor (LCA), so an ambiguous sequence is reported at, say, genus or family rather than forced to a single species.
+
+OBITools v1 has Python 2 dependencies and therefore lives in its own conda environment, separate from the main `seednap` env. This doc covers the install, how seednap discovers it, and the config keys it needs.
 
 > [!IMPORTANT]
 > ecotag only runs when a marker config sets `taxonomy.method: "ecotag"` **and** lists `"taxonomy"` in `pipeline.steps`. The shipped configs default to `method: "blast"` (see `config/markers/teleo.yaml`), so `seednap run-pipeline <config>` alone does not exercise ecotag. Switch the method first.
@@ -64,12 +66,12 @@ EcotagRunner(bin_dir="/path/to/bin")    # or pass the bin directory explicitly
 
 ## Reference databases
 
-ecotag needs two inputs, configured under `taxonomy.databases.ecotag` in the marker YAML:
+ecotag needs two inputs, configured under `taxonomy.databases.ecotag` in the marker YAML. The first is the taxonomy backbone (the rank hierarchy that lets ecotag walk up to a common ancestor), the second is the labelled reference sequences themselves:
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `tree` | Path | required | NCBI taxonomy tree directory (the `.tdx`/`.adx` files from `obitaxonomy`), passed to `ecotag -t`. |
-| `fasta` | Path | required | OBITools-format reference sequence FASTA, passed to `ecotag -R`. |
+| `tree` | Path | required | Directory holding the NCBI taxonomy tree in OBITools binary form (the `.tdx`/`.adx`/`.ndx` files built by `obitaxonomy` from an NCBI taxdump). This encodes which taxa nest inside which, so ecotag can resolve an LCA. Passed to `ecotag -t`. |
+| `fasta` | Path | required | Reference sequence FASTA in OBITools format: each record's header carries the NCBI taxid of the organism it came from, which is how a match becomes a taxonomic assignment. Passed to `ecotag -R`. |
 
 On the server these are, for the teleo marker:
 
@@ -83,7 +85,7 @@ taxonomy:
 ```
 
 > [!TIP]
-> Run `seednap validate <config>` before a full run. Pydantic only path-expands `tree` and `fasta` at load time; it does not check that the paths exist. A missing path passes the model check and otherwise fails only at the taxonomy step at run time. `validate`'s preflight flags such a path as MISSING in its summary table.
+> Run `seednap validate <config>` before a full run. The Pydantic model only path-expands `tree` and `fasta` at load time; the model check itself does not confirm the paths exist. Existence is checked separately by a read-only preflight step that both `seednap validate` and the start of `seednap run-pipeline` run: it lists each database path as found or MISSING in the summary table and, if any is missing, prints a what/why/fix error and exits with status 1 before trimming or clustering begins. The `FileNotFoundError` inside the ecotag runner is only a last-resort safety net for paths that vanish mid-run.
 
 ## See also
 

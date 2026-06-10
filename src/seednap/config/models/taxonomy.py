@@ -22,6 +22,14 @@ def _flatten_db_errors(exc: ValidationError) -> List[str]:
 
     Replaces dumping Pydantic's raw nested repr (which carries internal ``[type=...]``
     noise) with a flat, declarative list keyed by the offending field.
+
+    Args:
+        exc: The ValidationError raised when parsing one taxonomy database block into its
+            strict model.
+
+    Returns:
+        One ``"  - <field>: <problem>"`` bullet string per validation error, with the problem
+        phrased plainly (missing required path, unknown key, out-of-range value, ...).
     """
     bullets: List[str] = []
     for err in exc.errors():
@@ -54,7 +62,19 @@ def _flatten_db_errors(exc: ValidationError) -> List[str]:
 
 
 class Dada2DatabaseConfig(StrictModel):
-    """DADA2 taxonomic database configuration."""
+    """Reference databases for the DADA2 (RDP naive-Bayes) taxonomy method.
+
+    DADA2's ``assignTaxonomy`` uses a kingdom-to-genus training FASTA and a bootstrap
+    confidence cutoff, then ``addSpecies`` adds exact species matches from a second FASTA.
+
+    Attributes:
+        all: Reference FASTA covering all taxonomic ranks (kingdom through genus), used by
+            ``assignTaxonomy``.
+        species: Species-level reference FASTA used by ``addSpecies`` (always run).
+        bootstrap_threshold: Minimum RDP bootstrap percentage (0-100) for a rank to be kept;
+            below it the rank and every finer rank are nulled (Wang 2007 standard, 80 for
+            short rRNA reads).
+    """
 
     all: Path = Field(..., description="Path to database with all taxonomic ranks")
     species: Path = Field(
@@ -73,14 +93,46 @@ class Dada2DatabaseConfig(StrictModel):
     @field_validator("all", "species")
     @classmethod
     def expand_path(cls, v: Optional[Path]) -> Optional[Path]:
-        """Expand paths."""
+        """Expand ``~`` and resolve a database path to an absolute path.
+
+        Args:
+            v: The configured database path, or None.
+
+        Returns:
+            The path with ``~`` expanded and resolved to absolute, or None unchanged.
+        """
         if v is not None:
             return v.expanduser().resolve()
         return v
 
 
 class BlastDatabaseConfig(StrictModel):
-    """BLAST database configuration."""
+    """Reference database and thresholds for the BLAST taxonomy method.
+
+    Amplicon sequences are searched against a reference FASTA with ``blastn``; hits are then
+    filtered by identity per taxonomic rank and collapsed to a lowest-common-ancestor (LCA)
+    so a query that matches several near-identical references is assigned at the rank where
+    they agree. The per-rank thresholds, bitscore band, and LCA algorithm tune how
+    aggressively that collapse happens. See the per-field descriptions for the cascade rules
+    and cited defaults.
+
+    Attributes:
+        fasta: Reference FASTA database to BLAST against.
+        perc_identity: Minimum percent identity (0-100) for a blastn hit.
+        qcov_hsp_perc: Minimum query coverage per HSP (0-100).
+        evalue: Maximum e-value (> 0) for a hit.
+        max_target_seqs: Maximum reference hits to keep per query (>= 1).
+        task: blastn task type (megablast / blastn / dc-megablast / blastn-short).
+        threshold_species/genus/family/order/class: Per-rank percent-identity cutoffs; below
+            the cutoff for rank R, rank R and all finer ranks are nulled (cascade).
+        top_bitscore_pct: LCA bitscore band as a percent of the best hit (MEGAN-LR style).
+        lca_pident_delta: In-band hits must be within this many percent-identity points of
+            the best in-band hit to count toward the LCA; 0 disables the floor.
+        lca_algorithm: LCA resolver (cascade / collapsed_taxonomy / fishbase_tiered).
+        lca_pid: collapsed_taxonomy hard percent-identity floor.
+        lca_diff: collapsed_taxonomy top-identity window width within which disagreeing hits
+            collapse to their LCA.
+    """
 
     fasta: Path = Field(..., description="Path to reference FASTA database")
     perc_identity: float = Field(default=80.0, ge=0, le=100, description="Minimum percent identity")
@@ -135,12 +187,27 @@ class BlastDatabaseConfig(StrictModel):
     @field_validator("fasta")
     @classmethod
     def expand_path(cls, v: Path) -> Path:
-        """Expand path."""
+        """Expand ``~`` and resolve the FASTA path to an absolute path.
+
+        Args:
+            v: The configured reference FASTA path.
+
+        Returns:
+            The path with ``~`` expanded and resolved to absolute.
+        """
         return v.expanduser().resolve()
 
 
 class EcotagDatabaseConfig(StrictModel):
-    """Ecotag database configuration."""
+    """Reference data for the OBITools ecotag taxonomy method.
+
+    ecotag assigns each amplicon to the lowest taxonomic node consistent with its best
+    reference matches, using an NCBI taxonomy tree plus a reference FASTA.
+
+    Attributes:
+        tree: Directory holding the NCBI taxonomy tree files.
+        fasta: Reference FASTA database.
+    """
 
     tree: Path = Field(..., description="Path to NCBI taxonomy tree directory")
     fasta: Path = Field(..., description="Path to reference FASTA database")
@@ -148,12 +215,28 @@ class EcotagDatabaseConfig(StrictModel):
     @field_validator("tree", "fasta")
     @classmethod
     def expand_path(cls, v: Path) -> Path:
-        """Expand path."""
+        """Expand ``~`` and resolve a path to an absolute path.
+
+        Args:
+            v: The configured tree directory or reference FASTA path.
+
+        Returns:
+            The path with ``~`` expanded and resolved to absolute.
+        """
         return v.expanduser().resolve()
 
 
 class DecipherDatabaseConfig(StrictModel):
-    """DECIPHER database configuration."""
+    """Trained classifier and settings for the DECIPHER ``IdTaxa`` taxonomy method.
+
+    DECIPHER classifies each amplicon against a pre-trained model (an ``.rds`` file built from
+    a reference set) and reports an assignment per rank above the confidence threshold.
+
+    Attributes:
+        trained: Path to the trained DECIPHER model (``.rds``).
+        threshold: Minimum confidence (0-100) for an assignment to be kept.
+        processors: Number of CPU cores DECIPHER may use (>= 1).
+    """
 
     trained: Path = Field(..., description="Path to trained DECIPHER RDS file")
     threshold: int = Field(
@@ -164,7 +247,14 @@ class DecipherDatabaseConfig(StrictModel):
     @field_validator("trained")
     @classmethod
     def expand_path(cls, v: Path) -> Path:
-        """Expand path."""
+        """Expand ``~`` and resolve the trained-model path to an absolute path.
+
+        Args:
+            v: The configured trained DECIPHER ``.rds`` path.
+
+        Returns:
+            The path with ``~`` expanded and resolved to absolute.
+        """
         return v.expanduser().resolve()
 
 
@@ -180,7 +270,20 @@ _DATABASE_MODELS: Dict[str, type] = {
 
 
 class TaxonomicAssignmentConfig(StrictModel):
-    """Taxonomic assignment configuration."""
+    """Taxonomy step config: which assignment method to run and its reference databases.
+
+    Taxonomic assignment maps each ASV/OTU sequence to a taxon (species/genus/.../kingdom).
+    Exactly one ``method`` runs per pipeline; its database block under ``databases`` is the
+    one used at run time, though every present block is validated at load time.
+
+    Attributes:
+        method: The assignment method to run (dada2 / blast / ecotag / decipher).
+        databases: Open dict keyed by method name; each value is that method's database block.
+            Only the selected method's block is used at run time.
+        contaminants: Species names (CRABS underscore format, e.g. ``"Homo_sapiens"``) to
+            flag as candidate contaminants; matched rows get ``is_contaminant_candidate=True``
+            but are never deleted.
+    """
 
     method: Literal["dada2", "blast", "ecotag", "decipher"] = Field(
         ..., description="Taxonomic assignment method"
@@ -209,6 +312,21 @@ class TaxonomicAssignmentConfig(StrictModel):
         block present is parsed into its strict model now (not lazily at the taxonomy step), so a
         typo or a missing required path surfaces during ``seednap validate`` instead of mid-run.
         ``databases`` is an open dict, so ``extra="forbid"`` does not otherwise reach inside it.
+
+        Args:
+            v: The ``databases`` value to validate (method name -> database block dict).
+            info: Pydantic validation context; ``info.data`` carries the already-validated
+                fields, used here to read the selected ``method``.
+
+        Returns:
+            The ``databases`` dict unchanged (validation is for side-effect error reporting;
+            the blocks are not rewritten).
+
+        Raises:
+            ValueError: if the selected method has no database block; if a recognised block
+                fails its strict model (missing path, unknown key, out-of-range value); or if a
+                recognised block is not a mapping. The message names the offending block and
+                its required path(s).
         """
         method = info.data.get("method")
         if method is not None and method not in v:
@@ -245,7 +363,16 @@ class TaxonomicAssignmentConfig(StrictModel):
         return v
 
     def get_database_config(self) -> Any:
-        """Return the parsed database config model for the selected method."""
+        """Return the parsed database config model for the selected method.
+
+        Looks up the block for ``self.method`` and parses it into that method's strict model
+        for use at the taxonomy step.
+
+        Returns:
+            The method's parsed database model instance (e.g. :class:`BlastDatabaseConfig`).
+            If the method is not one of the recognised methods, the raw block dict is returned
+            unchanged.
+        """
         db_config = self.databases.get(self.method, {})
         model = _DATABASE_MODELS.get(self.method)
         return model(**db_config) if model is not None else db_config

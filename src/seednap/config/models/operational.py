@@ -32,7 +32,14 @@ class CleaningConfig(StrictModel):
 
 
 class LoggingConfig(StrictModel):
-    """Logging configuration."""
+    """Run logging configuration.
+
+    Attributes:
+        level: Minimum log level emitted (DEBUG / INFO / WARNING / ERROR).
+        format: Log line format (simple / detailed / json).
+        file: Write logs to the run log file.
+        console: Write logs to the console.
+    """
 
     level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(
         default="INFO", description="Logging level"
@@ -66,6 +73,16 @@ class PipelineStepsConfig(StrictModel):
 
         Each message names the offending stage and the exact fix so an error at load time is
         self-explanatory rather than a mid-run crash.
+
+        Returns:
+            The validated model (``self``) unchanged when the step list is consistent.
+
+        Raises:
+            ValueError: if ``steps`` lists an unknown stage; lists a stage more than once;
+                lists both ``dada2`` and ``swarm`` (mutually exclusive feature paths); or
+                violates an ordering dependency (demultiplex before trim; a feature path
+                before trim; taxonomy/clean after a feature path; clean after taxonomy;
+                export after taxonomy; clean before export).
         """
         steps = self.steps
         unknown = [s for s in steps if s not in VALID_STEPS]
@@ -88,7 +105,18 @@ class PipelineStepsConfig(StrictModel):
         pos = {s: i for i, s in enumerate(steps)}
 
         def requires_before(stage: str, prereq: str) -> None:
-            """Require ``prereq`` to be present and earlier than ``stage`` when ``stage`` is listed."""
+            """Require ``prereq`` present and earlier than ``stage`` when ``stage`` is listed.
+
+            No-op if ``stage`` is not in the step list.
+
+            Args:
+                stage: The dependent stage whose prerequisite is being checked.
+                prereq: The stage that must appear before ``stage``.
+
+            Raises:
+                ValueError: if ``stage`` is listed but ``prereq`` is absent, or ``prereq``
+                    appears after ``stage``.
+            """
             if stage in pos:
                 if prereq not in pos:
                     raise ValueError(

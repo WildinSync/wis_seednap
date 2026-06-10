@@ -35,7 +35,7 @@ class CutadaptRunner:
         min_overlap: int = 3,
         no_indels: bool = False,
         timeout: int = 7200,
-    ):
+    ) -> None:
         """
         Initialize cutadapt runner.
 
@@ -55,7 +55,17 @@ class CutadaptRunner:
         self.timeout = timeout
 
     def _build_base_command(self) -> List[str]:
-        """Build base cutadapt command with common parameters."""
+        """Build the base cutadapt command shared by trimming/detection calls.
+
+        Assembles the invocation prefix carrying the runner-wide settings:
+        cores (-j), error rate (-e), minimum read length (-m), minimum
+        read/adapter overlap (-O), and ``--no-indels`` when configured. Callers
+        append the adapter, input, and output arguments.
+
+        Returns:
+            The cutadapt command as a list of argument strings, e.g.
+            ["cutadapt", "-j", "1", "-e", "0.1", "-m", "20", "-O", "3"].
+        """
         cmd = [
             "cutadapt",
             "-j",
@@ -192,8 +202,12 @@ class CutadaptRunner:
             stdout from cutadapt
 
         Raises:
-            ValueError: If inputs are invalid
-            CutadaptError: If cutadapt command fails
+            FileNotFoundError: If the R1 input (or, for paired-end, the R2 input)
+                file does not exist.
+            ValueError: If R2 input is given for paired-end mode but r2_output is
+                not supplied.
+            CutadaptError: If the cutadapt command fails (non-zero exit, timeout,
+                or cutadapt not on PATH).
         """
         # Validate inputs
         r1_input = Path(r1_input)

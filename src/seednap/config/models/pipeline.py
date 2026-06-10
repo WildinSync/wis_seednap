@@ -31,7 +31,26 @@ from seednap.config.models.trimming import TrimmingConfig
 
 
 class PipelineConfig(StrictModel):
-    """Complete pipeline configuration."""
+    """Complete pipeline configuration: the root model composing every config section.
+
+    One validated instance per marker run is the single source of truth the orchestrator
+    drives from. ``marker`` and ``taxonomy`` are required; every other section has built-in
+    defaults so a marker YAML need only state what differs.
+
+    Attributes:
+        marker: Marker identity and primers (required).
+        paths: Raw input, output, and log directories.
+        demultiplex: Demultiplexing step config.
+        trimming: Primer-trimming step config.
+        dada2: DADA2 (ASV) clustering path config.
+        swarm: SWARM (OTU) clustering path config.
+        taxonomy: Taxonomic assignment method and databases (required).
+        export: GBIF / DarwinCore export config.
+        report: Run-reporting config.
+        cleaning: Control-decontamination config.
+        logging: Run logging config.
+        pipeline: Ordered list of stages to run.
+    """
 
     marker: MarkerConfig = Field(..., description="Marker configuration")
     paths: PathsConfig = Field(default_factory=PathsConfig, description="Path configuration")
@@ -72,6 +91,13 @@ class PipelineConfig(StrictModel):
         (raises NotImplementedError mid-run) and the default protocol='none' (raises "Unknown
         protocol" mid-run) -- the latter is the likely slip of adding 'demultiplex' to steps
         without setting the protocol.
+
+        Returns:
+            The validated model (``self``) unchanged.
+
+        Raises:
+            ValueError: if ``demultiplex`` is in ``pipeline.steps`` while ``demultiplex.protocol``
+                is anything other than the implemented ``ligation`` protocol.
         """
         if "demultiplex" in self.pipeline.steps and self.demultiplex.protocol != "ligation":
             raise ValueError(
@@ -84,7 +110,18 @@ class PipelineConfig(StrictModel):
         return self
 
     def model_post_init(self, __context: Any) -> None:
-        """Post-initialization validation."""
+        """Create the output and log directories after the config validates.
+
+        Side-effecting post-init: ``paths.output`` and ``paths.logs`` are created (parents
+        included) as soon as a config loads, so loading is not a read-only operation.
+
+        Args:
+            __context: Pydantic post-init context object (unused).
+
+        Raises:
+            ValueError: if either directory cannot be created (e.g. a read-only mount or a
+                path owned by another user); the message names the offending ``paths.*`` key.
+        """
         # Create output directories if they don't exist
         for path_name in ["output", "logs"]:
             path = getattr(self.paths, path_name)

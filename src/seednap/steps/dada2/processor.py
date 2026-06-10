@@ -36,15 +36,20 @@ class Dada2Processor:
         trimmed_reads_dir: Union[str, Path],
         output_base_dir: Union[str, Path],
         timeout: int = 14400,
-    ):
+    ) -> None:
         """
         Initialize DADA2 processor.
 
         Args:
-            marker: Marker name (e.g., 'teleo', 'amph')
-            trimmed_reads_dir: Directory with primer-trimmed FASTQ files
-            output_base_dir: Base output directory
-            timeout: Timeout for R scripts in seconds (default: 4 hours)
+            marker: Marker name (e.g., 'teleo', 'amph'); lowercased internally.
+            trimmed_reads_dir: Directory with primer-trimmed paired-end FASTQ files
+                (the DADA2 input).
+            output_base_dir: Base output directory; DADA2 outputs are written under
+                ``<output_base_dir>/02_dada2/<marker>/``.
+            timeout: Timeout for the R scripts in seconds (default: 14400 = 4 hours).
+
+        Raises:
+            FileNotFoundError: If ``trimmed_reads_dir`` does not exist.
         """
         self.marker = marker.lower()
         self.trimmed_reads_dir = Path(trimmed_reads_dir)
@@ -111,14 +116,21 @@ class Dada2Processor:
                 samples are denoised per-sample within each library (pool is
                 not honored on this path). With 0 or 1 library the standard
                 single-batch path runs and pool applies normally.
-            collect_metrics: Collect and export metrics (default: True)
+            collect_metrics: Collect and export ASV metrics (summary.txt +
+                JSON/CSV) after processing (default: True)
 
         Returns:
-            Dictionary with paths to output files
+            Dictionary mapping output names to paths, as produced by
+            Dada2Runner.run_dada2_process: "seqtab", "seqtab_clean",
+            "seqtab_clean_rds", "seqtab_clean_t", "query_fasta", "corresp_seq",
+            and "metrics_dir".
 
         Raises:
-            FileNotFoundError: If required input files are missing
-            Dada2Error: If DADA2 processing fails
+            FileNotFoundError: If no R1 FASTQ files are found in the trimmed
+                reads directory.
+            Dada2Error: If the R package check fails or DADA2 processing fails.
+            SeednapError: If metrics collection runs but the sequence table is
+                empty (0 ASVs).
         """
         logger.info(f"Starting DADA2 processing for {self.marker}")
         logger.info(
@@ -188,10 +200,25 @@ class Dada2Processor:
 
     def _collect_metrics(self, outputs: Dict[str, Path]) -> None:
         """
-        Collect metrics from DADA2 outputs.
+        Collect ASV-level metrics from the final DADA2 sequence table.
+
+        Reads the transposed chimera-free sequence table (one row per ASV) and,
+        when present, the ASV-to-sequence correspondence file, and stores the
+        derived statistics on the internal MetricsCollector. Per-step read
+        counts are not recomputed here; the R script writes those to
+        track_reads.csv / feature_counts.csv for the run report.
 
         Args:
-            outputs: Dictionary of output paths from DADA2 processing
+            outputs: Dictionary of output paths from DADA2 processing; uses the
+                "seqtab_clean_t" (transposed chimera-free table) and optional
+                "corresp_seq" (ASV correspondence) entries.
+
+        Returns:
+            None. Results are stored on ``self.metrics``.
+
+        Raises:
+            SeednapError: Propagated from collect_asv_metrics if the sequence
+                table exists but is empty (0 bytes or zero ASVs).
         """
         # This collects only ASV-level metrics from the final sequence table.
         # Per-step intermediate read counts are written by dada2_process.R to

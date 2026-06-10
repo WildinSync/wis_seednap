@@ -11,7 +11,9 @@
 
 ## What is SeeDNAP?
 
-SeeDNAP is an end-to-end Python pipeline for processing environmental DNA (eDNA) metabarcoding data. It takes raw paired-end FASTQ files and produces taxonomically assigned OTU/ASV tables ready for biodiversity analysis or GBIF submission. Every step's status is recorded in a per-run state JSON, so a failed run can be resumed from the step that failed.
+SeeDNAP is an end-to-end Python pipeline for processing environmental DNA (eDNA) metabarcoding data. It takes raw paired-end FASTQ files and produces taxonomically assigned feature tables ready for biodiversity analysis or GBIF submission. Every step's status is recorded in a per-run state JSON, so a failed run can be resumed from the step that failed.
+
+A "feature" here is a candidate sequence variant with a per-sample read count. SeeDNAP offers two ways to derive them: **OTUs** (Operational Taxonomic Units, sequences clustered at a similarity threshold; produced by SWARM) and **ASVs** (Amplicon Sequence Variants, exact sequences resolved by denoising; produced by DADA2). Pick one path per run.
 
 ```mermaid
 flowchart LR
@@ -107,17 +109,18 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 |---|---|---|
 | **Demultiplex** *(optional)* | Built-in | Ligation-tag demultiplexing; list `demultiplex` in `pipeline.steps` to run it, omit it for pre-demultiplexed inputs. Aborts if more than `demultiplex.max_sample_failure_rate` (default 0.5) of samples fail. |
 | **Trim** | Cutadapt | Two-pass primer removal (5' then 3') |
-| **Cluster** | SWARM or DADA2 | OTU clustering or ASV denoising. DADA2 can learn error models per sequencing library, then merge, via `dada2.per_library`. |
-| **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Taxonomic assignment. BLAST (default) supports `lca_algorithm: cascade` or `collapsed_taxonomy`; DADA2 uses RDP bootstrap. See [docs/taxonomy-methods.md](docs/taxonomy-methods.md). |
-| **Decontaminate** *(optional)* | Built-in | Flag or subtract reads found in negative controls, identified from the FAIRe manifest (add `clean` to `pipeline.steps`). |
-| **Export** | Built-in | GBIF long format and DarwinCore occurrence CSV with deterministic `occurrenceID` and `contamination_flag`. |
+| **Cluster** | SWARM or DADA2 | OTU clustering or ASV denoising; both also remove chimeras by default (artefactual sequences formed when two real templates fuse during PCR). DADA2 can learn its error model per sequencing library, then merge, via `dada2.per_library`. |
+| **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Assign a taxon to each feature. BLAST (default) resolves the lowest common ancestor (LCA) of the best-matching reference hits, so an ambiguous match is reported at the rank the data support (e.g. genus, not species); `lca_algorithm` is `cascade` or `collapsed_taxonomy`. DADA2 uses an RDP bootstrap (it resamples the sequence many times and reports the fraction of resamples that agree, as a per-rank confidence). See [docs/taxonomy-methods.md](docs/taxonomy-methods.md). |
+| **Decontaminate** *(optional)* | Built-in | Flag or subtract features found in negative controls (blanks: no-template samples carried through the workflow to reveal lab/reagent contamination), identified from the FAIRe manifest (add `clean` to `pipeline.steps`). |
+| **Export** | Built-in | A GBIF long-format table and a DarwinCore occurrence CSV. DarwinCore is the GBIF biodiversity-record standard (one row per occurrence, with standard column names like `eventID`, `decimalLatitude`, `scientificName`). Each row gets a deterministic `occurrenceID` and a `contamination_flag`. |
 | **Report** | Built-in | Per-step read/sequence tracking table, data-loss warnings, and a self-contained HTML run report. Runs when `report` is in `pipeline.steps` (the default); `report.html_report: false` writes the tables only. |
 
 > [!NOTE]
 > Each stage runs only if listed in `pipeline.steps` (the single ordered source of truth). The list
-> order is validated against stage dependencies at config load: `demultiplex` before `trim`; `dada2`
-> or `swarm` before `taxonomy`/`clean`; `taxonomy` before `export`. `dada2` and `swarm` are mutually
-> exclusive (keep exactly one).
+> order is validated against stage dependencies at config load: `demultiplex` before `trim`; a
+> feature step (`dada2` or `swarm`) before `taxonomy` and `clean`; `taxonomy` before both `clean`
+> and `export`; and `clean` before `export` (so the export uses the decontaminated table, not the
+> raw one). `dada2` and `swarm` are mutually exclusive (keep exactly one).
 
 > [!WARNING]
 > Only the `ligation` demultiplexing protocol is implemented. Listing `demultiplex` in
@@ -130,6 +133,16 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 > contaminants in the export `contamination_flag` column. It is empty by default, so nothing is
 > flagged unless you populate it. This is distinct from the manifest-driven `clean` step, which acts
 > on negative-control reads.
+
+> [!NOTE]
+> **How the `clean` step decides what is contamination.** It is presence-based and works at the
+> feature (OTU/ASV) level: any feature with at least one read in an applicable negative control is
+> treated as contamination in the associated biological samples. The control's type sets the scope,
+> taken from the FAIRe manifest: an **extraction blank** cleans only the samples that share its
+> `extraction_ID` (its extraction batch), while a **PCR blank** cleans the whole dataset.
+> `cleaning.mode` is `flag` by default (annotate the feature, never change counts) or `subtract`
+> (zero those reads in the associated samples). Subtraction is irreversible on the biological data,
+> so it is opt-in. The step runs only when `clean` is listed in `pipeline.steps`.
 
 ## CLI Commands
 
@@ -145,7 +158,7 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 | `assign-taxonomy METHOD MARKER QUERY COUNTS` | Generic taxonomy (blast/dada2/decipher/ecotag) |
 | `format-gbif INPUT` | Convert results to GBIF long format |
 | `create-gbif TAXO SAMPLE_META PROJECT_META OUTPUT` | Build DarwinCore GBIF occurrence CSV |
-| `demultiplex READS LIB META` | Demultiplex ligation-based libraries |
+| `demultiplex READS LIB META` | Demultiplex ligation-based libraries; META is a CSV with `eventID`, `tag_demultiplex`, and `library` columns |
 | `manifest FIELD_META` | Build (and optionally validate) a canonical FAIRe sample manifest from lab CSVs |
 | `clean ABUNDANCE FIELD_META OUTPUT` | Decontaminate an abundance table against its negative controls (flag or subtract) |
 | `report MARKER` | Build the read-tracking report (+ `--html` for the visual run report) from existing outputs |
@@ -160,6 +173,15 @@ Run `seednap --help` or `seednap <command> --help` for full options.
 > files (raw data, reference databases) are missing on disk or the taxonomy database block is
 > unresolved. `run-pipeline` runs the same preflight before any compute, so a syntactically valid
 > config can still fail fast.
+
+> [!IMPORTANT]
+> `create-gbif` joins the taxonomy table to your sample metadata on `eventID` to attach each
+> occurrence's date and coordinates. Because R's `make.names()` rewrites dashes to dots in column
+> names (so `DAR-2023-0025` can become `DAR.2023.0025` in the taxonomy table while the metadata
+> sheet keeps the dashed form), the join normalizes dot/dash/underscore separators before matching
+> and writes the canonical dashed form to the output. If the normalized join still matches **zero**
+> rows, the command raises instead of emitting a CSV with every date and coordinate left blank; a
+> partial match emits a `[WARN]` listing the unmatched `eventID`s.
 
 ## Configuration
 
@@ -194,6 +216,14 @@ Per-step artifacts go under `<paths.output>/<NN_step>/<marker>/` (`01_trim`, `02
 
 The `<method>` token follows `taxonomy.method`, except the DADA2 taxonomy table uses `dada2RDP`.
 Run state lives at `<paths.output>/.<marker>_state.json`.
+
+> [!NOTE]
+> **Every run is reproducible from its own outputs.** At the start of each run the orchestrator
+> writes the full effective config (your YAML merged over the built-in defaults) to
+> `<paths.output>/.<marker>_config.snapshot.yaml`, and stamps the SeeDNAP version that produced
+> the run into the state JSON (`seednap_version`). On `--resume`, a version mismatch (or a state
+> file written before version stamping existed) is surfaced as a `[WARN]`, so a result is never
+> silently stitched together across incompatible SeeDNAP versions.
 
 For a worked example of what a finished run produces -- read tracking, OTU table,
 taxonomy table, and FAIRe sample manifest, with trimmed sample rows -- see
@@ -249,18 +279,21 @@ including the per-panel breakdown: [docs/reporting.md](docs/reporting.md).
 seednap/
   src/seednap/
     cli.py                          # CLI entry point
-    config/                         # Pydantic config models + YAML loader
-    pipeline/                       # Orchestrator + state management
+    config/                         # Pydantic config models + YAML loader + FAIRe manifest
+    pipeline/                       # Orchestrator + run-state management
     steps/
       trimming/                     # Cutadapt integration
       dada2/                        # DADA2 R wrapper
       swarm/                        # VSEARCH + SWARM clustering
       taxonomic_assignment/         # BLAST, DADA2, DECIPHER, ecotag
+      cleaning/                     # Control decontamination (the 'clean' step)
       formatting/                   # GBIF + DarwinCore export
       report/                       # Read-tracking table + HTML run report
+    errors/                         # Error codes + 'explain'/preflight machinery
     utils/                          # Subprocess, logging, sequence tools
+    scripts/                        # Bundled R scripts (DADA2, DECIPHER)
+    data/templates/                 # Bundled CSV templates (primers, GBIF)
   config/markers/                   # Example YAML configs
-  scripts/                          # R scripts (DADA2, DECIPHER)
 ```
 
 ## Acknowledgments

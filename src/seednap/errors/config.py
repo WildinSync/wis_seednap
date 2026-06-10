@@ -49,7 +49,20 @@ _KIND = {
 
 
 def _unwrap(annotation: Any) -> Any:
-    """Strip Optional/Union to the first BaseModel arg, if any."""
+    """Strip Optional/Union to the first BaseModel arg, if any.
+
+    Nested config sections are often declared as ``Optional[SomeModel]`` (i.e.
+    ``Union[SomeModel, None]``). To walk the config tree we need the underlying model
+    class, so this peels one layer of Union to find it.
+
+    Args:
+        annotation: A type annotation taken from a Pydantic field
+            (e.g. ``Optional[MarkerConfig]`` or ``int``).
+
+    Returns:
+        The first ``BaseModel`` subclass found among the Union arguments if the
+        annotation is a Union; otherwise the annotation unchanged.
+    """
     if typing.get_origin(annotation) is Union:
         for arg in typing.get_args(annotation):
             if isinstance(arg, type) and issubclass(arg, BaseModel):
@@ -58,7 +71,22 @@ def _unwrap(annotation: Any) -> Any:
 
 
 def _model_at(loc: Tuple[Any, ...]) -> Optional[Type[BaseModel]]:
-    """Resolve the Pydantic model reached by walking ``loc`` from PipelineConfig."""
+    """Resolve the Pydantic model reached by walking ``loc`` from PipelineConfig.
+
+    A Pydantic error ``loc`` is the dotted path to the offending value (e.g.
+    ``("marker", "primers", "forward")``). Walking that path from the root
+    ``PipelineConfig`` tells us which sub-model owns the field, which in turn lets us
+    list that model's valid keys for a typo suggestion.
+
+    Args:
+        loc: The error location tuple from a Pydantic error dict, a sequence of field
+            names (and possibly list indices) descending from ``PipelineConfig``.
+
+    Returns:
+        The ``BaseModel`` subclass at that location, or None if the path leaves the
+        model tree (e.g. it descends into a scalar field or names a key that does not
+        exist on the current model).
+    """
     model: Any = PipelineConfig
     for part in loc:
         if not (isinstance(model, type) and issubclass(model, BaseModel)):
@@ -71,13 +99,44 @@ def _model_at(loc: Tuple[Any, ...]) -> Optional[Type[BaseModel]]:
 
 
 def _closest(word: str, options: List[str]) -> Optional[str]:
-    """Return the single closest match to ``word`` among ``options``, or None."""
+    """Return the single closest match to ``word`` among ``options``, or None.
+
+    Powers the "did you mean" suggestion: given the key (or value) the user typed and
+    the set of valid keys (or allowed values), it picks the nearest one by string
+    similarity so a typo like ``marker`` for ``markers`` gets a pointed hint.
+
+    Args:
+        word: The string the user supplied (a config key or value).
+        options: The valid strings to match against.
+
+    Returns:
+        The closest option string when its similarity meets the 0.6 cutoff, otherwise
+        None (no suggestion offered).
+    """
     matches = difflib.get_close_matches(word, options, n=1, cutoff=0.6)
     return matches[0] if matches else None
 
 
 def _one(err: Any) -> Tuple[str, str]:
-    """Map one Pydantic error dict (ErrorDetails) to (message, code)."""
+    """Map one Pydantic error dict (ErrorDetails) to a (message, code) pair.
+
+    This is the per-error dispatcher: it reads the Pydantic error ``type`` and renders
+    a friendly, actionable line plus the matching ``SDN-CFG-NNN`` code. It handles
+    unknown keys (with migration hints and typo suggestions), missing required fields,
+    type mismatches, out-of-range and length/pattern violations, invalid enum choices,
+    and custom-validator (``value_error``) messages, falling back to Pydantic's own
+    text for anything not templated.
+
+    Args:
+        err: One error dict from ``ValidationError.errors()``, i.e. Pydantic's
+            ErrorDetails mapping with keys such as ``type``, ``loc``, ``msg``,
+            ``input``, and ``ctx``.
+
+    Returns:
+        A two-tuple ``(message, code)`` where ``message`` is the human-readable line
+        (without the leading bullet) and ``code`` is the stable ``SDN-CFG-NNN`` error
+        code routing ``seednap explain`` to the right topic.
+    """
     loc: Tuple[Any, ...] = tuple(err.get("loc", ()))
     dotted = ".".join(str(p) for p in loc) or "(top level)"
     etype = err.get("type", "")
@@ -192,7 +251,23 @@ def _one(err: Any) -> Tuple[str, str]:
 
 
 def humanize_validation_error(exc: ValidationError, config_path: Path) -> str:
-    """Build a full, actionable config-error message from a Pydantic ValidationError."""
+    """Build a full, actionable config-error message from a Pydantic ValidationError.
+
+    A single bad marker YAML can trip several Pydantic errors at once; this turns the
+    whole batch into one readable report: each distinct problem becomes a bullet with
+    its ``SDN-CFG-NNN`` code, duplicates are collapsed, and a footer points at
+    ``seednap explain`` and the configuration docs.
+
+    Args:
+        exc: The Pydantic ``ValidationError`` raised while loading the config.
+        config_path: Path to the YAML config that failed validation, echoed in the
+            header so the user knows which file to edit.
+
+    Returns:
+        A multi-line message: a header naming the file, one ``  - <message>  [CODE]``
+        bullet per distinct error, and a footer pointing at ``seednap explain`` and
+        ``docs/configuration.md``.
+    """
     blocks: List[str] = []
     seen = set()
     for err in exc.errors():

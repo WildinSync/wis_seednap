@@ -38,7 +38,7 @@ A minimal config must set exactly these (everything else has a default):
 
 ## The feature path and method block are exclusive
 
-`dada2` and `swarm` are the two mutually-exclusive feature (clustering) paths. Fill in only the one named in `pipeline.steps`. Likewise, under `taxonomy` fill only `databases.<method>` for your chosen `method`; the other method blocks are ignored.
+`dada2` and `swarm` are the two mutually-exclusive feature (clustering) paths: the step that turns trimmed reads into the biological units you assign taxonomy to. The DADA2 path produces ASVs (amplicon sequence variants: denoised, exact sequences resolved to single-nucleotide differences). The SWARM path produces OTUs (operational taxonomic units: sequences clustered together within a small edit distance). Pick exactly one. Fill in only the section named in `pipeline.steps`. Likewise, under `taxonomy` fill only `databases.<method>` for your chosen `method`; the other method blocks are ignored.
 
 > [!TIP]
 > You do not need to delete the unused `dada2`/`swarm` or `databases.<method>` blocks; whatever is not selected by `pipeline.steps` and `taxonomy.method` is simply not read.
@@ -62,9 +62,13 @@ Your YAML is merged over the model defaults: any field with a default may be omi
 | `<output>/03_taxo/<marker>/` | `taxonomy` |
 | `<output>/04_report/<marker>/` | `report` (override with `report.output_dir`) |
 | `<output>/<marker>_<method>.csv` | merged taxonomy + abundance table |
+| `<output>/<marker>_<method>_cleaned.csv` | `clean` (the cleaned/annotated abundance table) |
 | `<output>/<marker>_<method>_gbif.csv` | `export` (GBIF/DarwinCore table) |
 
-Pipeline state is tracked in `<output>/.<marker>_state.json`, which drives `--resume`.
+For the merged table, `<method>` is the `taxonomy.method` value, except the DADA2 RDP classifier writes `<marker>_dada2RDP.csv` (the others are `<marker>_blast.csv`, `<marker>_ecotag.csv`, `<marker>_decipher.csv`).
+
+> [!NOTE]
+> Two hidden files alongside the outputs record what was run, so any single run can be reconstructed and re-verified. `<output>/.<marker>_state.json` tracks every step's status, duration, error, and output paths, records the `seednap` version that ran the pipeline, and drives `--resume`. `<output>/.<marker>_config.snapshot.yaml` is the effective merged config (your YAML over the defaults) exactly as it was used, written into the output tree rather than relying on the original YAML being unchanged. On `--resume`, a `seednap` version mismatch against the recorded version is logged as a `[WARN]`.
 
 ## `marker` (required)
 
@@ -124,7 +128,18 @@ demultiplex:
 > [!WARNING]
 > Listing `demultiplex` in `pipeline.steps` with any protocol other than `ligation` (including the default `none` and the unimplemented `standard`) is rejected at config load, not mid-run. Only the `ligation` protocol is implemented. Either set `protocol: ligation`, or remove `demultiplex` from `pipeline.steps` if your reads are already demultiplexed.
 
-The `ligation` protocol processes one bad sample at a time and only fails the whole library when the per-sample failure rate crosses `max_sample_failure_rate`. It requires `demultiplex.metadata`: a CSV with columns `eventID`/`sample`, `tag_demultiplex`, and `library` that maps tags to samples. If `metadata` is unset when the step runs, the run raises a `ValueError` naming the fix.
+The `ligation` protocol splits one multiplexed library FASTQ into per-sample files using a tag-to-sample mapping, then trims primers. It processes one bad sample at a time and only fails the whole library when the per-sample failure rate crosses `max_sample_failure_rate`. It requires `demultiplex.metadata`: a CSV whose header row contains exactly these columns:
+
+| Column | Meaning |
+| --- | --- |
+| `eventID` | Sample/event identifier (the per-sample output name) |
+| `tag_demultiplex` | The ligation tag sequence for that sample |
+| `library` | Library identifier; matches the raw FASTQ filename prefix |
+
+If `metadata` is unset when the step runs, the run raises a `ValueError` naming the fix.
+
+> [!IMPORTANT]
+> The lab's `Corr_tags` files cannot be used as-is. They are headerless and semicolon-delimited in the column order `well;library;sample;project;marker;tagseq`. Convert one to a headed metadata CSV first, mapping `eventID` <- `sample`, `tag_demultiplex` <- `tagseq`, and `library` <- `library`. A missing or misnamed column is reported with the columns it actually found.
 
 ## `trimming`
 
@@ -147,7 +162,7 @@ trimming:
 
 ## `swarm`
 
-The OTU feature path. Used only when `swarm` is in `pipeline.steps`.
+The OTU feature path. Used only when `swarm` is in `pipeline.steps`. It merges paired reads, removes chimeras (artefactual sequences formed when two real templates fuse during PCR; they create spurious OTUs if not removed), then clusters with SWARM.
 
 ```yaml
 swarm:
@@ -284,7 +299,9 @@ databases:
 | `lca_pid` | float (0-100) | `90.0` | `collapsed_taxonomy` only: hard percent-identity floor |
 | `lca_diff` | float (0-100) | `1.0` | `collapsed_taxonomy` only: identity-window width for collapsing disagreeing hits to their LCA |
 
-The `threshold_*` values drive a per-rank cascade: if percent identity falls below the threshold for a rank, that rank and every finer rank are nulled, so the output never shows orphan ranks. See [taxonomy-methods.md](taxonomy-methods.md) for the algorithm rationale.
+When a query sequence has several near-equal BLAST hits, SeeDNAP resolves them with an LCA (lowest common ancestor): it reports the most specific rank on which the competing hits agree, rather than arbitrarily picking one. The `top_bitscore_pct` and `lca_pident_delta` values decide which hits are close enough to the best to enter that vote.
+
+The `threshold_*` values then drive a per-rank cascade: if percent identity falls below the threshold for a rank, that rank and every finer rank are nulled, so the output never shows orphan ranks (a genus call with no supporting species, for example). See [taxonomy-methods.md](taxonomy-methods.md) for the algorithm rationale.
 
 > [!NOTE]
 > `lca_algorithm` selects the resolver. `cascade` (default) is the header-derived resolver and uses `top_bitscore_pct` + `lca_pident_delta` plus the per-rank `threshold_*` values. `collapsed_taxonomy` is the eDNAFlow/OceanOmics percent-identity-window collapse-to-LCA: header-based, offline, tuned by `lca_pid`/`lca_diff`, and it does not apply the `threshold_*` cascade. `fishbase_tiered` is not implemented and raises if selected.
@@ -303,7 +320,7 @@ databases:
 | --- | --- | --- | --- |
 | `all` | path | required | RDP-format database with all ranks |
 | `species` | path | required | Species-level exact-match DB (addSpecies is always run) |
-| `bootstrap_threshold` | int (0-100) | `80` | Minimum RDP bootstrap percent for a rank to be retained (Wang 2007). Below this, the rank is nulled and all finer ranks cascade to null |
+| `bootstrap_threshold` | int (0-100) | `80` | Minimum RDP bootstrap percent for a rank to be retained (Wang 2007). The bootstrap is the classifier's own confidence in a rank call (the fraction of resampled runs that agree). Below this value the rank is nulled and all finer ranks cascade to null |
 
 ### `databases.ecotag`
 
@@ -337,7 +354,7 @@ databases:
 
 ## `export`
 
-Runs only if `export` is listed in `pipeline.steps` (after `taxonomy`). Writes `<output>/<marker>_<method>_gbif.csv`.
+Runs only if `export` is listed in `pipeline.steps` (after `taxonomy`). Writes `<output>/<marker>_<method>_gbif.csv`: a long-format occurrence table in the DarwinCore vocabulary (the standard column terms GBIF, the Global Biodiversity Information Facility, uses for biodiversity records), one row per detected taxon per sample.
 
 ```yaml
 export:
@@ -381,7 +398,9 @@ A per-marker subdirectory is created inside `output_dir`, so `output_dir: /data/
 
 ## `cleaning`
 
-Control decontamination of the abundance table. Runs only if `clean` is listed in `pipeline.steps` (after a feature step). Control identity (which samples are negative controls, and how they associate to extraction/PCR batches) comes from the FAIRe manifest.
+Control decontamination of the abundance table: removing or flagging sequences that turn up in your negative controls (blanks) so they are not reported as real detections. A negative control (blank) is a no-template reaction carried alongside the samples to reveal contamination introduced during extraction or PCR; anything that appears in it is suspect.
+
+Runs only if `clean` is listed in `pipeline.steps` (after a feature step). Cleaning is presence-based and works at the OTU/ASV level: any OTU/ASV (the per-sequence cluster the feature step produces) that carries reads in an applicable control is removed from, or flagged in, the associated samples. Counts are never altered in `flag` mode.
 
 ```yaml
 cleaning:
@@ -390,12 +409,17 @@ cleaning:
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `mode` | "flag" \| "subtract" | `flag` | `flag` annotates control OTUs/ASVs without changing counts; `subtract` removes control reads from associated samples |
+| `mode` | "flag" \| "subtract" | `flag` | `flag` adds a boolean `in_negative_control` column marking control-positive OTUs/ASVs without changing counts; `subtract` zeroes those reads in the associated samples |
+
+Control identity (which columns are negative controls, whether each is an extraction or a PCR blank, and which extraction batch it belongs to) comes from a FAIRe manifest. In a pipeline run that manifest is built from `report.sample_metadata` (the per-sample field metadata CSV).
+
+> [!IMPORTANT]
+> In a pipeline run, the `clean` step needs `report.sample_metadata`. If it is unset, the step is skipped with a `[WARN]` and export uses the uncleaned table. A control column present in the table but absent from the manifest is classified by its name and warned about.
 
 > [!WARNING]
-> `mode: subtract` alters the abundance table: extraction blanks clean their extraction batch and PCR blanks clean the whole dataset. `mode: flag` is non-destructive (it only annotates). Use `subtract` deliberately.
+> `mode: subtract` alters the abundance table, so it is opt-in. An extraction blank (taken through DNA extraction with its batch) cleans only the samples sharing its `extraction_ID`; a PCR blank (added at the amplification step) cleans the whole dataset. `mode: flag` is non-destructive (it only annotates). Both modes write a per-sample report (`reads_before`/`reads_after`, OTUs and reads removed, and the controls that drove each removal).
 
-Cleaning can also be run standalone: `seednap clean ABUNDANCE_CSV FIELD_METADATA OUTPUT --mode flag|subtract`.
+Cleaning can also be run standalone: `seednap clean ABUNDANCE_CSV FIELD_METADATA OUTPUT --mode flag|subtract`, where `FIELD_METADATA` is the per-sample field metadata CSV.
 
 ## `logging`
 
@@ -440,7 +464,7 @@ Complete working examples in `config/markers/`:
 
 | File | Marker | Method | Notes |
 | --- | --- | --- | --- |
-| `teleo.yaml` | Teleo 12S fish (Namibia) | BLAST | SWARM path, ligation demux |
+| `teleo.yaml` | Teleo 12S fish (Namibia) | BLAST | SWARM path; ligation `demultiplex` block is configured but not listed in `pipeline.steps`, so demux does not run as shipped |
 | `mifish.yaml` | MiFish-U 12S fish | BLAST | SWARM path |
 | `mam07.yaml` | MamP007 16S mammal (Greina) | BLAST | SWARM path |
 | `mam07_dada2.yaml` | MamP007 16S mammal | DADA2 | DADA2 ASV path |

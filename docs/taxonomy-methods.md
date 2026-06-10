@@ -1,6 +1,8 @@
 # Taxonomic Assignment Methods
 
-How SeeDNAP assigns taxonomy to OTUs/ASVs, with one section per supported method.
+How SeeDNAP assigns taxonomy to the representative sequences produced by clustering, with one section per supported method.
+
+The input to this stage is one representative DNA sequence per detected variant: an **ASV** (Amplicon Sequence Variant, an exact denoised sequence from the DADA2 path) or an **OTU** (Operational Taxonomic Unit, a cluster of near-identical sequences from the SWARM path). This doc uses "OTU" loosely to mean either. Each carries a per-sample abundance (read count). The taxonomy stage attaches a Linnaean lineage (kingdom through species) to each one.
 
 SeeDNAP supports four taxonomic assignment methods, selected via the `taxonomy.method` field in the YAML config. This doc covers each method's algorithm, reference database format, and configuration keys. For per-key config tables across the whole pipeline see [configuration.md](configuration.md).
 
@@ -21,6 +23,9 @@ SeeDNAP supports four taxonomic assignment methods, selected via the `taxonomy.m
 
 > [!NOTE]
 > `<method>` in output filenames is the `taxonomy.method` value, except DADA2: the DADA2 path writes `<marker>_dada2RDP.csv`, not `<marker>_dada2.csv`. The other methods use `blast`, `decipher`, or `ecotag` directly.
+
+> [!NOTE]
+> **Lowest Common Ancestor (LCA)** is the recurring idea behind every method here. When a sequence matches several references that disagree on, say, which species but agree on the genus, the assignment is reported only as deep as the references actually agree: the disagreed rank and all finer ranks are set to null. This avoids guessing a single species when the data only support a genus, and it is why a finer rank can be blank while a coarser one is filled.
 
 ---
 
@@ -64,7 +69,7 @@ SeeDNAP supports four taxonomic assignment methods, selected via the `taxonomy.m
 
 3. **Phylogeny extraction:** Taxonomy is parsed from reference FASTA headers (see Reference Database Format below).
 
-4. **Cascade-null per-rank filtering.** The post-processor walks ranks from species down to class. When the hit's percent identity is below the threshold for a rank, that rank **and every finer rank** are set to null. The output therefore never contains orphan ranks like `kingdom=Metazoa, phylum=None, class=Mammalia`.
+4. **Cascade-null per-rank filtering.** Each of the five ranks class through species has a percent-identity threshold. When a hit's percent identity is below the threshold for a rank, that rank **and every finer rank** are set to null. (Kingdom and phylum have no threshold; they pass through on any hit that cleared the absolute `perc_identity` cutoff.) The output therefore never contains orphan ranks like `kingdom=Metazoa, phylum=None, class=Mammalia`.
 
    | Rank | Default |
    |---|---|
@@ -82,11 +87,14 @@ SeeDNAP supports four taxonomic assignment methods, selected via the `taxonomy.m
    > [!NOTE]
    > The default thresholds follow Pappalardo et al. 2025 (*Methods in Ecology and Evolution* 16:2380-2394), with rRNA-marker tweaks (family raised vs eDNAFlow).
 
-5. **MEGAN-LR top-bitscore LCA.** The resolver does not require exact bitscore ties. All hits within `top_bitscore_pct` (default 10%) of the best bitscore are pooled, with an in-band identity floor `lca_pident_delta` (default 1.0 %id points below the best). Ranks that disagree across that pool are nulled (Lowest Common Ancestor). Setting `top_bitscore_pct: 0` reverts to exact-tie behavior.
+5. **MEGAN-LR top-bitscore LCA.** When an OTU has several good hits, the resolver decides how deep to call it. It pools all hits whose *bitscore* (BLAST's alignment-quality score; higher is a better match) is within `top_bitscore_pct` (default 10 percent) of the best hit's bitscore, rather than requiring exact ties, which are brittle when references are near-duplicates. An in-band identity floor `lca_pident_delta` (default 1.0 percent-identity points below the best in the pool) keeps a single near-identity off-target hit from dragging the whole pool down. Ranks on which the pooled hits disagree are nulled (this is the LCA step). Setting `top_bitscore_pct: 0` reverts to exact-tie behavior.
 
 6. **Output merging.** Taxonomy is **left-joined** onto the OTU/ASV abundance table so that OTUs without any BLAST hit surface as `Unassigned` rows rather than being silently dropped.
 
-7. **Contamination flagging.** If `taxonomy.contaminants` is set, every row whose `species` matches one of the listed names gets `is_contaminant_candidate=True`. Rows are **never** deleted; the flag propagates through the GBIF formatter into the DarwinCore output as `contamination_flag` for downstream review. The default is an empty list, so omitting `contaminants` flags nothing.
+7. **Contamination flagging.** If `taxonomy.contaminants` is set, every row whose `species` matches one of the listed names gets `is_contaminant_candidate=True`. Rows are **never** deleted; the flag propagates through the GBIF formatter into the DarwinCore output as `contamination_flag` for downstream review. (DarwinCore is the GBIF biodiversity-record standard SeeDNAP exports to; see the export docs.) The default is an empty list, so omitting `contaminants` flags nothing.
+
+   > [!NOTE]
+   > This is name-based flagging of usual-suspect taxa (human, livestock, pets; see Whitmore et al. 2023), not blank/negative-control decontamination. Removing OTUs that also appear in extraction or PCR blanks (laboratory no-template controls run to catch reagent and cross-sample contamination) is a separate `clean` pipeline step, documented elsewhere.
 
 The merged final table is written to `<paths.output>/<marker>_blast.csv`. The intermediate BLAST TSV and other per-method artifacts live under `<paths.output>/03_taxo/<marker>/`.
 
@@ -178,7 +186,14 @@ Uses the naive Bayesian classifier from DADA2 (Wang et al., 2007; Callahan et al
 
 ### Algorithm and Bootstrap Threshold
 
-`assignTaxonomy` returns a per-rank bootstrap confidence (0-100). The post-processor applies a configurable `bootstrap_threshold` (default 80, the Wang 2007 recommendation for short rRNA reads): ranks below the threshold are nulled, and every finer rank cascades to null, exactly as in the BLAST path.
+The classifier runs in two stages. First, `assignTaxonomy` assigns kingdom through genus and returns a per-rank *bootstrap* confidence (0-100; a bootstrap is the fraction of resampled subsets of the read's k-mers that still vote for the same taxon, so it measures how stable the call is). Then `addSpecies` adds the species rank by exact match (100 percent identity), which is not bootstrap-based.
+
+The `bootstrap_threshold` (default 80, the Wang 2007 recommendation for short rRNA reads) is applied to kingdom through genus: a rank whose bootstrap falls below the threshold is nulled, and every finer rank cascades to null (so the output never carries an orphan rank like `class=Mammalia` under a nulled `phylum`). Two deliberate exceptions match the legacy pipeline:
+
+- Species itself is never bootstrap-gated; it is kept whenever `addSpecies` found an exact match.
+- An exact species match overrides the bootstrap for the whole lineage: a read with a confident 100 percent species hit but a low genus bootstrap keeps its genus and coarser ranks rather than being nulled.
+
+The `pident` column reported for the DADA2 path is `bootstrap_min`, the lowest bootstrap across the kingdom-to-genus ranks actually kept (species is exact-match), giving a per-sequence confidence summary analogous to BLAST's percent identity.
 
 ### Configuration (DADA2)
 

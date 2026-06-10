@@ -124,7 +124,19 @@ CODES: Dict[str, Tuple[str, str]] = {
 
 
 def explain(code: str) -> Optional[str]:
-    """Return the extended explanation for a code, or None if the code is unknown."""
+    """Return the extended explanation for an error code, or None if it is unknown.
+
+    Backs the ``seednap explain <code>`` command: given a stable code shown in an error
+    message, it returns the long-form title plus the WHY explanation from ``CODES``.
+
+    Args:
+        code: An error code such as ``SDN-CFG-001``. Surrounding whitespace is stripped
+            and the code is upper-cased before lookup, so casing/padding does not matter.
+
+    Returns:
+        A formatted string ``"<CODE>: <title>\\n\\n<detail>"`` when the code is known,
+        otherwise None.
+    """
     entry = CODES.get(code.strip().upper())
     if entry is None:
         return None
@@ -133,5 +145,13 @@ def explain(code: str) -> Optional[str]:
 
 
 def all_codes() -> Dict[str, str]:
-    """code -> title, for listing."""
+    """Return every known error code mapped to its short title, for listing.
+
+    Used to render a directory of codes (e.g. ``seednap explain`` with no argument)
+    without exposing the long-form explanations.
+
+    Returns:
+        A dict mapping each ``SDN-XXX-NNN`` code to its one-line title; the extended
+        explanation is omitted.
+    """
     return {c: t for c, (t, _) in CODES.items()}

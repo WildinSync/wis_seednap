@@ -32,7 +32,7 @@ class Dada2Runner(RScriptRunner):
 
     _error_class = Dada2Error
 
-    def __init__(self, timeout: int = 14400):
+    def __init__(self, timeout: int = 14400) -> None:
         """
         Initialize DADA2 runner.
 

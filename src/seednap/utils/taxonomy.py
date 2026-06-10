@@ -56,9 +56,21 @@ def is_missing_taxon(value: object) -> bool:
     """Return True if `value` is a missing-taxonomy sentinel (case-insensitive).
 
     A NaN, empty string, or any case variant of NA/nan/None/Unassigned is
-    treated as "no taxon at this rank". This is the single predicate behind
-    the canonical `MISSING_TAXON_VALUES` set; callers use it (or the set
-    directly) instead of re-declaring their own placeholder literals.
+    treated as "no taxon at this rank" (the sequence could not be confidently
+    placed at that taxonomic level). This is the single predicate behind the
+    canonical `MISSING_TAXON_VALUES` set; callers use it (or the set directly)
+    instead of re-declaring their own placeholder literals.
+
+    Args:
+        value: Any cell value from a taxonomy table (a rank name string, NaN,
+            None, or an empty string). Non-string values are coerced via str()
+            before comparison.
+
+    Returns:
+        True if the value represents missing/unassigned taxonomy, else False.
+
+    Raises:
+        None.
     """
     if value is None:
         return True
@@ -71,12 +83,27 @@ def is_missing_taxon(value: object) -> bool:
 
 
 def _normalize_unassigned(series: pd.Series, unassigned_label: str = UNASSIGNED_LABEL) -> pd.Series:
-    """Treat NaN, empty string, and any case variant of NA/None/nan/Unassigned
-    as unassigned.
+    """Collapse all missing-taxonomy sentinels in a rank column to one label.
 
-    Reference DBs and R scripts use a mix of these for missing taxonomy; we
-    collapse them to a single label (the canonical `MISSING_TAXON_VALUES`,
-    matched case-insensitively) so cascade nulling is unambiguous.
+    Treat NaN, empty string, and any case variant of NA/None/nan/Unassigned as
+    unassigned. Reference databases and R scripts use a mix of these for missing
+    taxonomy; collapsing them to a single label (the canonical
+    `MISSING_TAXON_VALUES`, matched case-insensitively) makes cascade nulling
+    unambiguous so a rank is never both "present" and "missing" depending on
+    which spelling a tool emitted.
+
+    Args:
+        series: A single taxonomic-rank column (e.g. genus) from the merged
+            taxonomy/abundance table; may contain strings, NaN, or None.
+        unassigned_label: The single label to write in place of any sentinel
+            (default: 'Unassigned').
+
+    Returns:
+        A pandas Series of dtype str, same index as the input, with every
+        missing-taxonomy cell replaced by `unassigned_label`.
+
+    Raises:
+        None.
     """
     s = series.astype(object).where(series.notna(), unassigned_label)
     s = s.astype(str)
@@ -132,11 +159,19 @@ def link_taxonomy_with_abundance(
         unassigned_label: Label for missing taxonomy entries.
 
     Returns:
-        Path to the output CSV.
+        Path to the output CSV. The CSV columns, in order, are: ASV_ID
+        (OTU_-prefixed feature ID), pident (identity/confidence or NaN), the
+        seven taxonomic ranks kingdom..species, is_contaminant_candidate
+        (bool), one column per sample (read counts), and Sequence. One row per
+        OTU, sorted by ASV number.
 
     Raises:
-        FileNotFoundError: If abundance_path doesn't exist. (Empty taxonomy
-            file is allowed and produces an all-Unassigned output.)
+        FileNotFoundError: If abundance_path does not exist. (An empty or
+            missing taxonomy file is allowed and yields an all-Unassigned
+            output.)
+        ValueError: If the abundance table cannot be parsed as CSV, or if the
+            taxonomy file has rows but no sequence column and none can be
+            inferred from a known alias.
     """
     taxonomy_path = Path(taxonomy_path)
     abundance_path = Path(abundance_path)
@@ -258,6 +293,23 @@ def link_taxonomy_with_abundance(
         # ANY component is a configured contaminant; an exact equality test
         # would miss a contaminant hidden inside an ambiguous multi-match.
         def _row_is_contam(value: object) -> bool:
+            """Return True if a species cell names a configured contaminant.
+
+            DADA2 addSpecies (allowMultiple=TRUE) can write a '/'-joined
+            multi-hit cell (e.g. 'Salmo_trutta/Salmo_salar'); the cell is
+            flagged if ANY component matches the contaminant set, so a
+            contaminant hidden inside an ambiguous multi-match is not missed.
+
+            Args:
+                value: The species-column cell for one OTU (a single species
+                    name or a '/'-joined list of names; coerced via str()).
+
+            Returns:
+                True if any '/'-separated component is in `contam_set`.
+
+            Raises:
+                None.
+            """
             return any(part in contam_set for part in str(value).split("/"))
 
         species_str = result["species"].astype(str)

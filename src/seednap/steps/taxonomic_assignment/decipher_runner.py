@@ -6,7 +6,7 @@ for taxonomic assignment of eDNA sequences.
 
 import logging
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Dict, List, Optional, Union
 
 from seednap.utils.r_runner import RScriptRunner, r_script_path
 from seednap.utils.subprocess import run_subprocess
@@ -30,12 +30,18 @@ class DecipherRunner(RScriptRunner):
 
     _error_class = DecipherError
 
-    def __init__(self, timeout: int = 7200):
+    def __init__(self, timeout: int = 7200) -> None:
         """
         Initialize DECIPHER runner.
 
+        Verifies the DECIPHER R package is importable in the active R interpreter so
+        a missing dependency fails fast at construction rather than mid-run.
+
         Args:
             timeout: Command timeout in seconds (default: 7200 = 2 hours)
+
+        Raises:
+            DecipherError: If the DECIPHER R package is not installed/importable.
         """
         super().__init__(timeout=timeout)
         self._check_decipher_package()
@@ -167,7 +173,7 @@ class DecipherRunner(RScriptRunner):
         abundance_csv: Union[str, Path],
         output_csv: Union[str, Path],
         sequence_col: str = "sequence",
-        contaminants: Optional[list] = None,
+        contaminants: Optional[List[str]] = None,
     ) -> Path:
         """
         Link DECIPHER taxonomy with the DADA2/SWARM abundance table.

@@ -52,6 +52,10 @@ def _find_obitools_bin() -> Optional[Path]:
         2. ``SEEDNAP_OBITOOLS_BIN`` env var -- a fallback bin dir, used when the
            tools are not all on PATH.
         3. The well-known install locations in :data:`_OBITOOLS_CANDIDATE_BINS`.
+
+    Returns:
+        Path to the first directory that contains all of ecotag, obiannotate, and
+        obitab, or None if no such directory is found.
     """
     override = os.environ.get("SEEDNAP_OBITOOLS_BIN")
     if override:
@@ -84,7 +88,7 @@ class EcotagRunner:
     - obitab: Convert FASTA to TSV table
     """
 
-    def __init__(self, timeout: int = 3600, bin_dir: Optional[Union[str, Path]] = None):
+    def __init__(self, timeout: int = 3600, bin_dir: Optional[Union[str, Path]] = None) -> None:
         """
         Initialize ecotag runner.
 
@@ -93,13 +97,32 @@ class EcotagRunner:
             bin_dir: Optional path to the directory containing the OBITools
                 binaries. If not provided, the runner auto-discovers from
                 PATH / SEEDNAP_OBITOOLS_BIN / well-known conda env paths.
+
+        Raises:
+            EcotagError: If bin_dir is given but lacks a required tool, or if no
+                usable OBITools bin directory can be discovered.
         """
         self.timeout = timeout
         self.bin_dir = self._resolve_bin_dir(bin_dir)
 
     @staticmethod
     def _resolve_bin_dir(bin_dir: Optional[Union[str, Path]]) -> Path:
-        """Find a usable OBITools bin directory or raise with a clear message."""
+        """Resolve and validate the OBITools bin directory.
+
+        If bin_dir is given it is validated to contain all required tools; otherwise
+        the directory is auto-discovered. Used at construction so a missing OBITools
+        install fails fast with actionable guidance rather than mid-run.
+
+        Args:
+            bin_dir: Caller-supplied bin directory, or None to auto-discover.
+
+        Returns:
+            Path to a directory containing ecotag, obiannotate, and obitab.
+
+        Raises:
+            EcotagError: If bin_dir is given but is missing a required tool, or if no
+                usable OBITools bin directory can be found anywhere probed.
+        """
         if bin_dir is not None:
             d = Path(bin_dir)
             missing = [t for t in _REQUIRED_OBITOOLS if not (d / t).is_file()]
@@ -135,26 +158,33 @@ class EcotagRunner:
         return discovered
 
     def _tool(self, name: str) -> str:
-        """Return the absolute path to an OBITools binary."""
+        """Return the absolute path to an OBITools binary.
+
+        Args:
+            name: Binary name, e.g. 'ecotag', 'obiannotate', or 'obitab'.
+
+        Returns:
+            The binary's absolute path inside the resolved OBITools bin directory.
+        """
         return str(self.bin_dir / name)
 
     def _run_command(
         self,
-        cmd: list,
+        cmd: List[str],
         log_file: Optional[Union[str, Path]] = None,
     ) -> str:
         """
-        Execute command.
+        Execute an OBITools command via the shared subprocess runner.
 
         Args:
-            cmd: Command list to execute
-            log_file: Optional path to log file for stdout/stderr
+            cmd: Command argument list to execute (program path plus arguments).
+            log_file: Optional path to a log file capturing stdout/stderr.
 
         Returns:
-            stdout from command
+            The command's stdout as a string.
 
         Raises:
-            EcotagError: If command fails
+            EcotagError: If the command exits non-zero or times out.
         """
         return run_subprocess(
             cmd,
@@ -253,25 +283,29 @@ class EcotagRunner:
         self,
         input_fasta: Union[str, Path],
         output_fasta: Union[str, Path],
-        tags_to_delete: Optional[list] = None,
+        tags_to_delete: Optional[List[str]] = None,
         log_file: Optional[Union[str, Path]] = None,
     ) -> Path:
         """
         Clean FASTA annotations using obiannotate.
 
-        Removes unnecessary tags from ecotag output to simplify downstream processing.
+        ecotag output FASTA headers carry many OBITools bookkeeping tags (clustering
+        counts, primer-match details, etc.). This strips them so the subsequent
+        tabulation keeps only the taxonomy columns of interest.
 
         Args:
-            input_fasta: Path to input FASTA file (from ecotag)
-            output_fasta: Path to output cleaned FASTA file
-            tags_to_delete: List of tag names to delete (default: common ecotag tags)
-            log_file: Optional path to log file
+            input_fasta: Path to input FASTA file (from ecotag).
+            output_fasta: Path to output cleaned FASTA file.
+            tags_to_delete: List of OBITools tag names to delete; if None, a built-in
+                list of common ecotag tags is used.
+            log_file: Optional path to a log file.
 
         Returns:
-            Path to cleaned FASTA file
+            Path to the cleaned FASTA file (same as output_fasta).
 
         Raises:
-            EcotagError: If obiannotate command fails
+            FileNotFoundError: If input_fasta does not exist.
+            EcotagError: If the obiannotate command fails.
         """
         input_fasta = Path(input_fasta)
         output_fasta = Path(output_fasta)
@@ -333,16 +367,21 @@ class EcotagRunner:
         """
         Convert FASTA to TSV table using obitab.
 
+        Turns the annotated FASTA into a flat per-sequence table (one row per
+        sequence, taxonomy fields as columns) that the Python post-processor can
+        join to the abundance table.
+
         Args:
-            input_fasta: Path to input FASTA file
-            output_tsv: Path to output TSV file
-            log_file: Optional path to log file
+            input_fasta: Path to input FASTA file.
+            output_tsv: Path to output TSV file.
+            log_file: Optional path to a log file.
 
         Returns:
-            Path to output TSV file
+            Path to the output TSV file (same as output_tsv).
 
         Raises:
-            EcotagError: If obitab command fails
+            FileNotFoundError: If input_fasta does not exist.
+            EcotagError: If the obitab command fails.
         """
         input_fasta = Path(input_fasta)
         output_tsv = Path(output_tsv)
@@ -396,7 +435,8 @@ class EcotagRunner:
             - taxonomy_tsv: TSV table with taxonomy
 
         Raises:
-            EcotagError: If any step fails
+            FileNotFoundError: If the query FASTA or a database does not exist.
+            EcotagError: If any ecotag/obiannotate/obitab step fails.
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -443,24 +483,33 @@ class EcotagRunner:
         abundance_csv: Union[str, Path],
         output_csv: Union[str, Path],
         sequence_col: str = "sequence",
-        contaminants: Optional[list] = None,
+        contaminants: Optional[List[str]] = None,
     ) -> Path:
         """
-        Link ecotag taxonomy with DADA2/SWARM abundance table.
+        Link ecotag taxonomy with the DADA2/SWARM abundance table.
 
-        Delegates to the shared taxonomy post-processor so ecotag, DECIPHER,
-        DADA2 RDP, and BLAST all share the same output schema and the same
-        correctness guarantees.
+        Maps the OBITools obitab schema (numeric NCBI taxids in order/family/genus/
+        species, scientific names in the *_name columns) onto the shared 7-rank
+        schema, then delegates to the shared taxonomy post-processor so ecotag,
+        DECIPHER, DADA2 RDP, and BLAST all share the same output schema and the same
+        correctness guarantees (left-merge from the abundance side, cascade null,
+        contaminant flagging, stable column order).
 
         Args:
-            taxonomy_tsv: Path to ecotag taxonomy TSV
-            abundance_csv: Path to abundance table (seqtab_clean_t.csv)
-            output_csv: Path to output CSV file
-            sequence_col: Name of sequence column (default: 'sequence')
-            contaminants: Optional list of species to flag as contaminants
+            taxonomy_tsv: Path to the ecotag taxonomy TSV (obitab output).
+            abundance_csv: Path to the abundance table (seqtab_clean_t.csv).
+            output_csv: Path to the output CSV file.
+            sequence_col: Name of the sequence column used to join (default: 'sequence').
+            contaminants: Optional list of species names to flag as contaminants.
 
         Returns:
-            Path to output CSV file with merged taxonomy and abundances
+            Path to the output CSV file with merged taxonomy and abundances (same as
+            output_csv).
+
+        Raises:
+            EcotagError: If the taxonomy table has no usable rank-name column after
+                mapping the obitab schema (refusing to link rather than silently
+                marking every OTU 'Unassigned').
         """
         import pandas as pd
 

@@ -6,7 +6,7 @@ files for both standard and ligation-based demultiplexing.
 
 import logging
 from pathlib import Path
-from typing import Union
+from typing import Dict, Union
 
 import pandas as pd
 
@@ -22,7 +22,7 @@ class TagFileGenerator:
     both standard (per-run) and ligation-based (per-library) layouts.
     """
 
-    def __init__(self, min_overlap: int = 8):
+    def __init__(self, min_overlap: int = 8) -> None:
         """
         Initialize tag file generator.
 
@@ -141,7 +141,7 @@ class TagFileGenerator:
         sample_col: str = "sample_name",
         tag_col: str = "tag",
         run_col: str = "run",
-    ) -> dict:
+    ) -> Dict[str, Path]:
         """
         Generate tag files for standard (non-ligation) demultiplexing.
 
@@ -232,7 +232,7 @@ class TagFileGenerator:
         sample_col: str = "eventID",
         tag_col: str = "tag_demultiplex",
         library_col: str = "library",
-    ) -> dict:
+    ) -> Dict[str, Path]:
         """
         Generate tag files for ligation-based demultiplexing.
 
