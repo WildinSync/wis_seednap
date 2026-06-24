@@ -1550,7 +1550,10 @@ class PipelineOrchestrator:
                 f"readable (ls '{raw_dir}'); a common cause is a config copied from another dataset."
             )
 
-        # Find all R1 files (support both _R1 and .R1 naming)
+        # Find all R1 files (support both _R1 and .R1 naming). Search the top level first;
+        # if nothing is there, search subdirectories recursively, so already-demultiplexed
+        # raw data organised into per-library / per-run subfolders is picked up without the
+        # user having to flatten it.
         r1_patterns = [
             "*_R1*.fastq.gz", "*_R1*.fastq",
             "*.R1.fastq.gz", "*.R1.fastq",
@@ -1558,24 +1561,24 @@ class PipelineOrchestrator:
         r1_files: List[Path] = []
         for pattern in r1_patterns:
             r1_files.extend(raw_dir.glob(pattern))
-
-        # The directory exists but holds no per-sample forward-read FASTQs. Fail loudly
-        # rather than returning an empty list and silently producing an empty run -- a
-        # common cause is a raw dir organised as per-library SUBDIRECTORIES or a single
-        # multiplexed library (which must be demultiplexed first), or a config pointing
-        # at the wrong directory. (no-silent-fallbacks policy)
         if not r1_files:
-            subdirs = [p.name for p in sorted(raw_dir.iterdir()) if p.is_dir()][:5]
-            hint = (
-                f" The directory does contain subdirectories ({', '.join(subdirs)}...), so the "
-                f"reads may be in per-library subfolders or a multiplexed library -- run the "
-                f"'demultiplex' step first, or point paths.raw_data at the flat per-sample dir."
-                if subdirs else ""
-            )
+            for pattern in r1_patterns:
+                r1_files.extend(raw_dir.rglob(pattern))
+            if r1_files:
+                logger.info(
+                    f"No FASTQs at the top level of {raw_dir}; found {len(r1_files)} R1 file(s) "
+                    f"in subdirectories and will trim those (per-library/per-run layout)."
+                )
+
+        # No per-sample forward-read FASTQs anywhere (top level or subdirectories). Fail
+        # loudly rather than returning an empty list and silently producing an empty run.
+        # (no-silent-fallbacks policy)
+        if not r1_files:
             raise FileNotFoundError(
-                f"No forward-read FASTQ files found in paths.raw_data ({raw_dir}). Expected "
-                f"per-sample files named <sample>_R1.fastq.gz / <sample>_R2.fastq.gz (or .R1/.R2)."
-                + hint
+                f"No forward-read FASTQ files found anywhere under paths.raw_data ({raw_dir}) "
+                f"(searched the top level and subdirectories). Expected per-sample files named "
+                f"<sample>_R1.fastq.gz / <sample>_R2.fastq.gz (or .R1/.R2). Check that "
+                f"paths.raw_data points at the intended directory and that the files use that naming."
             )
 
         # Extract sample names (everything before _R1 or .R1)
@@ -1620,10 +1623,26 @@ class PipelineOrchestrator:
             if read_file.exists():
                 return read_file
 
+        # Not at the top level: search subdirectories (per-library/per-run layout). Require
+        # exactly one match -- if a sample name resolves to several files across subfolders
+        # the choice is ambiguous, so raise rather than silently pick one.
+        matches: List[Path] = []
+        for pattern in patterns:
+            matches.extend(raw_dir.rglob(pattern))
+        unique = list(dict.fromkeys(matches))
+        if len(unique) == 1:
+            return unique[0]
+        if len(unique) > 1:
+            raise FileNotFoundError(
+                f"Ambiguous {read} file for sample '{sample_name}': found {len(unique)} matching "
+                f"files under {raw_dir} ({', '.join(str(p) for p in unique[:4])}). Sample names "
+                f"must be unique across subdirectories; rename or separate the colliding samples."
+            )
+
         raise FileNotFoundError(
-            f"Could not find the {read} file for sample '{sample_name}' in {raw_dir}. seednap "
-            f"expects paired files named like {sample_name}_{read}.fastq.gz (also accepts "
-            f"{sample_name}.{read}.fastq.gz and {sample_name}_{read}_001.fastq.gz). One mate of "
-            f"the pair is missing or named inconsistently; confirm both R1 and R2 exist with "
-            f"matching sample names."
+            f"Could not find the {read} file for sample '{sample_name}' under {raw_dir} "
+            f"(searched the top level and subdirectories). seednap expects paired files named "
+            f"like {sample_name}_{read}.fastq.gz (also accepts {sample_name}.{read}.fastq.gz and "
+            f"{sample_name}_{read}_001.fastq.gz). One mate of the pair is missing or named "
+            f"inconsistently; confirm both R1 and R2 exist with matching sample names."
         )
