@@ -18,7 +18,11 @@ marker:
 
 # File paths configuration
 paths:
-  raw_data: "/home/shared/edna/raw/fw_na_namibia/Teleo/raw_for_dada2/"
+  # REQUIRED: set this to YOUR dataset's directory of paired-end FASTQ files
+  # (named <sample>_R1.fastq.gz / <sample>_R2.fastq.gz). This is a reference
+  # template, so it ships with a placeholder on purpose: an unedited run fails
+  # the config preflight check rather than silently processing the wrong dataset.
+  raw_data: "/path/to/your/raw_fastq_dir/"
   output: "outputs"
   logs: "logs"
 
@@ -26,7 +30,8 @@ paths:
 # (before "trim"); the params below are then used. Omit it from steps for pre-demultiplexed data.
 demultiplex:
   protocol: "ligation"  # Options: "ligation", "standard", "none"
-  metadata: "/home/shared/edna/raw/fw_na_namibia/metadata/metadata_lab_fw_na_namibia_2023.csv"
+  # Only read if "demultiplex" is in pipeline.steps. Placeholder: set to your tag metadata.
+  metadata: "/path/to/your/demux_metadata.csv"
 
 # Primer trimming configuration (cutadapt)
 trimming:

@@ -2105,7 +2105,9 @@ def report(
     swarm_otu = out / "02_swarm" / marker / "otu_table.csv"
 
     kwargs: Dict[str, Any] = {
-        "marker": marker, "logs_dir": out / "logs",
+        # Cutadapt per-sample logs live under <output>/01_trim/<marker>/logs (written by
+        # the trim step); read them there so raw/trimmed counts (and % retained) populate.
+        "marker": marker, "logs_dir": out / "01_trim" / marker / "logs",
         "warn_below_retention_pct": warn_retention, "warn_step_loss_pct": warn_step_loss,
     }
     method = None
@@ -2131,7 +2133,7 @@ def report(
         if df.empty:
             print_error(
                 f"No samples found for marker '{marker}' under {out}. This report is built "
-                f"from the per-sample Cutadapt trim logs in {out}/logs/ "
+                f"from the per-sample Cutadapt trim logs in {out}/01_trim/{marker}/logs/ "
                 f"(<sample>_trim_pass1.txt), and none were found there. Most likely "
                 f"--output-dir does not point at the directory used for `run-pipeline` "
                 f"(default: outputs/), or trimming has not run yet. For the per-step ASV/OTU "

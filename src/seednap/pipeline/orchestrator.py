@@ -817,7 +817,11 @@ class PipelineOrchestrator:
             report_dir = self._report_dir()
             kwargs: Dict[str, Any] = {
                 "marker": marker,
-                "logs_dir": out / "logs",
+                # Cutadapt per-sample logs are written by the trim step under
+                # <output>/01_trim/<marker>/logs (see trimming_pipeline.StandardTrimmer,
+                # log_dir = output_dir / "logs"). Read them from the same place so the
+                # report can recover raw/trimmed counts; otherwise % retained is NA.
+                "logs_dir": out / "01_trim" / marker / "logs",
                 "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
                 "warn_step_loss_pct": self.config.report.warn_step_loss_pct,
             }
@@ -1531,6 +1535,25 @@ class PipelineOrchestrator:
         r1_files: List[Path] = []
         for pattern in r1_patterns:
             r1_files.extend(raw_dir.glob(pattern))
+
+        # The directory exists but holds no per-sample forward-read FASTQs. Fail loudly
+        # rather than returning an empty list and silently producing an empty run -- a
+        # common cause is a raw dir organised as per-library SUBDIRECTORIES or a single
+        # multiplexed library (which must be demultiplexed first), or a config pointing
+        # at the wrong directory. (no-silent-fallbacks policy)
+        if not r1_files:
+            subdirs = [p.name for p in sorted(raw_dir.iterdir()) if p.is_dir()][:5]
+            hint = (
+                f" The directory does contain subdirectories ({', '.join(subdirs)}...), so the "
+                f"reads may be in per-library subfolders or a multiplexed library -- run the "
+                f"'demultiplex' step first, or point paths.raw_data at the flat per-sample dir."
+                if subdirs else ""
+            )
+            raise FileNotFoundError(
+                f"No forward-read FASTQ files found in paths.raw_data ({raw_dir}). Expected "
+                f"per-sample files named <sample>_R1.fastq.gz / <sample>_R2.fastq.gz (or .R1/.R2)."
+                + hint
+            )
 
         # Extract sample names (everything before _R1 or .R1)
         samples = []
