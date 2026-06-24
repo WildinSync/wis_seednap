@@ -1525,6 +1525,32 @@ class PipelineOrchestrator:
 
             # narrowed by the `missing` check above: both are non-None here
             assert sample_meta is not None and project_meta is not None
+
+            # Auto-fill the reference-database and chimera-removal provenance from the run
+            # config (the single source of truth) so they need not be re-entered in the
+            # project metadata; a differing project value is reported by the builder.
+            otu_db = None
+            try:
+                db = self.config.taxonomy.get_database_config()
+                db_path = (
+                    getattr(db, "fasta", None)
+                    or getattr(db, "all", None)
+                    or getattr(db, "trained", None)
+                )
+                if db_path:
+                    otu_db = Path(db_path).name
+            except Exception:  # noqa: BLE001 -- provenance is best-effort; never fail the step
+                otu_db = None
+            chimera_check = None
+            if self.state.is_step_completed("dada2"):
+                method = getattr(self.config.dada2.chimera, "method", "consensus")
+                chimera_check = (
+                    "not performed" if method == "none"
+                    else f"removeBimeraDenovo (DADA2 {method})"
+                )
+            elif self.state.is_step_completed("swarm"):
+                chimera_check = "uchime_denovo (VSEARCH)"
+
             output_path = (
                 self.config.paths.output
                 / f"{self.config.marker.name}_{self.config.taxonomy.method}_darwincore.csv"
@@ -1536,6 +1562,8 @@ class PipelineOrchestrator:
                 output_path=output_path,
                 summarise_pcr_replicates=self.config.export.darwincore.summarise_pcr_replicates,
                 skip_enrichment=self.config.export.darwincore.skip_enrichment,
+                otu_db=otu_db,
+                chimera_check=chimera_check,
             )
             builder.build()
             outputs = {"darwincore_csv": output_path}

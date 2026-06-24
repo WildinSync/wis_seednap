@@ -24,7 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file in-pipeline (joining the long-format export to `report.sample_metadata` +
   `report.project_metadata`, with `export.darwincore` flags), rather than only
   via the standalone `create-gbif` command. Opt-in via `pipeline.steps`; required
-  metadata is checked at config preflight.
+  metadata is checked at config preflight. The reference-database (`otu_db`) and
+  chimera-removal (`chimera_check`) provenance are filled automatically from the
+  run config (a differing project-metadata value is warned and overridden).
 
 ### Changed
 
