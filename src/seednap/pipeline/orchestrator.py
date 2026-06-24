@@ -604,12 +604,82 @@ class PipelineOrchestrator:
 
                 trimmed_outputs[sample_name] = sample_outputs
 
+            # Early data-loss check: surface a catastrophic primer-trimming loss now,
+            # with its likely cause and the exact fix, rather than only as a per-sample
+            # note in the final report (which runs after the long feature/taxonomy/export
+            # steps). See _warn_on_heavy_trim_loss. (no-silent-fallbacks policy)
+            self._warn_on_heavy_trim_loss(output_dir / "logs")
+
             return {
                 "trimmed_dir": output_dir,
                 "samples": trimmed_outputs,
             }
 
         return self._execute_step("trim", body)
+
+    def _warn_on_heavy_trim_loss(self, logs_dir: Path) -> None:
+        """Emit an early diagnostic ``[WARN]`` when primer trimming discards most reads.
+
+        Runs immediately after the trim step, before the long feature/taxonomy/export
+        steps, so a catastrophic but fixable data loss surfaces right away rather than
+        only as a per-sample note in the final read-tracking report. The textbook cause
+        is feeding already-primer-trimmed FASTQs into the default
+        ``trimming.discard_untrimmed=True`` path: Cutadapt finds no primer and discards
+        nearly every read. The warning names that cause and the exact config fix, and
+        also flags the off-target / primer-mismatch alternative so a genuinely low yield
+        is not misread. The threshold reuses ``report.warn_step_loss_pct`` (the same
+        per-step-loss threshold the read-tracking report uses), so no new knob is added.
+
+        Non-fatal: this is observational and must never fail the run, so any measurement
+        problem is swallowed with its own ``[WARN]`` (the no-silent-fallbacks policy).
+
+        Args:
+            logs_dir: Directory holding this run's per-sample Cutadapt logs
+                (``<sample>_trim_pass1.txt`` / ``_trim_pass2.txt``).
+
+        Returns:
+            None. Side effect: a ``[WARN]`` is logged when the run-level read loss
+            exceeds ``report.warn_step_loss_pct``.
+        """
+        try:
+            from seednap.steps.report import ReadTrackingBuilder
+
+            result = ReadTrackingBuilder(
+                marker=self.config.marker.name, logs_dir=logs_dir
+            ).aggregate_trim_loss()
+            if result is None:
+                return  # counts unmeasurable; _trim_counts already WARNed about it
+            raw_total, trimmed_total, loss_pct = result
+            if loss_pct <= self.config.report.warn_step_loss_pct:
+                return
+            retained_pct = 100.0 - loss_pct
+            if self.config.trimming.discard_untrimmed:
+                fix = (
+                    "If these FASTQs are already primer-trimmed, set "
+                    "trimming.discard_untrimmed: false and re-run -- Cutadapt is "
+                    "discarding reads because it cannot find the primer to remove. "
+                    "Otherwise this can indicate off-target amplification or a primer "
+                    "mismatch; check the configured primers and trimming.max_error_rate."
+                )
+            else:
+                fix = (
+                    "trimming.discard_untrimmed is already false, so reads are not "
+                    "dropped for lacking a primer; this likely reflects off-target "
+                    "amplification or a primer/length mismatch. Check the configured "
+                    "primers, trimming.max_error_rate, and trimming.min_length."
+                )
+            logger.warning(
+                f"[WARN] trim: expected=most reads keep the primer through trimming, "
+                f"got={loss_pct:.1f}% of reads discarded "
+                f"(raw={raw_total:,} -> trimmed={trimmed_total:,}, "
+                f"{retained_pct:.1f}% retained), fallback=continuing with the trimmed "
+                f"reads. {fix}"
+            )
+        except Exception as exc:  # noqa: BLE001 -- observational; must not fail the run
+            logger.warning(
+                f"[WARN] trim heavy-loss check: expected=raw/trimmed counts from "
+                f"{logs_dir}, got=error ({exc}), fallback=skipped (trim unaffected)",
+            )
 
     def run_dada2(self) -> Dict[str, Path]:
         """

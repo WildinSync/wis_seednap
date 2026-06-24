@@ -73,6 +73,15 @@ cutadapt -j {cores} -e {max_error_rate} -m {min_length} -O {overlap}
 
 Pass 1 temporary files are deleted after pass 2. When `trimming.discard_untrimmed: true`, reads without a detected 5' primer are dropped in pass 1.
 
+### Heavy read-loss warning
+
+Right after trimming, the pipeline checks the run-level read loss (raw vs. trimmed, summed across samples). If trimming discarded more than `report.warn_step_loss_pct` of the reads, it logs a loud `[WARN]` immediately, before the long feature/taxonomy/export steps run, naming the likely cause and the fix:
+
+- The classic cause is feeding **already-primer-trimmed** FASTQs into the default `discard_untrimmed: true` path. cutadapt finds no primer to remove and discards nearly every read, leaving a tiny `nb_reads`. The fix is to set `trimming.discard_untrimmed: false` and re-run.
+- A genuinely low yield (off-target amplification, a primer mismatch) is also flagged, so the warning is not misread; check the configured primers, `trimming.max_error_rate`, and `trimming.min_length`.
+
+The per-sample read-tracking report (see step 4) still records retention for every sample; this warning just surfaces a catastrophic, fixable loss early.
+
 ### File naming
 
 The trimmer detects inputs in both `.R1.fastq` and `_R1.fastq` conventions (plus `_R1_001.fastq` and `.gz` variants). Trimmed outputs are always written as `{sample}.R1.fastq` / `{sample}.R2.fastq`.

@@ -20,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - DADA2-by-library (`dada2.per_library`) now derives the sample-to-library
   grouping from the per-library subfolders of `raw_data` when no metadata is
   configured, instead of silently falling back to a single-batch run.
+- Early heavy-read-loss warning at the trim step: if primer trimming discards
+  more than `report.warn_step_loss_pct` of the reads (summed across the run), a
+  loud `[WARN]` is logged immediately, before the long downstream steps, naming
+  the likely cause and fix. The textbook case is feeding already-primer-trimmed
+  FASTQs into the default `trimming.discard_untrimmed: true` path (set it to
+  `false`); a genuine low yield (off-target amplification, primer mismatch) is
+  flagged too so the warning is not misread.
 - New `darwincore` pipeline step: builds the GBIF-ready DarwinCore occurrence
   file in-pipeline (joining the long-format export to `report.sample_metadata` +
   `report.project_metadata`, with `export.darwincore` flags), rather than only

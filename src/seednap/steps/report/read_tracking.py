@@ -20,7 +20,7 @@ measurement is never mistaken for real data loss.
 
 import re
 from pathlib import Path
-from typing import Dict, List, Optional, Union, cast
+from typing import Dict, List, Optional, Tuple, Union, cast
 
 import pandas as pd
 
@@ -184,6 +184,38 @@ class ReadTrackingBuilder:
                 )
             counts[sample] = {"raw": raw, "trimmed": trimmed}
         return counts
+
+    def aggregate_trim_loss(self) -> Optional[Tuple[int, int, float]]:
+        """Run-level read loss across primer trimming, for an early data-loss check.
+
+        Aggregates the per-sample two-pass Cutadapt counts (see :meth:`_trim_counts`)
+        into run totals and the overall fraction of reads discarded by primer
+        trimming. Only samples that have *both* a raw and a trimmed count are
+        included, so a sample with an unparsable log neither inflates nor deflates
+        the ratio. This lets the orchestrator flag a catastrophic but fixable trim
+        loss (e.g. already-primer-trimmed input fed into the discard-untrimmed path)
+        right after trimming, before the long downstream steps, instead of only as a
+        per-sample note in the final report.
+
+        Returns:
+            ``(raw_total, trimmed_total, loss_pct)`` where ``loss_pct`` is the percent
+            of reads discarded (``0`` = none lost, ``100`` = all lost), or ``None``
+            when no sample has a measurable raw and trimmed count (e.g. the logs are
+            missing). A missing measurement is already reported as a ``[WARN]`` by
+            :meth:`_trim_counts`.
+        """
+        counts = self._trim_counts()
+        pairs = [
+            (c["raw"], c["trimmed"])
+            for c in counts.values()
+            if c["raw"] is not None and c["trimmed"] is not None
+        ]
+        raw_total = sum(r for r, _ in pairs)
+        trimmed_total = sum(t for _, t in pairs)
+        if not pairs or raw_total <= 0:
+            return None
+        loss_pct = (1 - trimmed_total / raw_total) * 100
+        return raw_total, trimmed_total, loss_pct
 
     def _dada2_counts(self) -> pd.DataFrame:
         """Read the DADA2 ``track_reads.csv`` (filtered/denoised/merged/nonchim).
