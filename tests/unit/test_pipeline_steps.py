@@ -59,5 +59,5 @@ def test_invalid_step_orders_rejected_with_message(steps, needle) -> None:
 def test_valid_steps_constant_is_complete() -> None:
     # Guard against drift: every stage the orchestrator dispatches must be a valid step.
     assert set(VALID_STEPS) == {
-        "demultiplex", "trim", "dada2", "swarm", "taxonomy", "clean", "export", "report",
+        "demultiplex", "trim", "dada2", "swarm", "taxonomy", "clean", "export", "darwincore", "report",
     }

@@ -8,7 +8,7 @@ from seednap.config.models.base import StrictModel
 
 # Valid pipeline stages. `pipeline.steps` is the single source of truth for what runs and in
 # what order; a stage runs iff listed. dada2 and swarm are mutually exclusive feature paths.
-VALID_STEPS = ("demultiplex", "trim", "dada2", "swarm", "taxonomy", "clean", "export", "report")
+VALID_STEPS = ("demultiplex", "trim", "dada2", "swarm", "taxonomy", "clean", "export", "darwincore", "report")
 
 
 # ===========================================================================
@@ -153,6 +153,8 @@ class PipelineStepsConfig(StrictModel):
         requires_before("clean", "taxonomy")
         # export needs taxonomy earlier
         requires_before("export", "taxonomy")
+        # the DarwinCore occurrence file is built from the long-format export output
+        requires_before("darwincore", "export")
         # when cleaning is requested, export must use the cleaned table, so clean
         # must come before export; otherwise export silently emits uncleaned counts.
         if "clean" in pos and "export" in pos and pos["clean"] > pos["export"]:

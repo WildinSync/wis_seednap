@@ -166,6 +166,7 @@ class PipelineOrchestrator:
             "taxonomy": self.run_taxonomy,
             "clean": self.run_clean,
             "export": self.run_export,
+            "darwincore": self.run_darwincore,
             "report": self.run_report,
         }
         missing = set(VALID_STEPS) - set(self._step_methods)
@@ -1452,6 +1453,92 @@ class PipelineOrchestrator:
 
             gbif_table.to_csv(output_path, index=False)
             outputs = {"gbif_csv": output_path}
+
+            self.state.complete_step(step_name, outputs)
+            self._save_state()
+            log_pipeline_step(step_name, "complete", logger)
+            return outputs
+
+        except Exception as e:
+            self.state.fail_step(step_name, e)
+            self._save_state()
+            log_pipeline_step(step_name, "error", logger)
+            raise
+
+    def run_darwincore(self) -> Dict[str, Path]:
+        """DarwinCore occurrence export: build the GBIF-ready occurrence CSV in-pipeline.
+
+        Runs the DarwinCore builder as a pipeline step: it joins the long-format export output
+        (from the 'export' step) to the per-sample and per-project metadata
+        (``report.sample_metadata`` / ``report.project_metadata``), fills the DarwinCore fields,
+        removes control and non-target rows, and (unless ``export.darwincore.skip_enrichment``)
+        enriches the higher ranks from NCBI/WoRMS. Both metadata files are required: the step
+        fails fast with a clear error if either is unset, rather than emitting an occurrence
+        file with blank provenance.
+
+        Returns:
+            Dictionary with ``darwincore_csv`` (path to the DarwinCore occurrence CSV), or the
+            previously recorded outputs on a skip.
+
+        Raises:
+            ValueError: if the 'export' step did not complete or recorded no GBIF table, or if
+                ``report.sample_metadata`` / ``report.project_metadata`` is not configured.
+            Exception: re-raises any failure from the DarwinCore builder (recorded in state).
+        """
+        step_name = "darwincore"
+        if not self._should_run_step(step_name):
+            step = self.state.get_step(step_name)
+            return step.outputs if step else {}
+
+        log_pipeline_step(step_name, "start", logger)
+        self.state.start_step(step_name)
+        self._save_state()
+
+        try:
+            from seednap.steps.formatting.darwincore_builder import DarwinCoreBuilder
+
+            logger.info("Building DarwinCore occurrence file")
+            export_step = self.state.get_step("export")
+            gbif_csv = export_step.outputs.get("gbif_csv") if export_step else None
+            if gbif_csv is None:
+                raise ValueError(
+                    "Cannot build the DarwinCore file: the 'export' step did not complete or "
+                    "recorded no 'gbif_csv' (the long-format table the DarwinCore builder joins "
+                    "metadata onto). Ensure 'export' runs and completes before 'darwincore'."
+                )
+            sample_meta = self.config.report.sample_metadata
+            project_meta = self.config.report.project_metadata
+            missing = [
+                name for name, val in (
+                    ("report.sample_metadata", sample_meta),
+                    ("report.project_metadata", project_meta),
+                ) if val is None
+            ]
+            if missing:
+                raise ValueError(
+                    f"The 'darwincore' step needs per-sample and per-project metadata, but "
+                    f"{', '.join(missing)} is not set. Set both to this dataset's metadata CSVs "
+                    f"(they supply each occurrence's eventDate, coordinates, recorder, sequencing "
+                    f"method and reference database), or remove 'darwincore' from pipeline.steps "
+                    f"if you only need the long-format export."
+                )
+
+            # narrowed by the `missing` check above: both are non-None here
+            assert sample_meta is not None and project_meta is not None
+            output_path = (
+                self.config.paths.output
+                / f"{self.config.marker.name}_{self.config.taxonomy.method}_darwincore.csv"
+            )
+            builder = DarwinCoreBuilder(
+                taxonomy_results_path=Path(gbif_csv),
+                sample_metadata_path=Path(sample_meta),
+                project_metadata_path=Path(project_meta),
+                output_path=output_path,
+                summarise_pcr_replicates=self.config.export.darwincore.summarise_pcr_replicates,
+                skip_enrichment=self.config.export.darwincore.skip_enrichment,
+            )
+            builder.build()
+            outputs = {"darwincore_csv": output_path}
 
             self.state.complete_step(step_name, outputs)
             self._save_state()

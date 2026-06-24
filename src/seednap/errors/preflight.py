@@ -105,4 +105,34 @@ def preflight_checks(config: PipelineConfig) -> List[SeednapError]:
                     )
                 )
 
+    # The DarwinCore occurrence step joins the taxonomy table to per-sample + per-project
+    # metadata; require both up front rather than after trim/cluster/taxonomy have already run.
+    if "darwincore" in config.pipeline.steps:
+        for label, val in (
+            ("report.sample_metadata", config.report.sample_metadata),
+            ("report.project_metadata", config.report.project_metadata),
+        ):
+            if val is None:
+                problems.append(
+                    SeednapError(
+                        f"pipeline.steps includes 'darwincore' but {label} is not set",
+                        why="the DarwinCore occurrence file is built by joining the taxonomy "
+                        "table to per-sample and per-project metadata; without it every "
+                        "occurrence would have blank date / coordinates / provenance",
+                        fix=f"set {label} to this dataset's metadata CSV, or remove 'darwincore' "
+                        "from pipeline.steps",
+                        code="SDN-CFG-007",
+                    )
+                )
+            elif not Path(val).exists():
+                problems.append(
+                    SeednapError(
+                        f"{label} does not exist: {val}",
+                        why="the 'darwincore' step reads this metadata CSV to fill the "
+                        "DarwinCore occurrence fields",
+                        fix=f"set {label} to an existing metadata CSV",
+                        code="SDN-CFG-007",
+                    )
+                )
+
     return problems

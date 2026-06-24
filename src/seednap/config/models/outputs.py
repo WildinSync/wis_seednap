@@ -28,15 +28,41 @@ class GbifExportConfig(StrictModel):
     add_taxon: bool = Field(default=True, description="Add lowest available taxon column")
 
 
+class DarwinCoreExportConfig(StrictModel):
+    """DarwinCore occurrence export options (the 'darwincore' step runs iff listed in
+    pipeline.steps).
+
+    This is the GBIF-ready occurrence file: it joins the long-format export to per-sample +
+    project metadata, fills DarwinCore fields, and (unless skipped) enriches higher ranks from
+    NCBI/WoRMS. The metadata it needs comes from ``report.sample_metadata`` (per-sample) and
+    ``report.project_metadata`` (per-project); the 'darwincore' step requires both to be set.
+
+    Attributes:
+        summarise_pcr_replicates: Collapse PCR-replicate suffixes, summing reads per sample.
+        skip_enrichment: Skip the NCBI/WoRMS kingdom/phylum enrichment (offline / faster).
+    """
+
+    summarise_pcr_replicates: bool = Field(
+        default=False, description="Collapse PCR-replicate suffixes, summing reads per sample"
+    )
+    skip_enrichment: bool = Field(
+        default=False, description="Skip the NCBI/WoRMS kingdom/phylum enrichment"
+    )
+
+
 class ExportConfig(StrictModel):
     """Export step configuration.
 
     Attributes:
-        gbif: GBIF / DarwinCore export options.
+        gbif: GBIF long-format export options (the 'export' step).
+        darwincore: DarwinCore occurrence export options (the 'darwincore' step).
     """
 
     gbif: GbifExportConfig = Field(
-        default_factory=GbifExportConfig, description="GBIF export settings"
+        default_factory=GbifExportConfig, description="GBIF long-format export settings"
+    )
+    darwincore: DarwinCoreExportConfig = Field(
+        default_factory=DarwinCoreExportConfig, description="DarwinCore occurrence export settings"
     )
 
 

@@ -141,9 +141,14 @@ taxonomy:
 
 # Export configuration. Runs ONLY if you add "export" to pipeline.steps (after "taxonomy").
 export:
-  gbif:
+  gbif:                        # the "export" step: long-format GBIF table
     add_rank: true
     add_taxon: true
+  darwincore:                  # the "darwincore" step: the GBIF-ready DarwinCore occurrence file.
+    summarise_pcr_replicates: false   # collapse PCR-replicate suffixes, summing reads per sample
+    skip_enrichment: false            # skip the NCBI/WoRMS kingdom/phylum enrichment (offline/faster)
+# To produce the DarwinCore occurrence file in one run, add "darwincore" after "export" in
+# pipeline.steps and set report.sample_metadata + report.project_metadata below (both required).
 
 # Run reporting (runs iff "report" is in pipeline.steps): always writes the per-step
 # read/sequence tracking table + step summary; html_report toggles the HTML document.
