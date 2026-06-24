@@ -556,6 +556,29 @@ class PipelineOrchestrator:
 
             output_dir = self.config.paths.output / "01_trim" / self.config.marker.name
 
+            # Remove trimmed reads left over from a PREVIOUS run before producing this
+            # run's set. The downstream feature step (SWARM/DADA2) discovers its inputs by
+            # scanning this directory, so without this a re-run that finds a different
+            # sample set (e.g. raw_data was corrected, or the new raw dir holds fewer
+            # samples) would leave stale per-sample FASTQs here and silently process the
+            # earlier run's samples -- producing results for the wrong dataset while
+            # reporting success. This runs only on a fresh trim; --resume skips the trim
+            # step entirely, so cached outputs are preserved. (no-silent-fallbacks policy)
+            if output_dir.exists():
+                stale = (
+                    list(output_dir.glob("*.fastq"))
+                    + list(output_dir.glob("*.fastq.gz"))
+                    + list((output_dir / "logs").glob("*_trim_pass*.txt"))
+                )
+                for f in stale:
+                    f.unlink()
+                if stale:
+                    logger.info(
+                        f"Cleared {len(stale)} file(s) from a previous trim run in "
+                        f"{output_dir} before re-trimming, so stale samples cannot be "
+                        f"reused by the downstream feature step."
+                    )
+
             # Get list of samples from raw data directory
             samples = self._get_sample_list()
             logger.info(f"Found {len(samples)} samples to trim")
