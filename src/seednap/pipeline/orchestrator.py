@@ -1566,7 +1566,10 @@ class PipelineOrchestrator:
                 chimera_check=chimera_check,
             )
             builder.build()
-            outputs = {"darwincore_csv": output_path}
+            outputs: Dict[str, Any] = {"darwincore_csv": output_path}
+            dropped = getattr(builder, "dropped_report_path", None)
+            if dropped is not None:
+                outputs["dropped_report"] = dropped
 
             self.state.complete_step(step_name, outputs)
             self._save_state()

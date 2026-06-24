@@ -26,7 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   via the standalone `create-gbif` command. Opt-in via `pipeline.steps`; required
   metadata is checked at config preflight. The reference-database (`otu_db`) and
   chimera-removal (`chimera_check`) provenance are filled automatically from the
-  run config (a differing project-metadata value is warned and overridden).
+  run config (a differing project-metadata value is warned and overridden). It also
+  writes a deleted-entries report (`<output>_dropped.csv`) of the occurrences removed
+  by the control and non-target filters, for QA.
 
 ### Changed
 

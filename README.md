@@ -132,7 +132,7 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 | **Taxonomy** | BLAST, DADA2, DECIPHER, or ecotag | Assign a taxon to each feature. BLAST (default) resolves the lowest common ancestor (LCA) of the best-matching reference hits, so an ambiguous match is reported at the rank the data support (e.g. genus, not species); `lca_algorithm` is `cascade` or `collapsed_taxonomy`. DADA2 uses an RDP bootstrap (it resamples the sequence many times and reports the fraction of resamples that agree, as a per-rank confidence). See [docs/taxonomy-methods.md](docs/taxonomy-methods.md). |
 | **Decontaminate** *(optional)* | Built-in | Flag or subtract features found in negative controls (blanks: no-template samples carried through the workflow to reveal lab/reagent contamination), identified from the FAIRe manifest (add `clean` to `pipeline.steps`). |
 | **Export** | Built-in | The GBIF long-format table (one row per feature x sample with `nb_reads`), written when `export` is in `pipeline.steps` (the default). |
-| **DarwinCore** *(optional)* | Built-in | The GBIF-ready DarwinCore occurrence CSV: joins the export table to per-sample + project metadata, fills the standard fields (`eventID`, `decimalLatitude`, `scientificName`, a deterministic `occurrenceID`, `contamination_flag`), and enriches higher ranks from NCBI/WoRMS. Add `darwincore` after `export` in `pipeline.steps` and set `report.sample_metadata` + `report.project_metadata` (it can also be run afterwards via the `create-gbif` command). |
+| **DarwinCore** *(optional)* | Built-in | The GBIF-ready DarwinCore occurrence CSV: joins the export table to per-sample + project metadata, fills the standard fields (`eventID`, `decimalLatitude`, `scientificName`, a deterministic `occurrenceID`, `contamination_flag`), and enriches higher ranks from NCBI/WoRMS. The reference DB + chimera provenance are auto-filled from the run config, and a `_dropped.csv` records every occurrence the control/non-target filters removed (for QA). Add `darwincore` after `export` in `pipeline.steps` and set `report.sample_metadata` + `report.project_metadata` (also available afterwards via the `create-gbif` command). |
 | **Report** | Built-in | Per-step read/sequence tracking table, data-loss warnings, and a self-contained HTML run report. Runs when `report` is in `pipeline.steps` (the default); `report.html_report: false` writes the tables only. |
 
 > [!NOTE]
@@ -234,6 +234,7 @@ Per-step artifacts go under `<paths.output>/<NN_step>/<marker>/` (`01_trim`, `02
 | `<paths.output>/<marker>_<method>.csv` | Merged taxonomy + abundance table (e.g. `teleo_blast.csv`, `teleo_dada2RDP.csv`) |
 | `<paths.output>/<marker>_<method>_gbif.csv` | GBIF long-format table (the `export` step) |
 | `<paths.output>/<marker>_<method>_darwincore.csv` | GBIF-ready DarwinCore occurrence file (the `darwincore` step, when enabled) |
+| `<paths.output>/<marker>_<method>_darwincore_dropped.csv` | Occurrences the `darwincore` step removed (control / non-target rows), with the reason |
 
 The `<method>` token follows `taxonomy.method`, except the DADA2 taxonomy table uses `dada2RDP`.
 Run state lives at `<paths.output>/.<marker>_state.json`.
