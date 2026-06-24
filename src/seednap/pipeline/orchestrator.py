@@ -753,10 +753,17 @@ class PipelineOrchestrator:
         lab_csv = self.config.demultiplex.metadata
         src = field_csv or lab_csv
         if src is None:
+            # No metadata grouping configured. If raw_data is organized into per-library
+            # subdirectories (one folder per sequencing library/run of already-demultiplexed
+            # per-sample FASTQs), derive the sample->library map from the subfolder each
+            # sample's R1 file lives in -- no lab metadata needed.
+            subdir_map = self._library_map_from_subdirs()
+            if subdir_map is not None:
+                return subdir_map
             logger.warning(
                 "[WARN] dada2 per_library: expected=report.sample_metadata or "
-                "demultiplex.metadata for the library grouping, got=none, "
-                "fallback=standard single-batch DADA2"
+                "demultiplex.metadata (or a per-library subdirectory layout under raw_data) "
+                "for the library grouping, got=none, fallback=standard single-batch DADA2"
             )
             return None
         try:
@@ -788,6 +795,65 @@ class PipelineOrchestrator:
                 f"fallback=standard single-batch DADA2"
             )
             return None
+
+    def _library_map_from_subdirs(self) -> Optional[Path]:
+        """Derive a ``sample,library`` map from a per-library subdirectory layout of raw_data.
+
+        Used for DADA2-by-library when ``dada2.per_library`` is on but no metadata grouping is
+        configured. When raw_data holds no FASTQs at its top level but keeps them in
+        subdirectories (one folder per sequencing library/run of already-demultiplexed
+        per-sample reads), each sample's library is the immediate subfolder its R1 file lives
+        in. The resulting ``sample,library`` CSV is identical in shape to the manifest-derived
+        map, so the DADA2 R per-library branch consumes it unchanged -- no metadata required.
+
+        Returns:
+            Path to the written ``library_map.csv`` when at least two libraries are found,
+            else None (a flat layout, a single library, or a sample name colliding across
+            subdirectories all fall back to the standard single-batch DADA2 path).
+        """
+        import re
+
+        import pandas as pd
+
+        raw_dir = self.config.paths.raw_data
+        if not raw_dir.exists():
+            return None
+        r1_patterns = ["*_R1*.fastq.gz", "*_R1*.fastq", "*.R1.fastq.gz", "*.R1.fastq"]
+        # Only derive from subdirectories when the top level itself has no per-sample FASTQs
+        # (mirrors sample discovery, which prefers the top level and recurses only if empty).
+        if any(True for pat in r1_patterns for _ in raw_dir.glob(pat)):
+            return None
+        sample_lib: Dict[str, str] = {}
+        for pat in r1_patterns:
+            for f in raw_dir.rglob(pat):
+                if f.parent == raw_dir:
+                    continue
+                m = re.match(r"(.+?)[._]R[12]", f.name)
+                if not m:
+                    continue
+                sample = m.group(1)
+                library = f.parent.relative_to(raw_dir).parts[0]
+                if sample in sample_lib and sample_lib[sample] != library:
+                    logger.warning(
+                        f"[WARN] dada2 per_library: sample {sample!r} appears under two "
+                        f"libraries ({sample_lib[sample]!r}, {library!r}); cannot derive a "
+                        f"library grouping from subdirectories, fallback=single-batch DADA2"
+                    )
+                    return None
+                sample_lib[sample] = library
+        if len(set(sample_lib.values())) < 2:
+            return None
+        df = pd.DataFrame(
+            [{"sample": s, "library": lib} for s, lib in sorted(sample_lib.items())]
+        )
+        out = self.config.paths.output / "02_dada2" / self.config.marker.name / "library_map.csv"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        df.to_csv(out, index=False)
+        logger.info(
+            f"DADA2-by-library: derived library map from raw_data subdirectories "
+            f"({len(df)} samples, {df['library'].nunique()} libraries) -> {out}"
+        )
+        return out
 
     def _report_dir(self) -> Path:
         """Per-marker directory for report artifacts.
