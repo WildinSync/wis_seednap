@@ -13,6 +13,8 @@ This page covers the recommended conda setup, manual installation, and the requi
 > seednap --version
 > ```
 > Always activate by full path. A bare `conda activate seednap` only works if you have a personal env of that name, and silently picks the wrong one if you do. All tools (cutadapt, vsearch, swarm, blast, R + packages) are present. OBITools for the optional `ecotag` method lives in its own env and is auto-discovered; no extra activation needed.
+>
+> The shared env is editable-installed from the canonical checkout, so it is always the current version. You do **not** clone the repo to run on the server, and you should **not** clone it per dataset (a private clone only goes stale and ships example configs pointing at other datasets). All you provide per dataset is a config file, and each run writes into the output folder named in it (`paths.output`). See the [server quickstart in the README](../README.md#quick-start) for the copy-a-config-and-run recipe.
 
 The rest of this page is only for a fresh setup elsewhere (local development or a new machine).
 

@@ -101,12 +101,15 @@ paths:
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `raw_data` | path | `data/raw` | Input FASTQ directory |
+| `raw_data` | path | `data/raw` | Input FASTQ directory (flat per-sample files, or per-library subfolders; see note) |
 | `output` | path | `outputs` | Base output directory (see Output tree) |
 | `logs` | path | `logs` | Log files directory |
 
 > [!NOTE]
 > Relative paths are resolved to absolute paths and `~` is expanded. The `output` and `logs` directories are created automatically when the config loads. Reference databases are not set here; each taxonomy method points at its own database under `taxonomy.databases.<method>`.
+
+> [!NOTE]
+> **Layout of `raw_data`.** seednap looks for per-sample paired files named `<sample>_R1.fastq.gz` / `<sample>_R2.fastq.gz` (also accepts `.R1`/`.R2` and the `_001` suffix). They can sit directly in `raw_data`, or be organized into per-library / per-run subfolders: discovery scans the top level first and, if nothing is there, searches subdirectories recursively. So already-demultiplexed data kept one folder per sequencing library is processed without flattening it. Sample names must be unique across subfolders; a name that resolves to files in more than one subfolder is rejected as ambiguous rather than guessed.
 
 ## `demultiplex`
 

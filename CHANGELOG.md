@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Error-explainability module with a `seednap explain` command: errors carry
   stable codes and actionable what / why / how-to-fix detail, and the codes can
   be looked up from the CLI.
+- Sample discovery now finds per-sample FASTQs inside per-library / per-run
+  subdirectories of `paths.raw_data`, not only at the top level, so
+  already-demultiplexed data organized one folder per library is processed
+  without flattening. Sample names must be unique across subfolders (an
+  ambiguous name is rejected rather than guessed).
 
 ### Changed
 
@@ -20,12 +25,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   per-stage toggles.
 - Standardized the documentation for accuracy and a consistent structure so the
   docs match the implementation.
+- The shipped reference marker configs now use placeholder `raw_data` / metadata
+  paths, so an unedited run fails the config preflight instead of silently
+  processing a bundled example dataset.
 
 ### Fixed
 
 - Correctness sweep across the pipeline focused on data integrity, removing
   silent fallbacks (fallbacks now warn or fail loudly), and catching
   wrong-environment misconfiguration earlier.
+- The run report now reads the per-sample Cutadapt logs from the trim step's
+  output directory, so raw and trimmed read counts (and `% retained`) are
+  reported instead of `NA`.
+- The trim step clears stale outputs from a previous run before writing, so a
+  re-run that finds a different sample set cannot reuse the earlier run's
+  trimmed reads downstream.
+- Sample discovery fails loudly when `paths.raw_data` holds no FASTQ files,
+  instead of returning an empty list and producing an empty run.
+- Standalone CLI commands: `trim` no longer crashes on a shallow output path;
+  `clean` no longer treats per-OTU annotation columns as biological samples;
+  `create-gbif` normalizes eventID separators and warns or fails on a
+  zero-match metadata join (rather than silently emitting blank dates and
+  coordinates); `assign-taxonomy --config` uses the marker config's BLAST
+  parameters; `format-gbif` logs the actual input format.
 
 ## [0.1.0]
 
