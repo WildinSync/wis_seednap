@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   already-demultiplexed data organized one folder per library is processed
   without flattening. Sample names must be unique across subfolders (an
   ambiguous name is rejected rather than guessed).
+- DADA2-by-library (`dada2.per_library`) now derives the sample-to-library
+  grouping from the per-library subfolders of `raw_data` when no metadata is
+  configured, instead of silently falling back to a single-batch run.
+- New `darwincore` pipeline step: builds the GBIF-ready DarwinCore occurrence
+  file in-pipeline (joining the long-format export to `report.sample_metadata` +
+  `report.project_metadata`, with `export.darwincore` flags), rather than only
+  via the standalone `create-gbif` command. Opt-in via `pipeline.steps`; required
+  metadata is checked at config preflight.
 
 ### Changed
 

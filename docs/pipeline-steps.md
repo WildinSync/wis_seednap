@@ -192,7 +192,8 @@ When `dada2.collect_metrics: true` (default), ASV summary statistics are written
 
 - Config key: `dada2.per_library` (default `false`).
 - Default (`false`): DADA2 learns one pooled error model across all input samples (the legacy behavior).
-- When `true`: DADA2 groups samples by sequencing library (the FAIRe manifest's `seq_run_id`), learns and denoises each library separately, then merges the per-library tables and collapses identical ASVs (`mergeSequenceTables` + `collapseNoMismatch`).
+- When `true`: DADA2 groups samples by sequencing library, learns and denoises each library separately, then merges the per-library tables and collapses identical ASVs (`mergeSequenceTables` + `collapseNoMismatch`).
+- Where the grouping comes from: the manifest's `seq_run_id` (from `report.sample_metadata` or `demultiplex.metadata`). If no metadata is configured but `raw_data` is organized one folder per library/run (no FASTQs at the top level, per-sample reads in subfolders), the grouping is derived automatically from those subfolders, so already-demultiplexed multi-library data works with no metadata. With neither a metadata grouping nor a subfolder layout, it logs a `[WARN]` and falls back to the single pooled model.
 - When to use: runs spanning multiple sequencing runs, where run-specific error profiles would otherwise be averaged together. It is a no-op for single-library datasets.
 
 ## 3. Taxonomic assignment
@@ -267,10 +268,12 @@ Tool: built-in formatter. Input: the taxonomy CSV from step 3 (cleaned table pre
 | --- | --- | --- | --- |
 | `export.gbif.add_rank` | bool | `True` | Add a `rank` column (species/genus/family/higher). |
 | `export.gbif.add_taxon` | bool | `True` | Add a `taxon` column (lowest available name). |
+| `export.darwincore.summarise_pcr_replicates` | bool | `False` | (darwincore step) Collapse PCR-replicate suffixes, summing reads per sample. |
+| `export.darwincore.skip_enrichment` | bool | `False` | (darwincore step) Skip the NCBI/WoRMS higher-rank enrichment. |
 
 The `export` step transforms the wide-format taxonomy table (one row per OTU/ASV, one column per sample) into GBIF long format (one row per sample-feature observation), keyed by `eventID` (the per-sample identifier). Zero-count observations are dropped. The marker contaminant flag `is_contaminant_candidate` is carried through so the downstream DarwinCore output can surface it as `contamination_flag`.
 
-The DarwinCore occurrence CSV is produced separately by `seednap create-gbif`, which joins the long table to a per-sample metadata CSV (locations, dates, environment) on `eventID`. Because R's `make.names()` rewrites the dashed canonical eventID (`A-1-2`) into a dotted form (`A.1.2`) in some legacy tables, the join matches on a separator-normalized key so dot/dash differences still line up. If after normalization no occurrence eventID matches any metadata eventID, `create-gbif` raises (rather than silently writing rows with blank location, date, and `env_medium`); if only some fail to match, it emits a `[WARN]` naming the unmatched eventIDs.
+The DarwinCore occurrence CSV (the GBIF-ready file) is produced by the **`darwincore` pipeline step** -- list `darwincore` after `export` in `pipeline.steps` and set `report.sample_metadata` + `report.project_metadata` (both required, checked at preflight; `export.darwincore` tunes it), so one `run-pipeline` yields the occurrence file as `outputs/{marker}_{taxonomy.method}_darwincore.csv` -- or, equivalently, afterwards by the standalone `seednap create-gbif` command. Either way it joins the long table to a per-sample metadata CSV (locations, dates, environment) on `eventID`. Because R's `make.names()` rewrites the dashed canonical eventID (`A-1-2`) into a dotted form (`A.1.2`) in some legacy tables, the join matches on a separator-normalized key so dot/dash differences still line up. If after normalization no occurrence eventID matches any metadata eventID, `create-gbif` raises (rather than silently writing rows with blank location, date, and `env_medium`); if only some fail to match, it emits a `[WARN]` naming the unmatched eventIDs.
 
 See [gbif-export.md](gbif-export.md) for the full DarwinCore publishing workflow.
 

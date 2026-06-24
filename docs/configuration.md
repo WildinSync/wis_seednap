@@ -232,7 +232,7 @@ dada2:
 | `chimera.method` | "consensus" \| "pooled" \| "none" | `consensus` | Chimera detection method |
 | `pool` | bool | `false` | Pool samples for denoising |
 | `multithread` | bool | `true` | Use multithreading |
-| `per_library` | bool | `false` | Learn a separate error model per sequencing library (grouped from the manifest `seq_run_id`), then merge and collapse. `false` uses one pooled model. Use for multi-run datasets |
+| `per_library` | bool | `false` | Learn a separate error model per sequencing library, then merge and collapse. The sample-to-library grouping comes from the manifest `seq_run_id` (`report.sample_metadata` / `demultiplex.metadata`); when no metadata is configured it is derived automatically from the per-library subfolders of `raw_data`. `false` uses one pooled model. Use for multi-run datasets |
 | `collect_metrics` | bool | `true` | Write ASV summary stats to `metrics.json`/`csv` and console |
 
 ## `taxonomy` (required)
@@ -361,15 +361,22 @@ Runs only if `export` is listed in `pipeline.steps` (after `taxonomy`). Writes `
 
 ```yaml
 export:
-  gbif:
-    add_rank: true    # add taxonomic rank column
-    add_taxon: true   # add lowest taxon column
+  gbif:                            # the `export` step (long-format table)
+    add_rank: true                 # add taxonomic rank column
+    add_taxon: true                # add lowest taxon column
+  darwincore:                      # the `darwincore` step (DarwinCore occurrence file)
+    summarise_pcr_replicates: false  # collapse PCR-replicate suffixes, summing reads per sample
+    skip_enrichment: false           # skip NCBI/WoRMS kingdom/phylum enrichment (offline/faster)
 ```
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `gbif.add_rank` | bool | `true` | Add a taxonomic rank column |
 | `gbif.add_taxon` | bool | `true` | Add a lowest-available-taxon column |
+| `darwincore.summarise_pcr_replicates` | bool | `false` | Collapse PCR-replicate suffixes, summing reads per sample |
+| `darwincore.skip_enrichment` | bool | `false` | Skip the NCBI/WoRMS higher-rank enrichment |
+
+The **`darwincore`** step builds the GBIF-ready DarwinCore occurrence file (one row per occurrence with `eventID`, coordinates, `scientificName`, a deterministic `occurrenceID`, `contamination_flag`). List `darwincore` after `export` in `pipeline.steps`; it joins the long-format table to `report.sample_metadata` + `report.project_metadata` (both required, checked at preflight) and, unless `skip_enrichment`, fills higher ranks from NCBI/WoRMS. Output: `<output>/<marker>_<method>_darwincore.csv`. (The same builder is also available afterwards as the `create-gbif` command.)
 
 > [!NOTE]
 > ASV summary stats are collected by the DADA2 step via `dada2.collect_metrics`. There is no separate `metrics` section.
