@@ -50,14 +50,33 @@ flowchart LR
 ## Quick Start
 
 > [!IMPORTANT]
-> **On the ETH eDNA server, SeeDNAP is already installed.** A shared conda env lives at
-> `/home/shared/edna/envs/seednap` and every user can use it, so you do **not** need to create
-> an environment or `pip install` anything. Just activate it and go:
+> **On the ETH eDNA server, SeeDNAP is already installed and always current.** A shared conda env
+> lives at `/home/shared/edna/envs/seednap`, editable-installed from the canonical checkout, so you
+> do **not** clone the repo, create an env, or `pip install` anything. Do **not** clone it per dataset
+> either: a private clone only goes stale (it misses later fixes) and ships example configs that point
+> at other datasets. The only thing you provide per dataset is a **config file**, and each run writes
+> everything into the **output folder you name in that config**.
+>
 > ```bash
+> # 1. Activate the shared env (use the full path)
 > conda activate /home/shared/edna/envs/seednap
-> seednap run-pipeline config/markers/my_marker.yaml
+>
+> # 2. Make a config for your dataset: copy the closest marker template, then edit it.
+> cp /home/shared/edna/seednap/config/markers/teleo.yaml ~/my_run.yaml
+> #    Set these three paths in ~/my_run.yaml (primers, database and steps are already correct
+> #    per marker, so you usually touch nothing else):
+> #      paths.raw_data : your FASTQ directory  (per-sample R1/R2; per-library subfolders are fine)
+> #      paths.output   : the folder to write results into (created if missing), e.g. ~/teleo_run
+> #      paths.logs     : where the run log goes, e.g. ~/teleo_run/logs
+>
+> # 3. Check the config (verifies the paths + database exist), then run.
+> seednap validate ~/my_run.yaml
+> seednap run-pipeline ~/my_run.yaml
 > ```
-> The install steps below are only for a fresh setup elsewhere (e.g. local development).
+> Everything lands under `paths.output` (trimmed reads, the OTU/ASV table, taxonomy, the GBIF export,
+> and the HTML report), so all you keep per dataset is your config and its output folder. You never
+> keep a copy of the SeeDNAP code. The install steps below are only for a fresh setup elsewhere
+> (e.g. local development).
 
 ```bash
 # Install (fresh setup only; not needed on the eDNA server, see above)
