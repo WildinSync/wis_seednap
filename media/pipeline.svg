@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 468" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
+  <rect x="0.5" y="0.5" width="919" height="467" rx="11" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
+  <path d="M 0 11 a 11 11 0 0 1 11 -11 h 898 a 11 11 0 0 1 11 11 v 31 h -920 z" fill="#161B22"/>
+  <line x1="0" y1="42" x2="920" y2="42" stroke="#30363d" stroke-width="1"/>
+  <circle cx="30" cy="21" r="3" fill="#00C853"/><circle cx="42" cy="21" r="3" fill="#3fb950"/><line x1="30" y1="21" x2="42" y2="21" stroke="#2ea043" stroke-width="1.5"/>
+  <text x="52" y="25" font-size="12.5" fill="#7d8590" letter-spacing="0.5">pipeline.steps</text>
+  <line x1="40" y1="72" x2="40" y2="422" stroke="#30363d" stroke-width="2"/>
+  <circle cx="40" cy="72" r="11" fill="#0D1117" stroke="#2ea043" stroke-width="1.5" stroke-dasharray="2.5 2"/>
+  <text x="40" y="76" text-anchor="middle" font-size="12" fill="#2ea043">+</text>
+  <text x="66" y="70" font-size="14.5"><tspan font-weight="bold" fill="#e6edf3">Demultiplex</tspan><tspan fill="#484f58">  ·  </tspan><tspan fill="#7ee787" font-size="12.5">built-in</tspan> <tspan fill="#6e7681" font-size="10.5">OPTIONAL</tspan></text>
+  <text x="66" y="87" font-size="12" fill="#8b949e">split ligation-tagged libraries into per-sample reads</text>
+  <circle cx="40" cy="122" r="11" fill="#00C853"/>
+  <text x="40" y="126.5" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#0D1117">1</text>
+  <text x="66" y="120" font-size="14.5"><tspan font-weight="bold" fill="#e6edf3">Trim</tspan><tspan fill="#484f58">  ·  </tspan><tspan fill="#7ee787" font-size="12.5">Cutadapt</tspan></text>
+  <text x="66" y="137" font-size="12" fill="#8b949e">two-pass primer removal, 5' then 3'</text>
+  <circle cx="40" cy="172" r="11" fill="#00C853"/>
+  <text x="40" y="176.5" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#0D1117">2</text>
+  <text x="66" y="170" font-size="14.5"><tspan font-weight="bold" fill="#e6edf3">Cluster</tspan><tspan fill="#484f58">  ·  </tspan><tspan fill="#7ee787" font-size="12.5">SWARM  or  DADA2</tspan></text>
+  <text x="66" y="187" font-size="12" fill="#8b949e">OTUs (clustered) or ASVs (denoised); PCR chimeras removed</text>
+  <circle cx="40" cy="222" r="11" fill="#00C853"/>
+  <text x="40" y="226.5" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#0D1117">3</text>
+  <text x="66" y="220" font-size="14.5"><tspan font-weight="bold" fill="#e6edf3">Taxonomy</tspan><tspan fill="#484f58">  ·  </tspan><tspan fill="#7ee787" font-size="12.5">BLAST / DADA2 / DECIPHER / ecotag</tspan></text>
+  <text x="66" y="237" font-size="12" fill="#8b949e">one taxon per feature; BLAST + LCA is the default</text>
+  <circle cx="40" cy="272" r="11" fill="#0D1117" stroke="#2ea043" stroke-width="1.5" stroke-dasharray="2.5 2"/>
+  <text x="40" y="276" text-anchor="middle" font-size="12" fill="#2ea043">+</text>
+  <text x="66" y="270" font-size="14.5"><tspan font-weight="bold" fill="#e6edf3">Decontaminate</tspan><tspan fill="#484f58">  ·  </tspan><tspan fill="#7ee787" font-size="12.5">built-in</tspan> <tspan fill="#6e7681" font-size="10.5">OPTIONAL</tspan></text>
+  <text x="66" y="287" font-size="12" fill="#8b949e">flag or subtract features seen in negative controls</text>
+  <circle cx="40" cy="322" r="11" fill="#00C853"/>
+  <text x="40" y="326.5" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#0D1117">4</text>
+  <text x="66" y="320" font-size="14.5"><tspan font-weight="bold" fill="#e6edf3">Export</tspan><tspan fill="#484f58">  ·  </tspan><tspan fill="#7ee787" font-size="12.5">built-in</tspan></text>
+  <text x="66" y="337" font-size="12" fill="#8b949e">GBIF long-format table, one row per feature x sample</text>
+  <circle cx="40" cy="372" r="11" fill="#0D1117" stroke="#2ea043" stroke-width="1.5" stroke-dasharray="2.5 2"/>
+  <text x="40" y="376" text-anchor="middle" font-size="12" fill="#2ea043">+</text>
+  <text x="66" y="370" font-size="14.5"><tspan font-weight="bold" fill="#e6edf3">DarwinCore</tspan><tspan fill="#484f58">  ·  </tspan><tspan fill="#7ee787" font-size="12.5">built-in</tspan> <tspan fill="#6e7681" font-size="10.5">OPTIONAL</tspan></text>
+  <text x="66" y="387" font-size="12" fill="#8b949e">GBIF-ready occurrence CSV + dropped-rows QA report</text>
+  <circle cx="40" cy="422" r="11" fill="#00C853"/>
+  <text x="40" y="426.5" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#0D1117">5</text>
+  <text x="66" y="420" font-size="14.5"><tspan font-weight="bold" fill="#e6edf3">Report</tspan><tspan fill="#484f58">  ·  </tspan><tspan fill="#7ee787" font-size="12.5">built-in</tspan></text>
+  <text x="66" y="437" font-size="12" fill="#8b949e">per-step read tracking, data-loss warnings, HTML report</text>
+</svg>

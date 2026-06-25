@@ -113,16 +113,9 @@ seednap run-pipeline config/markers/my_marker.yaml
 
 ## 🔬 Pipeline
 
-| # | Step | Tool | What it does |
-|:--:|---|---|---|
-| - | Demultiplex <sub>opt</sub> | built-in | Ligation-tag demultiplexing (only when `demultiplex` is in `pipeline.steps`; omit for pre-demultiplexed inputs) |
-| **1** | **Trim** | Cutadapt | Two-pass primer removal (5′ then 3′) |
-| **2** | **Cluster** | SWARM **or** DADA2 | OTUs (clustered) or ASVs (denoised); both also remove PCR chimeras |
-| **3** | **Taxonomy** | BLAST · DADA2 · DECIPHER · ecotag | Assign a taxon per feature; BLAST+LCA (default) reports the rank the data support |
-| - | Decontaminate <sub>opt</sub> | built-in | Flag or subtract features seen in negative controls |
-| **4** | **Export** | built-in | GBIF long-format table (one row per feature × sample) |
-| - | DarwinCore <sub>opt</sub> | built-in | GBIF-ready occurrence CSV + a dropped-rows QA report |
-| **5** | **Report** | built-in | Per-step read tracking, data-loss warnings, HTML run report |
+<p align="center">
+  <img src="media/pipeline.svg" width="100%" alt="SeeDNAP pipeline stages">
+</p>
 
 Each stage runs **only if listed in `pipeline.steps`**, the single ordered source of truth, validated against stage dependencies at config load.
 
@@ -196,7 +189,13 @@ At the start of each run the orchestrator writes the full effective config (your
 
 ## 📊 Reporting
 
-The `report` step is on by default, so every run reports on itself, writing to `<paths.output>/04_report/<marker>/`:
+The `report` step is on by default, so every run reports on itself. The headline is read tracking: how many reads and sequences survive each step, per sample, so a failed sample is obvious at a glance.
+
+<p align="center">
+  <img src="media/reporting.svg" width="100%" alt="read tracking: reads surviving each step">
+</p>
+
+Each run writes these to `<paths.output>/04_report/<marker>/`:
 
 ```
 read_tracking.csv / .txt    reads & sequences surviving each step, per sample
