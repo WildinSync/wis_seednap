@@ -8,9 +8,9 @@ SeeDNAP turns raw amplicon sequencing reads into a table of biological features 
 
 The pipeline runs the stages listed in `pipeline.steps`, in order. A stage runs only if it is listed. Valid stages are `demultiplex`, `trim`, `dada2`, `swarm`, `taxonomy`, `clean`, `export`, `report`; `dada2` and `swarm` are mutually exclusive (you pick one feature path). The default `pipeline.steps` is `[trim, dada2, taxonomy, export, report]`.
 
-```text
-demultiplex (optional) --> trim --> dada2 OR swarm --> taxonomy --> clean (optional) --> export --> report
-```
+<p align="center">
+  <img src="../media/dataflow.svg" width="100%" alt="SeeDNAP data flow: raw FASTQ through trim, cluster, taxonomy, export, and report, with the artifact passed between each step">
+</p>
 
 Each step reads the previous step's outputs. The pipeline records progress in a state JSON, so a failed run can resume from the failed step with `--resume`.
 
@@ -93,6 +93,14 @@ The per-sample read-tracking report (see step 4) still records retention for eve
 ### File naming
 
 The trimmer detects inputs in both `.R1.fastq` and `_R1.fastq` conventions (plus `_R1_001.fastq` and `.gz` variants). Trimmed outputs are always written as `{sample}.R1.fastq` / `{sample}.R2.fastq`.
+
+## 🧬 2. Cluster: pick a feature path
+
+Step 2 turns trimmed reads into features. Pick exactly one path (they are mutually exclusive): SWARM clusters reads into OTUs (2a), DADA2 denoises them into ASVs (2b).
+
+<p align="center">
+  <img src="../media/feature-paths.svg" width="100%" alt="SWARM (OTUs) versus DADA2 (ASVs) feature paths, side by side">
+</p>
 
 ## 🧬 2a. SWARM OTU clustering
 
