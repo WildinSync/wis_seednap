@@ -179,16 +179,13 @@ Run `seednap <command> --help` for full options. Every command, with all of its 
 
 ## 📂 Outputs
 
-Per-step artifacts go under `<paths.output>/<NN_step>/<marker>/` (`01_trim`, `02_swarm`/`02_dada2`, `03_taxo`, `04_report`). The final tables land at the output root:
+Everything a run produces lands under the `paths.output` directory you named in the config:
 
-| File | Contents |
-|---|---|
-| `<marker>_<method>.csv` | Merged taxonomy + abundance table (e.g. `teleo_blast.csv`, `teleo_dada2RDP.csv`) |
-| `<marker>_<method>_gbif.csv` | GBIF long-format table (the `export` step) |
-| `<marker>_<method>_darwincore.csv` | GBIF-ready DarwinCore occurrence file (`darwincore` step) |
-| `<marker>_<method>_darwincore_dropped.csv` | Occurrences removed (control / non-target), with the reason |
+<p align="center">
+  <img src="media/outputs.svg" width="100%" alt="SeeDNAP run output tree">
+</p>
 
-The `<method>` token follows `taxonomy.method` (the DADA2 taxonomy table uses `dada2RDP`). Run state lives at `<paths.output>/.<marker>_state.json`.
+The `<method>` token follows `taxonomy.method`, except the DADA2 taxonomy table uses `dada2RDP` (so `teleo_blast.csv`, `teleo_dada2RDP.csv`).
 
 <details>
 <summary><b>Reproducibility: every run rebuilds from its own outputs</b></summary>
@@ -217,16 +214,16 @@ seednap report teleo --html --field-metadata metadata_field_my_dataset.csv
 
 ## 🛠️ Requirements
 
-| Tool | Version | Purpose |
-|---|:--:|---|
-| Python | 3.9 | Pipeline runtime |
-| Cutadapt | 5.2 | Primer trimming |
-| VSEARCH | 2.30.5 | Merging, dereplication, chimera detection |
-| SWARM | 3.1.6 | OTU clustering |
-| BLAST+ | 2.17.0 | Taxonomic assignment |
-| R | 4.2 | DADA2 / DECIPHER (optional) |
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.9-00C853?style=flat-square&logo=python&logoColor=white&labelColor=0D1117" alt="Python 3.9">
+  <img src="https://img.shields.io/badge/Cutadapt-5.2-00C853?style=flat-square&labelColor=0D1117" alt="Cutadapt 5.2">
+  <img src="https://img.shields.io/badge/VSEARCH-2.30.5-00C853?style=flat-square&labelColor=0D1117" alt="VSEARCH 2.30.5">
+  <img src="https://img.shields.io/badge/SWARM-3.1.6-00C853?style=flat-square&labelColor=0D1117" alt="SWARM 3.1.6">
+  <img src="https://img.shields.io/badge/BLAST%2B-2.17.0-00C853?style=flat-square&labelColor=0D1117" alt="BLAST+ 2.17.0">
+  <img src="https://img.shields.io/badge/R-4.2-00C853?style=flat-square&logo=r&logoColor=white&labelColor=0D1117" alt="R 4.2">
+</p>
 
-Versions are pinned in `environment.yml`. OBITools (for the optional `ecotag` method) lives in a separate env. See [docs/ecotag-setup.md](docs/ecotag-setup.md).
+Versions are pinned in `environment.yml`; the Pipeline section above shows which tool runs which step. OBITools (for the optional `ecotag` method) lives in a separate env. See [docs/ecotag-setup.md](docs/ecotag-setup.md).
 
 ## 📖 Documentation
 
