@@ -332,32 +332,9 @@ See [reporting.md](reporting.md) for full details.
 
 ## 📂 Output directory structure
 
-```text
-outputs/
-  01_trim/{marker}/              # Trimmed FASTQ files
-    demux/                       #   Demultiplexed FASTQ (ligation demux, if "demultiplex" in pipeline.steps)
-  02_swarm/{marker}/             # SWARM outputs
-    merged/                      #   Merged reads per sample
-    dereplicated/                #   Dereplicated per sample
-    logs/                        #   Per-step log files
-    otu_table.csv                #   Abundance matrix (for taxonomy)
-    otu_table_full.csv           #   Full OTU table with metadata
-    query.fasta                  #   Representative sequences
-  02_dada2/{marker}/             # DADA2 outputs (if used)
-    metrics/                     #   metrics.json / metrics.csv (if dada2.collect_metrics)
-  03_taxo/{marker}/              # BLAST/taxonomy intermediate files
-  04_report/{marker}/            # Read-tracking + HTML report (dir configurable via report.output_dir)
-    read_tracking.csv            #   Per-sample counts at each step + % retained
-    read_tracking.txt            #   Human-readable table
-    step_summary.csv             #   Run-level reads + feature counts after each step
-    report.html                  #   Self-contained HTML run report (when report.html_report)
-    cleaning_report.csv          #   Per-sample decontamination report (if "clean" in pipeline.steps)
-  {marker}_{token}.csv           # Final taxonomy + abundance (token = blast/ecotag/decipher/dada2RDP)
-  {marker}_{taxonomy.method}_cleaned.csv  # Decontaminated table (if "clean" in pipeline.steps); token = dada2/blast/ecotag/decipher
-  {marker}_{taxonomy.method}_gbif.csv     # GBIF long table (if "export" in pipeline.steps)
-  .{marker}_state.json           # Pipeline state (for resume); records seednap_version + config snapshot path
-  .{marker}_config.snapshot.yaml # Effective merged config used by this run (reproducibility)
-```
+<p align="center">
+  <img src="../media/output-tree.svg" width="100%" alt="SeeDNAP run output directory tree: per-step folders (01_trim, 02_swarm/02_dada2, 03_taxo, 04_report) and the final tables">
+</p>
 
 The final taxonomy table uses `dada2RDP` for the DADA2 method, but the `_cleaned.csv` and `_gbif.csv` tables use the raw `taxonomy.method` value `dada2` (see section 3).
 

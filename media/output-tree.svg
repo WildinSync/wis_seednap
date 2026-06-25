@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 567" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
+  <rect x="0.5" y="0.5" width="939" height="566" rx="11" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
+  <path d="M 0 11 a 11 11 0 0 1 11 -11 h 918 a 11 11 0 0 1 11 11 v 31 h -940 z" fill="#161B22"/>
+  <line x1="0" y1="42" x2="940" y2="42" stroke="#30363d" stroke-width="1"/>
+  <path d="M 22 16 h 7 l 2 3 h 9 a 2 2 0 0 1 2 2 v 6 a 2 2 0 0 1 -2 2 h -18 a 2 2 0 0 1 -2 -2 v -9 a 2 2 0 0 1 2 -2 z" fill="#00C853"/>
+  <text x="52" y="25" font-size="12.5" fill="#7d8590" letter-spacing="0.5">run output tree</text>
+  <text x="26" y="70" font-size="13.5" font-weight="bold" fill="#7ee787">outputs/</text>
+  <text x="26" y="93" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#7ee787">01_trim/{marker}/</tspan></text>
+  <text x="360" y="93" font-size="12" fill="#6e7681" xml:space="preserve">trimmed FASTQ</text>
+  <text x="26" y="114" font-size="13" xml:space="preserve"><tspan fill="#484f58">│   └── </tspan><tspan fill="#7ee787">demux/</tspan></text>
+  <text x="360" y="114" font-size="12" fill="#6e7681" xml:space="preserve">demultiplexed FASTQ (if demultiplex step)</text>
+  <text x="26" y="135" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#7ee787">02_swarm/{marker}/</tspan></text>
+  <text x="360" y="135" font-size="12" fill="#6e7681" xml:space="preserve">SWARM outputs</text>
+  <text x="26" y="156" font-size="13" xml:space="preserve"><tspan fill="#484f58">│   ├── </tspan><tspan fill="#7ee787">merged/</tspan></text>
+  <text x="360" y="156" font-size="12" fill="#6e7681" xml:space="preserve">merged reads, per sample</text>
+  <text x="26" y="177" font-size="13" xml:space="preserve"><tspan fill="#484f58">│   ├── </tspan><tspan fill="#7ee787">dereplicated/</tspan></text>
+  <text x="360" y="177" font-size="12" fill="#6e7681" xml:space="preserve">dereplicated, per sample</text>
+  <text x="26" y="198" font-size="13" xml:space="preserve"><tspan fill="#484f58">│   ├── </tspan><tspan fill="#7ee787">logs/</tspan></text>
+  <text x="360" y="198" font-size="12" fill="#6e7681" xml:space="preserve">per-step logs</text>
+  <text x="26" y="219" font-size="13" xml:space="preserve"><tspan fill="#484f58">│   ├── </tspan><tspan fill="#e6edf3">otu_table.csv</tspan></text>
+  <text x="360" y="219" font-size="12" fill="#6e7681" xml:space="preserve">abundance matrix (taxonomy input)</text>
+  <text x="26" y="240" font-size="13" xml:space="preserve"><tspan fill="#484f58">│   ├── </tspan><tspan fill="#e6edf3">otu_table_full.csv</tspan></text>
+  <text x="360" y="240" font-size="12" fill="#6e7681" xml:space="preserve">full OTU table with metadata</text>
+  <text x="26" y="261" font-size="13" xml:space="preserve"><tspan fill="#484f58">│   └── </tspan><tspan fill="#e6edf3">query.fasta</tspan></text>
+  <text x="360" y="261" font-size="12" fill="#6e7681" xml:space="preserve">representative sequences</text>
+  <text x="26" y="282" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#7ee787">02_dada2/{marker}/</tspan></text>
+  <text x="360" y="282" font-size="12" fill="#6e7681" xml:space="preserve">DADA2 outputs (alternative to SWARM)</text>
+  <text x="26" y="303" font-size="13" xml:space="preserve"><tspan fill="#484f58">│   └── </tspan><tspan fill="#7ee787">metrics/</tspan></text>
+  <text x="360" y="303" font-size="12" fill="#6e7681" xml:space="preserve">metrics.json / .csv (if collect_metrics)</text>
+  <text x="26" y="324" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#7ee787">03_taxo/{marker}/</tspan></text>
+  <text x="360" y="324" font-size="12" fill="#6e7681" xml:space="preserve">BLAST / taxonomy intermediates</text>
+  <text x="26" y="345" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#7ee787">04_report/{marker}/</tspan></text>
+  <text x="360" y="345" font-size="12" fill="#6e7681" xml:space="preserve">read tracking + HTML report</text>
+  <text x="26" y="366" font-size="13" xml:space="preserve"><tspan fill="#484f58">│   ├── </tspan><tspan fill="#e6edf3">read_tracking.csv / .txt</tspan></text>
+  <text x="360" y="366" font-size="12" fill="#6e7681" xml:space="preserve">per-sample counts each step + % retained</text>
+  <text x="26" y="387" font-size="13" xml:space="preserve"><tspan fill="#484f58">│   ├── </tspan><tspan fill="#e6edf3">step_summary.csv</tspan></text>
+  <text x="360" y="387" font-size="12" fill="#6e7681" xml:space="preserve">run totals per step</text>
+  <text x="26" y="408" font-size="13" xml:space="preserve"><tspan fill="#484f58">│   ├── </tspan><tspan fill="#e6edf3">report.html</tspan></text>
+  <text x="360" y="408" font-size="12" fill="#6e7681" xml:space="preserve">self-contained HTML report</text>
+  <text x="26" y="429" font-size="13" xml:space="preserve"><tspan fill="#484f58">│   └── </tspan><tspan fill="#e6edf3">cleaning_report.csv</tspan></text>
+  <text x="360" y="429" font-size="12" fill="#6e7681" xml:space="preserve">decontamination report (if clean step)</text>
+  <text x="26" y="450" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">{marker}_{token}.csv</tspan></text>
+  <text x="360" y="450" font-size="12" fill="#6e7681" xml:space="preserve">final taxonomy + abundance table</text>
+  <text x="26" y="471" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">{marker}_{method}_cleaned.csv</tspan></text>
+  <text x="360" y="471" font-size="12" fill="#6e7681" xml:space="preserve">decontaminated table (if clean step)</text>
+  <text x="26" y="492" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">{marker}_{method}_gbif.csv</tspan></text>
+  <text x="360" y="492" font-size="12" fill="#6e7681" xml:space="preserve">GBIF long table (if export step)</text>
+  <text x="26" y="513" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">.{marker}_state.json</tspan></text>
+  <text x="360" y="513" font-size="12" fill="#6e7681" xml:space="preserve">pipeline state, drives --resume</text>
+  <text x="26" y="534" font-size="13" xml:space="preserve"><tspan fill="#484f58">└── </tspan><tspan fill="#e6edf3">.{marker}_config.snapshot.yaml</tspan></text>
+  <text x="360" y="534" font-size="12" fill="#6e7681" xml:space="preserve">effective merged config (reproducibility)</text>
+</svg>
