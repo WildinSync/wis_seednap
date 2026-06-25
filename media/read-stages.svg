@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 170" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
+  <rect x="0.5" y="0.5" width="859" height="169" rx="12" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
+  <text x="24" y="28" font-size="12.5" fill="#7d8590" letter-spacing="1">read-tracking stages (per sample)</text>
+  <text x="24" y="76" font-size="12.5" font-weight="bold" fill="#7ee787">SWARM to OTUs</text>
+  <rect x="164" y="56" width="96" height="30" rx="7" fill="#161B22" stroke="#484f58" stroke-width="1.5"/>
+  <text x="212" y="75" text-anchor="middle" font-size="11.5" fill="#adbac7">raw</text>
+  <line x1="260" y1="71" x2="268" y2="71" stroke="#3fb950" stroke-width="1.5"/><path d="M 268 68 L 272 71 L 268 74 z" fill="#3fb950"/>
+  <rect x="272" y="56" width="96" height="30" rx="7" fill="#161B22" stroke="#484f58" stroke-width="1.5"/>
+  <text x="320" y="75" text-anchor="middle" font-size="11.5" fill="#adbac7">trimmed</text>
+  <line x1="368" y1="71" x2="376" y2="71" stroke="#3fb950" stroke-width="1.5"/><path d="M 376 68 L 380 71 L 376 74 z" fill="#3fb950"/>
+  <rect x="380" y="56" width="96" height="30" rx="7" fill="#161B22" stroke="#00C853" stroke-width="1.5"/>
+  <text x="428" y="75" text-anchor="middle" font-size="11.5" fill="#e6edf3">clustered</text>
+  <text x="24" y="128" font-size="12.5" font-weight="bold" fill="#7ee787">DADA2 to ASVs</text>
+  <rect x="164" y="108" width="96" height="30" rx="7" fill="#161B22" stroke="#484f58" stroke-width="1.5"/>
+  <text x="212" y="127" text-anchor="middle" font-size="11.5" fill="#adbac7">raw</text>
+  <line x1="260" y1="123" x2="268" y2="123" stroke="#3fb950" stroke-width="1.5"/><path d="M 268 120 L 272 123 L 268 126 z" fill="#3fb950"/>
+  <rect x="272" y="108" width="96" height="30" rx="7" fill="#161B22" stroke="#484f58" stroke-width="1.5"/>
+  <text x="320" y="127" text-anchor="middle" font-size="11.5" fill="#adbac7">trimmed</text>
+  <line x1="368" y1="123" x2="376" y2="123" stroke="#3fb950" stroke-width="1.5"/><path d="M 376 120 L 380 123 L 376 126 z" fill="#3fb950"/>
+  <rect x="380" y="108" width="96" height="30" rx="7" fill="#161B22" stroke="#00C853" stroke-width="1.5"/>
+  <text x="428" y="127" text-anchor="middle" font-size="11.5" fill="#e6edf3">filtered</text>
+  <line x1="476" y1="123" x2="484" y2="123" stroke="#3fb950" stroke-width="1.5"/><path d="M 484 120 L 488 123 L 484 126 z" fill="#3fb950"/>
+  <rect x="488" y="108" width="96" height="30" rx="7" fill="#161B22" stroke="#00C853" stroke-width="1.5"/>
+  <text x="536" y="127" text-anchor="middle" font-size="11.5" fill="#e6edf3">denoised</text>
+  <line x1="584" y1="123" x2="592" y2="123" stroke="#3fb950" stroke-width="1.5"/><path d="M 592 120 L 596 123 L 592 126 z" fill="#3fb950"/>
+  <rect x="596" y="108" width="96" height="30" rx="7" fill="#161B22" stroke="#00C853" stroke-width="1.5"/>
+  <text x="644" y="127" text-anchor="middle" font-size="11.5" fill="#e6edf3">merged</text>
+  <line x1="692" y1="123" x2="700" y2="123" stroke="#3fb950" stroke-width="1.5"/><path d="M 700 120 L 704 123 L 700 126 z" fill="#3fb950"/>
+  <rect x="704" y="108" width="96" height="30" rx="7" fill="#161B22" stroke="#00C853" stroke-width="1.5"/>
+  <text x="752" y="127" text-anchor="middle" font-size="11.5" fill="#e6edf3">nonchim</text>
+  <text x="24" y="158" font-size="10.5" fill="#6e7681">both paths share raw and trimmed (grey), then diverge; pct_retained = final / raw</text>
+</svg>

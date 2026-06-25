@@ -30,8 +30,9 @@ By default these go to `<paths.output>/04_report/<marker>/`. Set `report.output_
 
 The table records per-sample read counts at each stage. The stages depend on the feature-generation path. SWARM produces OTUs (operational taxonomic units: sequences clustered by similarity); DADA2 produces ASVs (amplicon sequence variants: exact sequences resolved by an error model, no similarity clustering):
 
-- **SWARM:** `raw -> trimmed -> clustered`
-- **DADA2:** `raw -> trimmed -> filtered -> denoised -> merged -> nonchim`
+<p align="center">
+  <img src="../media/read-stages.svg" width="100%" alt="read-tracking stages: SWARM tracks raw, trimmed, clustered; DADA2 tracks raw, trimmed, filtered, denoised, merged, nonchim; both share raw and trimmed then diverge">
+</p>
 
 For DADA2, `denoised` is reads after the error model corrects sequencing errors, `merged` is forward/reverse reads joined into one amplicon, and `nonchim` is reads left after chimeras (artefactual sequences formed when two real templates join during PCR) are removed.
 
