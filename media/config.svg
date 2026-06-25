@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 540" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
+  <rect x="0.5" y="0.5" width="859" height="539" rx="11" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
+  <path d="M 0 11 a 11 11 0 0 1 11 -11 h 838 a 11 11 0 0 1 11 11 v 31 h -860 z" fill="#161B22"/>
+  <rect x="0" y="42" width="38" height="498" fill="#0b0f14"/>
+  <line x1="0" y1="42" x2="860" y2="42" stroke="#30363d" stroke-width="1"/>
+  <circle cx="22" cy="21" r="6" fill="#ff5f56"/><circle cx="42" cy="21" r="6" fill="#febc2e"/><circle cx="62" cy="21" r="6" fill="#27c93f"/>
+  <text x="430" y="25" text-anchor="middle" font-size="12.5" fill="#7d8590" letter-spacing="0.5">teleo.yaml</text>
+  <text x="30" y="68" text-anchor="end" font-size="11" fill="#484f58">1</text>
+  <text x="52" y="68" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="bold">marker</tspan><tspan fill="#8b949e">:</tspan></text>
+  <text x="300" y="68" font-size="12" fill="#6e7681" xml:space="preserve"># the locus and its PCR primers  (required)</text>
+  <text x="30" y="89" text-anchor="end" font-size="11" fill="#484f58">2</text>
+  <text x="68" y="89" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">name</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> teleo</tspan></text>
+  <text x="30" y="110" text-anchor="end" font-size="11" fill="#484f58">3</text>
+  <text x="68" y="110" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">primers</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> {forward: ACACCGCCCGTCACTCT, reverse: CTTCCGGTACACTTACCATG}</tspan></text>
+  <text x="30" y="131" text-anchor="end" font-size="11" fill="#484f58">4</text>
+  <text x="52" y="131" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="bold">paths</tspan><tspan fill="#8b949e">:</tspan></text>
+  <text x="300" y="131" font-size="12" fill="#6e7681" xml:space="preserve"># where reads are, where results go</text>
+  <text x="30" y="152" text-anchor="end" font-size="11" fill="#484f58">5</text>
+  <text x="68" y="152" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">raw_data</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> /path/to/fastq</tspan></text>
+  <text x="30" y="173" text-anchor="end" font-size="11" fill="#484f58">6</text>
+  <text x="68" y="173" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">output</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> outputs</tspan></text>
+  <text x="30" y="194" text-anchor="end" font-size="11" fill="#484f58">7</text>
+  <text x="52" y="194" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="bold">trimming</tspan><tspan fill="#8b949e">:</tspan></text>
+  <text x="300" y="194" font-size="12" fill="#6e7681" xml:space="preserve"># cutadapt primer removal</text>
+  <text x="30" y="215" text-anchor="end" font-size="11" fill="#484f58">8</text>
+  <text x="68" y="215" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">max_error_rate</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> 0.1</tspan></text>
+  <text x="30" y="236" text-anchor="end" font-size="11" fill="#484f58">9</text>
+  <text x="68" y="236" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">discard_untrimmed</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> true</tspan></text>
+  <text x="30" y="257" text-anchor="end" font-size="11" fill="#484f58">10</text>
+  <text x="52" y="257" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="bold">swarm</tspan><tspan fill="#8b949e">:</tspan></text>
+  <text x="300" y="257" font-size="12" fill="#6e7681" xml:space="preserve"># feature path A: OTUs  (or use dada2: for ASVs)</text>
+  <text x="30" y="278" text-anchor="end" font-size="11" fill="#484f58">11</text>
+  <text x="68" y="278" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">clustering</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> {d: 1, fastidious: true}</tspan></text>
+  <text x="30" y="299" text-anchor="end" font-size="11" fill="#484f58">12</text>
+  <text x="52" y="299" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="bold">taxonomy</tspan><tspan fill="#8b949e">:</tspan></text>
+  <text x="300" y="299" font-size="12" fill="#6e7681" xml:space="preserve"># assign a taxon to each feature  (required)</text>
+  <text x="30" y="320" text-anchor="end" font-size="11" fill="#484f58">13</text>
+  <text x="68" y="320" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">method</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> blast</tspan></text>
+  <text x="300" y="320" font-size="12" fill="#6e7681" xml:space="preserve"># blast | dada2 | decipher | ecotag</text>
+  <text x="30" y="341" text-anchor="end" font-size="11" fill="#484f58">14</text>
+  <text x="68" y="341" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">databases</tspan><tspan fill="#8b949e">:</tspan></text>
+  <text x="30" y="362" text-anchor="end" font-size="11" fill="#484f58">15</text>
+  <text x="84" y="362" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">blast</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> {fasta: /path/to/reference.fasta}</tspan></text>
+  <text x="30" y="383" text-anchor="end" font-size="11" fill="#484f58">16</text>
+  <text x="52" y="383" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="bold">export</tspan><tspan fill="#8b949e">:</tspan></text>
+  <text x="300" y="383" font-size="12" fill="#6e7681" xml:space="preserve"># GBIF long-format table</text>
+  <text x="30" y="404" text-anchor="end" font-size="11" fill="#484f58">17</text>
+  <text x="68" y="404" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">gbif</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> {add_rank: true, add_taxon: true}</tspan></text>
+  <text x="30" y="425" text-anchor="end" font-size="11" fill="#484f58">18</text>
+  <text x="52" y="425" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="bold">report</tspan><tspan fill="#8b949e">:</tspan></text>
+  <text x="300" y="425" font-size="12" fill="#6e7681" xml:space="preserve"># read tracking and the HTML report</text>
+  <text x="30" y="446" text-anchor="end" font-size="11" fill="#484f58">19</text>
+  <text x="68" y="446" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">html_report</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> true</tspan></text>
+  <text x="30" y="467" text-anchor="end" font-size="11" fill="#484f58">20</text>
+  <text x="52" y="467" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="bold">cleaning</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> {mode: flag}</tspan></text>
+  <text x="300" y="467" font-size="12" fill="#6e7681" xml:space="preserve"># optional: decontaminate vs controls</text>
+  <text x="30" y="488" text-anchor="end" font-size="11" fill="#484f58">21</text>
+  <text x="52" y="488" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="bold">pipeline</tspan><tspan fill="#8b949e">:</tspan></text>
+  <text x="300" y="488" font-size="12" fill="#6e7681" xml:space="preserve"># the ordered stages to actually run</text>
+  <text x="30" y="509" text-anchor="end" font-size="11" fill="#484f58">22</text>
+  <text x="68" y="509" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">steps</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> [trim, swarm, taxonomy, export, report]</tspan></text>
+</svg>

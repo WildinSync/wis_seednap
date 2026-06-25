@@ -4,6 +4,12 @@
 
 Every key in a SeeDNAP marker config, with its type, default, and meaning. SeeDNAP uses one YAML file per marker to configure the whole pipeline. Your YAML is merged over the model defaults, so you specify only what differs. Complete working examples live in [config/markers/](../config/markers/).
 
+A config at a glance, every top-level section in one view (the per-key reference for each follows below):
+
+<p align="center">
+  <img src="../media/config.svg" width="100%" alt="Annotated SeeDNAP config: marker, paths, trimming, feature path, taxonomy, export, report, cleaning, pipeline">
+</p>
+
 ## ⚙️ Generating and validating a config
 
 `init` writes a config; `validate` checks it before you commit to a run.
