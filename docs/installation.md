@@ -1,24 +1,28 @@
 # Installation
 
-How to install SeeDNAP and the external bioinformatics tools it drives.
+How to install SeeDNAP and the external bioinformatics tools it drives. This page covers the recommended conda setup, manual installation, and the requirements for each pipeline step.
 
-This page covers the recommended conda setup, manual installation, and the requirements you need for each pipeline step. On the ETH ELE eDNA server, installation is already done; see [On the ETH eDNA server](#on-the-eth-edna-server).
+On the ETH ELE eDNA server, installation is already done; jump to [On the ETH eDNA server](#-on-the-eth-edna-server). Everywhere else, the rest of this page is for a fresh setup.
 
-## On the ETH eDNA server
+<img src="../media/divider.svg" width="100%" alt="">
 
-> [!IMPORTANT]
-> On the ETH ELE eDNA server you do not need to install anything. SeeDNAP is already installed in a shared conda env that every user can activate:
-> ```bash
-> conda activate /home/shared/edna/envs/seednap
-> seednap --version
-> ```
-> Always activate by full path. A bare `conda activate seednap` only works if you have a personal env of that name, and silently picks the wrong one if you do. All tools (cutadapt, vsearch, swarm, blast, R + packages) are present. OBITools for the optional `ecotag` method lives in its own env and is auto-discovered; no extra activation needed.
->
-> The shared env is editable-installed from the canonical checkout, so it is always the current version. You do **not** clone the repo to run on the server, and you should **not** clone it per dataset (a private clone only goes stale and ships example configs pointing at other datasets). All you provide per dataset is a config file, and each run writes into the output folder named in it (`paths.output`). See the [server quickstart in the README](../README.md#quick-start) for the copy-a-config-and-run recipe.
+## 🖥️ On the ETH eDNA server
 
-The rest of this page is only for a fresh setup elsewhere (local development or a new machine).
+On the ETH ELE eDNA server you do not need to install anything. SeeDNAP is already installed in a shared conda env that every user can activate:
 
-## Conda environment (recommended)
+```bash
+conda activate /home/shared/edna/envs/seednap
+seednap --version
+```
+
+> [!WARNING]
+> Always activate by full path. A bare `conda activate seednap` only works if you have a personal env of that name, and silently picks the wrong one if you do.
+
+All tools (cutadapt, vsearch, swarm, blast, R + packages) are present. OBITools for the optional `ecotag` method lives in its own env and is auto-discovered; no extra activation needed.
+
+The shared env is editable-installed from the canonical checkout, so it is always the current version. You do **not** clone the repo to run on the server, and you should **not** clone it per dataset (a private clone only goes stale and ships example configs pointing at other datasets). All you provide per dataset is a config file, and each run writes into the output folder named in it (`paths.output`). See the [server quickstart in the README](../README.md#quick-start) for the copy-a-config-and-run recipe.
+
+## 🐍 Conda environment (recommended)
 
 The simplest way to install SeeDNAP with every dependency, including the external tools and R packages, is the bundled conda environment:
 
@@ -36,15 +40,16 @@ Verify the install:
 seednap --version
 ```
 
-> [!TIP]
-> After the version check, scaffold and validate a config as a post-install sanity check:
-> ```bash
-> seednap init --marker teleo -o my_config.yaml   # write a starter config
-> seednap validate my_config.yaml                 # schema + preflight checks
-> ```
-> `seednap validate` runs preflight: it fails if the config references files that are missing on disk or a taxonomy database block that cannot be resolved, so problems surface before a run starts. Run `seednap --help` to see all 17 commands; see [cli-reference.md](cli-reference.md).
+As a post-install sanity check, scaffold and validate a config:
 
-## Manual installation
+```bash
+seednap init --marker teleo -o my_config.yaml   # write a starter config
+seednap validate my_config.yaml                 # schema + preflight checks
+```
+
+`seednap validate` runs preflight: it fails if the config references files that are missing on disk or a taxonomy database block that cannot be resolved, so problems surface before a run starts. Run `seednap --help` to see all 17 commands; see [cli-reference.md](cli-reference.md).
+
+## 🔧 Manual installation
 
 If you manage dependencies yourself, install the package and then the external tools separately. Target the versions pinned in `environment.yml` unless you have a reason not to.
 
@@ -72,9 +77,11 @@ conda install -c conda-forge -c bioconda r-base=4.2 r-tidyverse=2.0.0 r-patchwor
 ```
 
 > [!WARNING]
-> Install the full R stack, not just dada2 and DECIPHER. The R scripts also call `library(Biostrings)`, `library(dplyr)`, `library(ggplot2)` (the last two ship with `r-tidyverse`), and `library(patchwork)`; a partial install passes `pip install -e .` and Python import checks but fails at runtime the first time an R step loads a missing package. Note also that `environment.yml` does not install OBITools (the optional `ecotag` taxonomy method); set it up separately if you need it, per [ecotag-setup.md](ecotag-setup.md).
+> Install the full R stack, not just dada2 and DECIPHER. The R scripts also call `library(Biostrings)`, `library(dplyr)`, `library(ggplot2)` (the last two ship with `r-tidyverse`), and `library(patchwork)`; a partial install passes `pip install -e .` and Python import checks but fails at runtime the first time an R step loads a missing package.
 
-## Requirements
+Note that `environment.yml` does not install OBITools (the optional `ecotag` taxonomy method); set it up separately if you need it, per [ecotag-setup.md](ecotag-setup.md).
+
+## 📦 Requirements
 
 ### Python dependencies
 
@@ -93,8 +100,7 @@ Defined in `pyproject.toml`:
 | `matplotlib` | >= 3.5 | Charts for the optional HTML run report |
 | `python-dotenv` | >= 1.0 | Loads `.env` (NCBI Entrez key for GBIF enrichment) |
 
-> [!NOTE]
-> The NCBI Entrez API key in `.env` is only needed for taxonomy enrichment in the `create-gbif` command. Copy `.env.example` to `.env` and fill in `NCBI_API_KEY` before running that command. No key is required for the core pipeline or for BLAST assignment. See [gbif-export.md](gbif-export.md).
+The NCBI Entrez API key in `.env` is only needed for taxonomy enrichment in the `create-gbif` command: copy `.env.example` to `.env` and fill in `NCBI_API_KEY` before running that command. No key is required for the core pipeline or for BLAST assignment. See [gbif-export.md](gbif-export.md).
 
 ### External tools
 
@@ -120,17 +126,20 @@ Loaded by the R scripts and pinned in `environment.yml`. ASV inference and mergi
 | `r-tidyverse` (provides `dplyr`, `ggplot2`) | 2.0.0 | conda-forge |
 | `r-patchwork` | 1.2.0 | conda-forge |
 
-### ecotag (optional)
+<details>
+<summary><b>ecotag (optional): tool discovery order</b></summary>
 
 OBITools v1 has Python 2 dependencies that conflict with the rest of the environment, so it lives in its own conda env and is not installed by `environment.yml`. The `ecotag` runner discovers it in this order:
 
-1. `PATH` -- an activated OBITools env wins, if `ecotag`, `obiannotate`, and `obitab` all resolve there.
-2. `SEEDNAP_OBITOOLS_BIN` -- a bin directory used when the tools are not all on `PATH`.
+1. `PATH`: an activated OBITools env wins, if `ecotag`, `obiannotate`, and `obitab` all resolve there.
+2. `SEEDNAP_OBITOOLS_BIN`: a bin directory used when the tools are not all on `PATH`.
 3. A set of well-known install locations.
 
 See [ecotag-setup.md](ecotag-setup.md) for setup.
 
-## Running the test suite
+</details>
+
+## 🧪 Running the test suite
 
 The repository ships a pytest suite that exercises the post-processing logic without invoking any external bioinformatics tools, so it runs locally in a few seconds:
 
@@ -138,18 +147,23 @@ The repository ships a pytest suite that exercises the post-processing logic wit
 pytest
 ```
 
-Tests cover, among other things:
+<details>
+<summary><b>What the tests cover</b></summary>
 
 - BLAST lowest-common-ancestor (LCA) behavior: when several reference sequences match a feature equally well, the assignment is collapsed to the lowest taxonomic rank they all agree on (e.g. genus rather than a guessed species), including the case where that resolves to nothing.
 - The DarwinCore builder (DarwinCore is the GBIF biodiversity record standard that the `create-gbif` export targets).
 - SWARM OTU non-zero invariants: a guard that the OTU (operational taxonomic unit, a cluster of near-identical reads treated as one feature) by sample table is not silently all zeros, which would mean reads were dropped during clustering.
 - The shared taxonomy post-processor, demultiplex robustness, ecotag tool discovery, runner signatures, config-snapshot reproducibility, R-script packaging, and YAML round-tripping.
 
+</details>
+
 Add new tests under `tests/unit/` or `tests/integration/` when you change load-bearing logic.
 
-## See also
+## 📖 See also
 
-- [cli-reference.md](cli-reference.md) -- all commands and options
-- [configuration.md](configuration.md) -- YAML config reference
-- [ecotag-setup.md](ecotag-setup.md) -- installing OBITools for the `ecotag` method
-- [gbif-export.md](gbif-export.md) -- `create-gbif` and the NCBI Entrez key
+| Guide | What's inside |
+|---|---|
+| [cli-reference.md](cli-reference.md) | All commands and options |
+| [configuration.md](configuration.md) | YAML config reference |
+| [ecotag-setup.md](ecotag-setup.md) | Installing OBITools for the `ecotag` method |
+| [gbif-export.md](gbif-export.md) | `create-gbif` and the NCBI Entrez key |

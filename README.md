@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <b>Modern eDNA metabarcoding</b> &mdash; from raw FASTQ to GBIF-ready biodiversity tables.
+  <b>Modern eDNA metabarcoding</b>: from raw FASTQ to GBIF-ready biodiversity tables.
 </p>
 
 <p align="center">
@@ -28,23 +28,23 @@
 
 SeeDNAP turns raw paired-end FASTQ files into taxonomically assigned feature tables, ready for biodiversity analysis or **GBIF** submission. Every step's status is tracked in a per-run state file, so a failed run resumes from exactly where it stopped.
 
-A **feature** is a candidate sequence variant with a per-sample read count. SeeDNAP gives you two ways to derive them &mdash; pick one path per run:
+A **feature** is a candidate sequence variant with a per-sample read count. SeeDNAP gives you two ways to derive them. Pick one path per run:
 
-- 🟢 **OTUs** &mdash; sequences clustered at a similarity threshold (**SWARM**)
-- 🟢 **ASVs** &mdash; exact sequences resolved by denoising (**DADA2**)
+- 🟢 **OTUs**: sequences clustered at a similarity threshold (**SWARM**)
+- 🟢 **ASVs**: exact sequences resolved by denoising (**DADA2**)
 
 ```mermaid
 flowchart LR
     raw[Raw FASTQ<br/>R1 / R2]:::io
     trim[Trim<br/>Cutadapt 2-pass]:::pass
 
-    subgraph s2 [STEP 2 · Cluster — pick one]
+    subgraph s2 [STEP 2 · Cluster (pick one)]
         direction TB
         swarm[SWARM<br/>VSEARCH + SWARM]:::reco
         dada2[DADA2<br/>R / Bioconductor]:::alt
     end
 
-    subgraph s3 [STEP 3 · Taxonomy — pick one]
+    subgraph s3 [STEP 3 · Taxonomy (pick one)]
         direction TB
         blast[BLAST + LCA<br/>default]:::reco
         rdp[DADA2 RDP]:::alt
@@ -68,7 +68,7 @@ flowchart LR
 ## ⚡ Quick start
 
 > [!IMPORTANT]
-> **On the ETH eDNA server, SeeDNAP is already installed and always current** &mdash; a shared conda env at `/home/shared/edna/envs/seednap`. Don't clone it, don't `pip install`, and don't keep a per-dataset copy (a private clone only goes stale). All you provide per dataset is a **config file**; each run writes everything into the **output folder named in that config**.
+> **On the ETH eDNA server, SeeDNAP is already installed and always current**. A shared conda env at `/home/shared/edna/envs/seednap`. Don't clone it, don't `pip install`, and don't keep a per-dataset copy (a private clone only goes stale). All you provide per dataset is a **config file**; each run writes everything into the **output folder named in that config**.
 
 ```bash
 # 1 · activate the shared env (use the full path)
@@ -115,25 +115,25 @@ seednap run-pipeline config/markers/my_marker.yaml
 
 | # | Step | Tool | What it does |
 |:--:|---|---|---|
-| – | Demultiplex <sub>opt</sub> | built-in | Ligation-tag demultiplexing (only when `demultiplex` is in `pipeline.steps`; omit for pre-demultiplexed inputs) |
+| - | Demultiplex <sub>opt</sub> | built-in | Ligation-tag demultiplexing (only when `demultiplex` is in `pipeline.steps`; omit for pre-demultiplexed inputs) |
 | **1** | **Trim** | Cutadapt | Two-pass primer removal (5′ then 3′) |
-| **2** | **Cluster** | SWARM **or** DADA2 | OTUs (clustered) or ASVs (denoised) &mdash; both also remove PCR chimeras |
+| **2** | **Cluster** | SWARM **or** DADA2 | OTUs (clustered) or ASVs (denoised); both also remove PCR chimeras |
 | **3** | **Taxonomy** | BLAST · DADA2 · DECIPHER · ecotag | Assign a taxon per feature; BLAST+LCA (default) reports the rank the data support |
-| – | Decontaminate <sub>opt</sub> | built-in | Flag or subtract features seen in negative controls |
+| - | Decontaminate <sub>opt</sub> | built-in | Flag or subtract features seen in negative controls |
 | **4** | **Export** | built-in | GBIF long-format table (one row per feature × sample) |
-| – | DarwinCore <sub>opt</sub> | built-in | GBIF-ready occurrence CSV + a dropped-rows QA report |
+| - | DarwinCore <sub>opt</sub> | built-in | GBIF-ready occurrence CSV + a dropped-rows QA report |
 | **5** | **Report** | built-in | Per-step read tracking, data-loss warnings, HTML run report |
 
-Each stage runs **only if listed in `pipeline.steps`** &mdash; the single ordered source of truth, validated against stage dependencies at config load.
+Each stage runs **only if listed in `pipeline.steps`**, the single ordered source of truth, validated against stage dependencies at config load.
 
 > [!WARNING]
 > Only the `ligation` demultiplexing protocol is implemented; listing `demultiplex` with any other protocol is rejected at config load. If your reads are already demultiplexed, just leave `demultiplex` out of `pipeline.steps`.
 
 <details>
-<summary><b>Step ordering, decontamination & contaminant flags — details</b></summary>
+<summary><b>Step ordering, decontamination & contaminant flags: details</b></summary>
 
 - **Ordering rules (validated at load):** `demultiplex` → `trim` → a feature step (`dada2` **or** `swarm`, mutually exclusive) → `taxonomy` → `clean` → `export`. `clean` runs before `export` so the export uses the decontaminated table.
-- **`clean` step (presence-based, feature-level):** any feature with ≥1 read in an applicable negative control is treated as contamination. An **extraction blank** cleans only samples sharing its `extraction_ID`; a **PCR blank** cleans the whole dataset. `cleaning.mode` is `flag` (default, annotate only) or `subtract` (zero those reads — irreversible, opt-in). Driven by the FAIRe manifest; runs only when `clean` is in `pipeline.steps`.
+- **`clean` step (presence-based, feature-level):** any feature with ≥1 read in an applicable negative control is treated as contamination. An **extraction blank** cleans only samples sharing its `extraction_ID`; a **PCR blank** cleans the whole dataset. `cleaning.mode` is `flag` (default, annotate only) or `subtract` (zero those reads, irreversible and opt-in). Driven by the FAIRe manifest; runs only when `clean` is in `pipeline.steps`.
 - **`taxonomy.contaminants`:** a separate list of species names flagged in the export `contamination_flag` column. Empty by default. Distinct from the manifest-driven `clean` step.
 - **DADA2 per-library:** `dada2.per_library` learns the error model per sequencing library; the grouping comes from the metadata `seq_run_id`, or is derived from per-library subfolders of `raw_data` when no metadata is given.
 
@@ -188,9 +188,9 @@ Run `seednap <command> --help` for full options.
 <details>
 <summary><b>Metadata-join &amp; preflight notes</b></summary>
 
-- **`validate` / `run-pipeline` preflight** fails fast if raw data or reference databases are missing on disk, or the taxonomy database block is unresolved &mdash; before any compute.
+- **`validate` / `run-pipeline` preflight** fails fast if raw data or reference databases are missing on disk, or the taxonomy database block is unresolved, before any compute.
 - **`create-gbif`** joins taxonomy to your sample metadata on `eventID`, normalizing dot/dash/underscore separators (so `DAR-2023-0025` matches a `make.names()`-dotted `DAR.2023.0025`). A **zero-match** join raises rather than emitting blank dates/coordinates; a partial match warns with the unmatched IDs.
-- **`wis-metadata`** pulls each sample's `eventID`, date, coordinates (PostGIS point), environmental medium and size from the WIS database into the two CSVs the export consumes &mdash; see [docs/gbif-export.md](docs/gbif-export.md#sourcing-metadata-from-the-wis-database).
+- **`wis-metadata`** pulls each sample's `eventID`, date, coordinates (PostGIS point), environmental medium and size from the WIS database into the two CSVs the export consumes. See [docs/gbif-export.md](docs/gbif-export.md#sourcing-metadata-from-the-wis-database).
 
 </details>
 
@@ -208,7 +208,7 @@ Per-step artifacts go under `<paths.output>/<NN_step>/<marker>/` (`01_trim`, `02
 The `<method>` token follows `taxonomy.method` (the DADA2 taxonomy table uses `dada2RDP`). Run state lives at `<paths.output>/.<marker>_state.json`.
 
 <details>
-<summary><b>Reproducibility — every run rebuilds from its own outputs</b></summary>
+<summary><b>Reproducibility: every run rebuilds from its own outputs</b></summary>
 
 At the start of each run the orchestrator writes the full effective config (your YAML merged over the defaults) to `<paths.output>/.<marker>_config.snapshot.yaml`, and stamps the producing SeeDNAP version into the state JSON. On `--resume`, a version mismatch is surfaced as a `[WARN]`, so a result is never silently stitched across incompatible versions. For a worked example of a finished run, see [docs/example-outputs/](docs/example-outputs/).
 
@@ -216,7 +216,7 @@ At the start of each run the orchestrator writes the full effective config (your
 
 ## 📊 Reporting
 
-The `report` step is on by default, so every run reports on itself &mdash; writing to `<paths.output>/04_report/<marker>/`:
+The `report` step is on by default, so every run reports on itself, writing to `<paths.output>/04_report/<marker>/`:
 
 ```
 read_tracking.csv / .txt    reads & sequences surviving each step, per sample
@@ -243,7 +243,7 @@ seednap report teleo --html --field-metadata metadata_field_my_dataset.csv
 | BLAST+ | 2.17.0 | Taxonomic assignment |
 | R | 4.2 | DADA2 / DECIPHER (optional) |
 
-Versions are pinned in `environment.yml`. OBITools (for the optional `ecotag` method) lives in a separate env &mdash; see [docs/ecotag-setup.md](docs/ecotag-setup.md).
+Versions are pinned in `environment.yml`. OBITools (for the optional `ecotag` method) lives in a separate env. See [docs/ecotag-setup.md](docs/ecotag-setup.md).
 
 ## 📖 Documentation
 
@@ -291,4 +291,4 @@ SeeDNAP builds on [Cutadapt](https://cutadapt.readthedocs.io/) (Martin, 2011), [
 
 ## 📜 License
 
-MIT &mdash; see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).

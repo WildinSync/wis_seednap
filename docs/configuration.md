@@ -1,30 +1,27 @@
 # Configuration Reference
 
-This document describes every key in a SeeDNAP marker config, with its type, default, and meaning.
+<img src="../media/divider.svg" width="100%" alt="">
 
-SeeDNAP uses one YAML file per marker to configure the whole pipeline. Your YAML is merged over the model defaults, so you specify only what differs. Complete working examples live in `config/markers/`.
+Every key in a SeeDNAP marker config, with its type, default, and meaning. SeeDNAP uses one YAML file per marker to configure the whole pipeline. Your YAML is merged over the model defaults, so you specify only what differs. Complete working examples live in [config/markers/](../config/markers/).
 
-## Generating a config
+## ⚙️ Generating and validating a config
+
+`init` writes a config; `validate` checks it before you commit to a run.
 
 ```bash
 seednap init --marker teleo --output config/markers/my_marker.yaml          # minimal: required fields only
 seednap init --marker teleo --output config/markers/my_marker.yaml --full   # fully-annotated template
+
+seednap validate config/markers/teleo.yaml
 ```
 
 `init` writes a minimal config (just the required fields) by default; pass `--full` for the fully-annotated reference template. A standalone minimal example also lives at `config/markers/minimal.example.yaml`.
 
-## Validating a config
+`validate` checks YAML syntax, field types, and required values, reports which `taxonomy.databases.<method>` block is used, and runs a preflight that fails with a non-zero exit if any referenced database or `raw_data` path is missing on disk. A config that loads but points at missing inputs is caught here, not mid-run.
 
-```bash
-seednap validate config/markers/teleo.yaml
-```
+All config models use strict validation (`extra="forbid"`), including inside the `taxonomy.databases.<method>` blocks. A typo in any field name is rejected at load time with a clear error, so you learn about a misspelled key from `seednap validate`, not hours into a run.
 
-This checks YAML syntax, field types, and required values, reports which `taxonomy.databases.<method>` block is used, and runs a preflight that fails with a non-zero exit if any referenced database or `raw_data` path is missing on disk. A config that loads but points at missing inputs is caught here, not mid-run.
-
-> [!NOTE]
-> All config models use strict validation (`extra="forbid"`), including inside the `taxonomy.databases.<method>` blocks. A typo in any field name is rejected at load time with a clear error, so you learn about a misspelled key from `seednap validate`, not hours into a run.
-
-## Required keys
+## ✅ Required keys
 
 A minimal config must set exactly these (everything else has a default):
 
@@ -33,24 +30,24 @@ A minimal config must set exactly these (everything else has a default):
 - `taxonomy.method`
 - the required path(s) in the selected database block: `blast.fasta`; `dada2.all`; `ecotag.tree` and `fasta`; or `decipher.trained`
 
-> [!IMPORTANT]
-> `paths.raw_data` has a schema default of `data/raw`, but a run effectively requires it to point at your FASTQ directory. Set it per dataset; the default is rarely correct.
+`paths.raw_data` has a schema default of `data/raw`, but a run effectively requires it to point at your FASTQ directory. Set it per dataset; the default is rarely correct.
 
-## The feature path and method block are exclusive
+## 🔀 Choosing a feature path and method block
 
-`dada2` and `swarm` are the two mutually-exclusive feature (clustering) paths: the step that turns trimmed reads into the biological units you assign taxonomy to. The DADA2 path produces ASVs (amplicon sequence variants: denoised, exact sequences resolved to single-nucleotide differences). The SWARM path produces OTUs (operational taxonomic units: sequences clustered together within a small edit distance). Pick exactly one. Fill in only the section named in `pipeline.steps`. Likewise, under `taxonomy` fill only `databases.<method>` for your chosen `method`; the other method blocks are ignored.
+`dada2` and `swarm` are the two mutually-exclusive feature (clustering) paths: the step that turns trimmed reads into the biological units you assign taxonomy to. Pick exactly one. Fill in only the section named in `pipeline.steps`. Likewise, under `taxonomy` fill only `databases.<method>` for your chosen `method`; the other method blocks are ignored.
 
-> [!TIP]
-> You do not need to delete the unused `dada2`/`swarm` or `databases.<method>` blocks; whatever is not selected by `pipeline.steps` and `taxonomy.method` is simply not read.
+| Path | Produces | Meaning |
+| --- | --- | --- |
+| `dada2` | ASVs | Amplicon sequence variants: denoised, exact sequences resolved to single-nucleotide differences |
+| `swarm` | OTUs | Operational taxonomic units: sequences clustered together within a small edit distance |
 
-## How config merging works
+You do not need to delete the unused `dada2`/`swarm` or `databases.<method>` blocks; whatever is not selected by `pipeline.steps` and `taxonomy.method` is simply not read.
 
-Your YAML is merged over the model defaults: any field with a default may be omitted, and nested sections merge recursively.
+## 🧩 How config merging works
 
-> [!IMPORTANT]
-> Lists and scalars are replaced wholesale, not appended. To change one entry of a list such as `pipeline.steps` or `taxonomy.contaminants`, restate the whole list.
+Your YAML is merged over the model defaults: any field with a default may be omitted, and nested sections merge recursively. Lists and scalars are replaced wholesale, not appended. To change one entry of a list such as `pipeline.steps` or `taxonomy.contaminants`, restate the whole list.
 
-## Output tree
+## 📂 Output tree
 
 `pipeline.steps` and `paths.output` determine where results land. The orchestrator creates this tree under `paths.output`:
 
@@ -67,10 +64,19 @@ Your YAML is merged over the model defaults: any field with a default may be omi
 
 For the merged table, `<method>` is the `taxonomy.method` value, except the DADA2 RDP classifier writes `<marker>_dada2RDP.csv` (the others are `<marker>_blast.csv`, `<marker>_ecotag.csv`, `<marker>_decipher.csv`).
 
-> [!NOTE]
-> Two hidden files alongside the outputs record what was run, so any single run can be reconstructed and re-verified. `<output>/.<marker>_state.json` tracks every step's status, duration, error, and output paths, records the `seednap` version that ran the pipeline, and drives `--resume`. `<output>/.<marker>_config.snapshot.yaml` is the effective merged config (your YAML over the defaults) exactly as it was used, written into the output tree rather than relying on the original YAML being unchanged. On `--resume`, a `seednap` version mismatch against the recorded version is logged as a `[WARN]`.
+<details>
+<summary><b>Hidden state files: how a run is reconstructed</b></summary>
 
-## `marker` (required)
+Two hidden files alongside the outputs record what was run, so any single run can be reconstructed and re-verified.
+
+- `<output>/.<marker>_state.json` tracks every step's status, duration, error, and output paths, records the `seednap` version that ran the pipeline, and drives `--resume`.
+- `<output>/.<marker>_config.snapshot.yaml` is the effective merged config (your YAML over the defaults) exactly as it was used, written into the output tree rather than relying on the original YAML being unchanged.
+
+On `--resume`, a `seednap` version mismatch against the recorded version is logged as a `[WARN]`.
+
+</details>
+
+## 🏷️ `marker` (required)
 
 ```yaml
 marker:
@@ -90,7 +96,7 @@ marker:
 
 Primers are validated for IUPAC DNA bases (A C G T R Y M K S W H B V D N) and must be at least 10 bp.
 
-## `paths`
+## 📁 `paths`
 
 ```yaml
 paths:
@@ -101,17 +107,20 @@ paths:
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `raw_data` | path | `data/raw` | Input FASTQ directory (flat per-sample files, or per-library subfolders; see note) |
+| `raw_data` | path | `data/raw` | Input FASTQ directory (flat per-sample files, or per-library subfolders; see below) |
 | `output` | path | `outputs` | Base output directory (see Output tree) |
 | `logs` | path | `logs` | Log files directory |
 
-> [!NOTE]
-> Relative paths are resolved to absolute paths and `~` is expanded. The `output` and `logs` directories are created automatically when the config loads. Reference databases are not set here; each taxonomy method points at its own database under `taxonomy.databases.<method>`.
+Relative paths are resolved to absolute paths and `~` is expanded. The `output` and `logs` directories are created automatically when the config loads. Reference databases are not set here; each taxonomy method points at its own database under `taxonomy.databases.<method>`.
 
-> [!NOTE]
-> **Layout of `raw_data`.** seednap looks for per-sample paired files named `<sample>_R1.fastq.gz` / `<sample>_R2.fastq.gz` (also accepts `.R1`/`.R2` and the `_001` suffix). They can sit directly in `raw_data`, or be organized into per-library / per-run subfolders: discovery scans the top level first and, if nothing is there, searches subdirectories recursively. So already-demultiplexed data kept one folder per sequencing library is processed without flattening it. Sample names must be unique across subfolders; a name that resolves to files in more than one subfolder is rejected as ambiguous rather than guessed.
+<details>
+<summary><b>Layout of <code>raw_data</code>: flat files vs per-library subfolders</b></summary>
 
-## `demultiplex`
+seednap looks for per-sample paired files named `<sample>_R1.fastq.gz` / `<sample>_R2.fastq.gz` (also accepts `.R1`/`.R2` and the `_001` suffix). They can sit directly in `raw_data`, or be organized into per-library / per-run subfolders: discovery scans the top level first and, if nothing is there, searches subdirectories recursively. So already-demultiplexed data kept one folder per sequencing library is processed without flattening it. Sample names must be unique across subfolders; a name that resolves to files in more than one subfolder is rejected as ambiguous rather than guessed.
+
+</details>
+
+## 🔖 `demultiplex`
 
 Demultiplexing runs only if `demultiplex` is listed in `pipeline.steps` (before `trim`). For pre-demultiplexed inputs (one FASTQ pair per sample), omit it; there is no `enabled`/`skip` flag.
 
@@ -141,10 +150,14 @@ The `ligation` protocol splits one multiplexed library FASTQ into per-sample fil
 
 If `metadata` is unset when the step runs, the run raises a `ValueError` naming the fix.
 
-> [!IMPORTANT]
-> The lab's `Corr_tags` files cannot be used as-is. They are headerless and semicolon-delimited in the column order `well;library;sample;project;marker;tagseq`. Convert one to a headed metadata CSV first, mapping `eventID` <- `sample`, `tag_demultiplex` <- `tagseq`, and `library` <- `library`. A missing or misnamed column is reported with the columns it actually found.
+<details>
+<summary><b>Converting the lab's <code>Corr_tags</code> files into a metadata CSV</b></summary>
 
-## `trimming`
+The lab's `Corr_tags` files cannot be used as-is. They are headerless and semicolon-delimited in the column order `well;library;sample;project;marker;tagseq`. Convert one to a headed metadata CSV first, mapping `eventID` <- `sample`, `tag_demultiplex` <- `tagseq`, and `library` <- `library`. A missing or misnamed column is reported with the columns it actually found.
+
+</details>
+
+## ✂️ `trimming`
 
 ```yaml
 trimming:
@@ -163,7 +176,7 @@ trimming:
 | `discard_untrimmed` | bool | `true` | Discard reads with no detected primer |
 | `overlap` | int (>= 1) | `3` | Minimum overlap for primer detection, bp |
 
-## `swarm`
+## 🧬 `swarm`
 
 The OTU feature path. Used only when `swarm` is in `pipeline.steps`. It merges paired reads, removes chimeras (artefactual sequences formed when two real templates fuse during PCR; they create spurious OTUs if not removed), then clusters with SWARM.
 
@@ -195,7 +208,7 @@ swarm:
 | `chimera.method` | "denovo" \| "none" | `denovo` | Chimera detection method |
 | `min_sequence_length` | int | `20` | Min sequence length after merging |
 
-## `dada2`
+## 🧬 `dada2`
 
 The ASV feature path. Used only when `dada2` is in `pipeline.steps`.
 
@@ -232,10 +245,17 @@ dada2:
 | `chimera.method` | "consensus" \| "pooled" \| "none" | `consensus` | Chimera detection method |
 | `pool` | bool | `false` | Pool samples for denoising |
 | `multithread` | bool | `true` | Use multithreading |
-| `per_library` | bool | `false` | Learn a separate error model per sequencing library, then merge and collapse. The sample-to-library grouping comes from the manifest `seq_run_id` (`report.sample_metadata` / `demultiplex.metadata`); when no metadata is configured it is derived automatically from the per-library subfolders of `raw_data`. `false` uses one pooled model. Use for multi-run datasets |
+| `per_library` | bool | `false` | Learn a separate error model per sequencing library, then merge and collapse (see below). `false` uses one pooled model |
 | `collect_metrics` | bool | `true` | Write ASV summary stats to `metrics.json`/`csv` and console |
 
-## `taxonomy` (required)
+<details>
+<summary><b><code>per_library</code>: where the library grouping comes from</b></summary>
+
+`per_library: true` learns a separate error model per sequencing library, then merges and collapses. The sample-to-library grouping comes from the manifest `seq_run_id` (`report.sample_metadata` / `demultiplex.metadata`); when no metadata is configured it is derived automatically from the per-library subfolders of `raw_data`. `false` uses one pooled model. Use for multi-run datasets.
+
+</details>
+
+## 🔬 `taxonomy` (required)
 
 ```yaml
 taxonomy:
@@ -257,8 +277,7 @@ taxonomy:
 
 `contaminants` are matched against the assigned `species` column in the post-processor; matching rows get `is_contaminant_candidate=True`. Rows are never deleted; downstream decides what to do with the flag. Use the underscore-separated CRABS format (for example `Homo_sapiens`). The default is empty, so omitting it flags nothing.
 
-> [!NOTE]
-> The 2025 CRABS reference DBs write the literal string `"NA"` where a rank is unknown. SeeDNAP normalizes `"NA"`/`""`/`"nan"` to a genuine missing rank, so no LCA resolver treats `"NA"` as a taxon; missing ranks surface as `Unassigned`.
+The 2025 CRABS reference DBs write the literal string `"NA"` where a rank is unknown. SeeDNAP normalizes `"NA"`/`""`/`"nan"` to a genuine missing rank, so no LCA resolver treats `"NA"` as a taxon; missing ranks surface as `Unassigned`.
 
 ### `databases.blast`
 
@@ -306,8 +325,16 @@ When a query sequence has several near-equal BLAST hits, SeeDNAP resolves them w
 
 The `threshold_*` values then drive a per-rank cascade: if percent identity falls below the threshold for a rank, that rank and every finer rank are nulled, so the output never shows orphan ranks (a genus call with no supporting species, for example). See [taxonomy-methods.md](taxonomy-methods.md) for the algorithm rationale.
 
-> [!NOTE]
-> `lca_algorithm` selects the resolver. `cascade` (default) is the header-derived resolver and uses `top_bitscore_pct` + `lca_pident_delta` plus the per-rank `threshold_*` values. `collapsed_taxonomy` is the eDNAFlow/OceanOmics percent-identity-window collapse-to-LCA: header-based, offline, tuned by `lca_pid`/`lca_diff`, and it does not apply the `threshold_*` cascade. `fishbase_tiered` is not implemented and raises if selected.
+<details>
+<summary><b>Choosing an <code>lca_algorithm</code> resolver</b></summary>
+
+`lca_algorithm` selects the resolver:
+
+- `cascade` (default) is the header-derived resolver and uses `top_bitscore_pct` + `lca_pident_delta` plus the per-rank `threshold_*` values.
+- `collapsed_taxonomy` is the eDNAFlow/OceanOmics percent-identity-window collapse-to-LCA: header-based, offline, tuned by `lca_pid`/`lca_diff`, and it does not apply the `threshold_*` cascade.
+- `fishbase_tiered` is not implemented and raises if selected.
+
+</details>
 
 ### `databases.dada2`
 
@@ -355,7 +382,7 @@ databases:
 | `threshold` | int (0-100) | `60` | Confidence threshold for assignment |
 | `processors` | int (>= 1) | `8` | CPU cores |
 
-## `export`
+## 📊 `export`
 
 Runs only if `export` is listed in `pipeline.steps` (after `taxonomy`). Writes `<output>/<marker>_<method>_gbif.csv`: a long-format occurrence table in the DarwinCore vocabulary (the standard column terms GBIF, the Global Biodiversity Information Facility, uses for biodiversity records), one row per detected taxon per sample.
 
@@ -376,12 +403,20 @@ export:
 | `darwincore.summarise_pcr_replicates` | bool | `false` | Collapse PCR-replicate suffixes, summing reads per sample |
 | `darwincore.skip_enrichment` | bool | `false` | Skip the NCBI/WoRMS higher-rank enrichment |
 
-The **`darwincore`** step builds the GBIF-ready DarwinCore occurrence file (one row per occurrence with `eventID`, coordinates, `scientificName`, a deterministic `occurrenceID`, `contamination_flag`). List `darwincore` after `export` in `pipeline.steps`; it joins the long-format table to `report.sample_metadata` + `report.project_metadata` (both required, checked at preflight) and, unless `skip_enrichment`, fills higher ranks from NCBI/WoRMS. Output: `<output>/<marker>_<method>_darwincore.csv`. When run in-pipeline, the reference-database (`otu_db`) and chimera-removal (`chimera_check`) provenance are filled automatically from the run config, so they need not be re-entered in the project metadata; a differing project-metadata value is used only as a fallback and the disagreement is logged with a `[WARN]`. It also writes `<output>_dropped.csv`, listing every occurrence the control and non-target filters removed and why (for QA). (The same builder is also available afterwards as the `create-gbif` command, which takes those values from the project CSV.)
+ASV summary stats are collected by the DADA2 step via `dada2.collect_metrics`. There is no separate `metrics` section.
 
-> [!NOTE]
-> ASV summary stats are collected by the DADA2 step via `dada2.collect_metrics`. There is no separate `metrics` section.
+<details>
+<summary><b>The <code>darwincore</code> step: occurrence file, provenance, dropped-rows QA</b></summary>
 
-## `report`
+The `darwincore` step builds the GBIF-ready DarwinCore occurrence file (one row per occurrence with `eventID`, coordinates, `scientificName`, a deterministic `occurrenceID`, `contamination_flag`). List `darwincore` after `export` in `pipeline.steps`; it joins the long-format table to `report.sample_metadata` + `report.project_metadata` (both required, checked at preflight) and, unless `skip_enrichment`, fills higher ranks from NCBI/WoRMS. Output: `<output>/<marker>_<method>_darwincore.csv`.
+
+When run in-pipeline, the reference-database (`otu_db`) and chimera-removal (`chimera_check`) provenance are filled automatically from the run config, so they need not be re-entered in the project metadata; a differing project-metadata value is used only as a fallback and the disagreement is logged with a `[WARN]`. It also writes `<output>_dropped.csv`, listing every occurrence the control and non-target filters removed and why (for QA). (The same builder is also available afterwards as the `create-gbif` command, which takes those values from the project CSV.)
+
+See [gbif-export.md](gbif-export.md) for the full export guide.
+
+</details>
+
+## 📝 `report`
 
 Runs only if `report` is listed in `pipeline.steps`. It always writes the per-step read/sequence tracking table and step summary; `html_report` additionally builds the self-contained HTML report. See [reporting.md](reporting.md).
 
@@ -406,7 +441,7 @@ report:
 
 A per-marker subdirectory is created inside `output_dir`, so `output_dir: /data/reports` for marker `teleo` writes to `/data/reports/teleo/`. `~` is expanded and relative paths are resolved.
 
-## `cleaning`
+## 🧼 `cleaning`
 
 Control decontamination of the abundance table: removing or flagging sequences that turn up in your negative controls (blanks) so they are not reported as real detections. A negative control (blank) is a no-template reaction carried alongside the samples to reveal contamination introduced during extraction or PCR; anything that appears in it is suspect.
 
@@ -421,17 +456,14 @@ cleaning:
 | --- | --- | --- | --- |
 | `mode` | "flag" \| "subtract" | `flag` | `flag` adds a boolean `in_negative_control` column marking control-positive OTUs/ASVs without changing counts; `subtract` zeroes those reads in the associated samples |
 
-Control identity (which columns are negative controls, whether each is an extraction or a PCR blank, and which extraction batch it belongs to) comes from a FAIRe manifest. In a pipeline run that manifest is built from `report.sample_metadata` (the per-sample field metadata CSV).
-
-> [!IMPORTANT]
-> In a pipeline run, the `clean` step needs `report.sample_metadata`. If it is unset, the step is skipped with a `[WARN]` and export uses the uncleaned table. A control column present in the table but absent from the manifest is classified by its name and warned about.
+Control identity (which columns are negative controls, whether each is an extraction or a PCR blank, and which extraction batch it belongs to) comes from a FAIRe manifest. In a pipeline run that manifest is built from `report.sample_metadata` (the per-sample field metadata CSV). If `report.sample_metadata` is unset, the `clean` step is skipped with a `[WARN]` and export uses the uncleaned table. A control column present in the table but absent from the manifest is classified by its name and warned about.
 
 > [!WARNING]
 > `mode: subtract` alters the abundance table, so it is opt-in. An extraction blank (taken through DNA extraction with its batch) cleans only the samples sharing its `extraction_ID`; a PCR blank (added at the amplification step) cleans the whole dataset. `mode: flag` is non-destructive (it only annotates). Both modes write a per-sample report (`reads_before`/`reads_after`, OTUs and reads removed, and the controls that drove each removal).
 
 Cleaning can also be run standalone: `seednap clean ABUNDANCE_CSV FIELD_METADATA OUTPUT --mode flag|subtract`, where `FIELD_METADATA` is the per-sample field metadata CSV.
 
-## `logging`
+## 🔧 `logging`
 
 ```yaml
 logging:
@@ -448,7 +480,7 @@ logging:
 | `file` | bool | `true` | Write logs to file |
 | `console` | bool | `true` | Write logs to console |
 
-## `pipeline`
+## 🚀 `pipeline`
 
 ```yaml
 pipeline:
@@ -468,9 +500,9 @@ pipeline:
 > [!WARNING]
 > The order is validated against these dependencies at load time. An invalid order (for example `taxonomy` before `dada2`) is rejected with a message naming the fix.
 
-## Example configs
+## 📦 Example configs
 
-Complete working examples in `config/markers/`:
+Complete working examples in [config/markers/](../config/markers/):
 
 | File | Marker | Method | Notes |
 | --- | --- | --- | --- |
@@ -481,10 +513,14 @@ Complete working examples in `config/markers/`:
 | `teleo_rhone.yaml` | Teleo 12S fish (Rhone) | BLAST | SWARM path |
 | `minimal.example.yaml` | minimal template | -- | required fields only |
 
-## See also
+## 📖 See also
 
-- [cli-reference.md](cli-reference.md) -- CLI commands and flags
-- [pipeline-steps.md](pipeline-steps.md) -- what each stage does
-- [taxonomy-methods.md](taxonomy-methods.md) -- LCA algorithms and threshold rationale
-- [reporting.md](reporting.md) -- the report step and HTML output
-- [gbif-export.md](gbif-export.md) -- GBIF/DarwinCore export
+| Guide | What's inside |
+| --- | --- |
+| [cli-reference.md](cli-reference.md) | CLI commands and flags |
+| [pipeline-steps.md](pipeline-steps.md) | What each stage does |
+| [taxonomy-methods.md](taxonomy-methods.md) | LCA algorithms and threshold rationale |
+| [reporting.md](reporting.md) | The report step and HTML output |
+| [gbif-export.md](gbif-export.md) | GBIF/DarwinCore export |
+</content>
+</invoke>
