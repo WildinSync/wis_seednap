@@ -8,6 +8,10 @@ GBIF (the Global Biodiversity Information Facility) is the public repository the
 
 Export is a two-stage process: reshape the wide taxonomy table into long format (`format-gbif`), then merge it with sample and project metadata into a full DarwinCore occurrence table (`create-gbif`). The first stage also runs automatically as the pipeline `export` step.
 
+<p align="center">
+  <img src="../media/export-flow.svg" width="100%" alt="export flow: wide taxonomy table to format-gbif to long table to create-gbif (joined with sample and project metadata on eventID) to the DarwinCore occurrence CSV">
+</p>
+
 <details>
 <summary><b>Running export automatically as the pipeline <code>export</code> step</b></summary>
 
@@ -18,6 +22,10 @@ The pipeline runs the same long-format conversion automatically when `export` is
 ## 🔄 Step 1: Format for GBIF (`format-gbif`)
 
 Converts the wide taxonomy table into GBIF long format. A wide taxonomy table has one row per OTU or ASV (an OTU is a cluster of similar sequences; an ASV is a single denoised sequence variant; both stand in for a taxon) and one numeric column per sample holding that sequence's read count. Long format has one row per sample-OTU observation, with a single `nb_reads` count.
+
+<p align="center">
+  <img src="../media/reshape.svg" width="100%" alt="format-gbif reshape: a wide OTU-by-sample table melted into a long table with one row per non-zero observation, eventID = sample and nb_reads = count">
+</p>
 
 ```bash
 seednap format-gbif outputs/teleo_blast.csv -f blast -o outputs/teleo_gbif.csv
