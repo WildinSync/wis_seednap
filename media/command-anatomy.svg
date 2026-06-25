@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 647 162" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
+  <rect x="0.5" y="0.5" width="646" height="161" rx="11" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
+  <path d="M 0 11 a 11 11 0 0 1 11 -11 h 625 a 11 11 0 0 1 11 11 v 31 h -647 z" fill="#161B22"/>
+  <line x1="0" y1="42" x2="647" y2="42" stroke="#30363d" stroke-width="1"/>
+  <circle cx="22" cy="21" r="6" fill="#ff5f56"/><circle cx="42" cy="21" r="6" fill="#febc2e"/><circle cx="62" cy="21" r="6" fill="#27c93f"/>
+  <text x="323" y="25" text-anchor="middle" font-size="12.5" fill="#7d8590" letter-spacing="0.5">anatomy of a command</text>
+  <text x="86.6" y="86" text-anchor="middle" font-size="15" font-weight="bold" fill="#e6edf3">seednap</text>
+  <path d="M 51.0 93 L 51.0 98 L 122.2 98 L 122.2 93 M 86.6 98 L 86.6 104" stroke="#e6edf3" stroke-width="1.3" fill="none" opacity="0.8"/>
+  <text x="86.6" y="122" text-anchor="middle" font-size="11.5" fill="#adbac7">program</text>
+  <text x="190.4" y="86" text-anchor="middle" font-size="15" font-weight="bold" fill="#00C853">-v</text>
+  <path d="M 178.8 93 L 178.8 98 L 202.0 98 L 202.0 93 M 190.4 98 L 190.4 104" stroke="#00C853" stroke-width="1.3" fill="none" opacity="0.8"/>
+  <text x="190.4" y="122" text-anchor="middle" font-size="11.5" fill="#adbac7">global option</text>
+  <text x="318.2" y="86" text-anchor="middle" font-size="15" font-weight="bold" fill="#7ee787">run-pipeline</text>
+  <path d="M 258.6 93 L 258.6 98 L 377.8 98 L 377.8 93 M 318.2 98 L 318.2 104" stroke="#7ee787" stroke-width="1.3" fill="none" opacity="0.8"/>
+  <text x="318.2" y="122" text-anchor="middle" font-size="11.5" fill="#adbac7">command</text>
+  <text x="454.6" y="86" text-anchor="middle" font-size="15" font-weight="bold" fill="#e3b341">config.yaml</text>
+  <path d="M 399.8 93 L 399.8 98 L 509.4 98 L 509.4 93 M 454.6 98 L 454.6 104" stroke="#e3b341" stroke-width="1.3" fill="none" opacity="0.8"/>
+  <text x="454.6" y="122" text-anchor="middle" font-size="11.5" fill="#adbac7">argument</text>
+  <text x="571.8" y="86" text-anchor="middle" font-size="15" font-weight="bold" fill="#79c0ff">--resume</text>
+  <path d="M 531.4 93 L 531.4 98 L 612.2 98 L 612.2 93 M 571.8 98 L 571.8 104" stroke="#79c0ff" stroke-width="1.3" fill="none" opacity="0.8"/>
+  <text x="571.8" y="122" text-anchor="middle" font-size="11.5" fill="#adbac7">option</text>
+  <text x="40" y="152" font-size="11.5" fill="#6e7681">global options (-v / -q) go BEFORE the command; the argument and --options come after</text>
+</svg>

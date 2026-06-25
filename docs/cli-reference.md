@@ -8,6 +8,18 @@ SeeDNAP exposes one command group with several subcommands. `run-pipeline` runs 
 
 A few terms recur below. An **ASV** (amplicon sequence variant) is an exact denoised sequence produced by DADA2; an **OTU** (operational taxonomic unit) is a cluster of similar sequences produced by SWARM. Both are rows in the final abundance table (one feature per row, one sample per column). The two are alternative, mutually exclusive feature paths.
 
+The full command surface, grouped by purpose:
+
+<p align="center">
+  <img src="../media/cli.svg" width="100%" alt="seednap commands grouped by purpose: run, individual stages, GBIF export, prepare data, inspect a run">
+</p>
+
+How a command reads, global options before the command, the argument and `--options` after:
+
+<p align="center">
+  <img src="../media/command-anatomy.svg" width="100%" alt="anatomy of a seednap command: program, global option, command, argument, option">
+</p>
+
 ## 📂 Where commands write
 
 `run-pipeline` writes under the canonical output tree rooted at `paths.output` (default `outputs/`):
