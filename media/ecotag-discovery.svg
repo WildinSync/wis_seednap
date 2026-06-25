@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 388" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
+  <rect x="0.5" y="0.5" width="859" height="387" rx="12" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
+  <text x="24" y="28" font-size="12.5" fill="#7d8590" letter-spacing="1">OBITools binary discovery (needs ecotag + obiannotate + obitab)</text>
+  <rect x="40" y="52" width="380" height="40" rx="8" fill="#161B22" stroke="#30363d" stroke-width="1.6"/>
+  <text x="230" y="72" text-anchor="middle" font-size="13" font-weight="bold" fill="#e6edf3">find OBITools bin</text>
+  <line x1="230" y1="92" x2="230" y2="116" stroke="#6e7681" stroke-width="1.6"/><path d="M 225 116 L 235 116 L 230 124 z" fill="#6e7681"/>
+  <text x="240" y="111" font-size="10.5" fill="#6e7681">no</text>
+  <rect x="40" y="124" width="380" height="44" rx="8" fill="#161B22" stroke="#00C853" stroke-width="1.6"/>
+  <text x="230" y="146" text-anchor="middle" font-size="12.5"  fill="#e6edf3">1   all three tools on PATH?</text>
+  <line x1="420" y1="146" x2="532" y2="146" stroke="#3fb950" stroke-width="1.6"/><path d="M 532 141 L 540 146 L 532 151 z" fill="#3fb950"/>
+  <text x="480" y="139" text-anchor="middle" font-size="10.5" fill="#7ee787">yes</text>
+  <rect x="540" y="127" width="290" height="38" rx="8" fill="#0a6b32" stroke="#00C853" stroke-width="1.6"/>
+  <text x="685" y="146" text-anchor="middle" font-size="11.5"  fill="#7ee787">use the first PATH directory</text>
+  <line x1="230" y1="168" x2="230" y2="188" stroke="#6e7681" stroke-width="1.6"/><path d="M 225 188 L 235 188 L 230 196 z" fill="#6e7681"/>
+  <text x="240" y="185" font-size="10.5" fill="#6e7681">no</text>
+  <rect x="40" y="196" width="380" height="44" rx="8" fill="#161B22" stroke="#00C853" stroke-width="1.6"/>
+  <text x="230" y="218" text-anchor="middle" font-size="12.5"  fill="#e6edf3">2   $SEEDNAP_OBITOOLS_BIN valid?</text>
+  <line x1="420" y1="218" x2="532" y2="218" stroke="#3fb950" stroke-width="1.6"/><path d="M 532 213 L 540 218 L 532 223 z" fill="#3fb950"/>
+  <text x="480" y="211" text-anchor="middle" font-size="10.5" fill="#7ee787">yes</text>
+  <rect x="540" y="199" width="290" height="38" rx="8" fill="#0a6b32" stroke="#00C853" stroke-width="1.6"/>
+  <text x="685" y="218" text-anchor="middle" font-size="11.5"  fill="#7ee787">use $SEEDNAP_OBITOOLS_BIN</text>
+  <line x1="230" y1="240" x2="230" y2="260" stroke="#6e7681" stroke-width="1.6"/><path d="M 225 260 L 235 260 L 230 268 z" fill="#6e7681"/>
+  <text x="240" y="257" font-size="10.5" fill="#6e7681">no</text>
+  <rect x="40" y="268" width="380" height="44" rx="8" fill="#161B22" stroke="#00C853" stroke-width="1.6"/>
+  <text x="230" y="290" text-anchor="middle" font-size="12.5"  fill="#e6edf3">3   a well-known conda env?</text>
+  <line x1="420" y1="290" x2="532" y2="290" stroke="#3fb950" stroke-width="1.6"/><path d="M 532 285 L 540 290 L 532 295 z" fill="#3fb950"/>
+  <text x="480" y="283" text-anchor="middle" font-size="10.5" fill="#7ee787">yes</text>
+  <rect x="540" y="271" width="290" height="38" rx="8" fill="#0a6b32" stroke="#00C853" stroke-width="1.6"/>
+  <text x="685" y="290" text-anchor="middle" font-size="11.5"  fill="#7ee787">use that env's bin directory</text>
+  <line x1="230" y1="312" x2="230" y2="324" stroke="#6e7681" stroke-width="1.6"/><path d="M 225 324 L 235 324 L 230 332 z" fill="#6e7681"/>
+  <text x="240" y="325" font-size="10.5" fill="#6e7681">no</text>
+  <rect x="40" y="332" width="500" height="40" rx="8" fill="#0D1117" stroke="#d29922" stroke-width="1.6"/>
+  <text x="290" y="352" text-anchor="middle" font-size="11.5"  fill="#d29922">EcotagError: none found (prints install help + probed paths)</text>
+</svg>

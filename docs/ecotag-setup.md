@@ -14,6 +14,10 @@ ecotag only runs when a marker config sets `taxonomy.method: "ecotag"` **and** l
 
 The runner auto-discovers the OBITools bin directory by probing these sources in order, requiring all three of `ecotag`, `obiannotate`, and `obitab`:
 
+<p align="center">
+  <img src="../media/ecotag-discovery.svg" width="100%" alt="OBITools discovery flowchart: try PATH, then SEEDNAP_OBITOOLS_BIN, then well-known conda env locations; the first source with all three tools wins, otherwise EcotagError">
+</p>
+
 | Order | Source | When used |
 | :--: | --- | --- |
 | 1 | `PATH` | All three tools resolve on PATH (e.g. after `conda activate obitools`). The directory of the first tool is used. |
