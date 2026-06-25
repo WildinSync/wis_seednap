@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 168" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
+  <rect x="0.5" y="0.5" width="859" height="167" rx="11" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
+  <path d="M 0 11 a 11 11 0 0 1 11 -11 h 838 a 11 11 0 0 1 11 11 v 31 h -860 z" fill="#161B22"/>
+  <line x1="0" y1="42" x2="860" y2="42" stroke="#30363d" stroke-width="1"/>
+  <path d="M 22 16 h 7 l 2 3 h 9 a 2 2 0 0 1 2 2 v 6 a 2 2 0 0 1 -2 2 h -18 a 2 2 0 0 1 -2 -2 v -9 a 2 2 0 0 1 2 -2 z" fill="#00C853"/>
+  <text x="52" y="25" font-size="12.5" fill="#7d8590" letter-spacing="0.5">04_report/<marker>/</text>
+<text x="26" y="72" font-size="13.5" font-weight="bold" fill="#7ee787">04_report/&lt;marker&gt;/</text>
+<text x="26" y="97" font-size="13.5" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">read_tracking.csv / .txt</tspan></text>
+<text x="430" y="97" font-size="12.5" fill="#6e7681">reads &amp; sequences surviving each step, per sample</text>
+<text x="26" y="120" font-size="13.5" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">step_summary.csv</tspan></text>
+<text x="430" y="120" font-size="12.5" fill="#6e7681">run totals: reads + ASVs/OTUs after each step</text>
+<text x="26" y="143" font-size="13.5" xml:space="preserve"><tspan fill="#484f58">└── </tspan><tspan fill="#e6edf3">report.html</tspan></text>
+<text x="430" y="143" font-size="12.5" fill="#6e7681">self-contained visual report (no JS, no CDN)</text>
+</svg>

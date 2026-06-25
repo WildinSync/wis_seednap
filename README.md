@@ -189,19 +189,17 @@ At the start of each run the orchestrator writes the full effective config (your
 
 ## 📊 Reporting
 
-The `report` step is on by default, so every run reports on itself. The headline is read tracking: how many reads and sequences survive each step, per sample, so a failed sample is obvious at a glance.
+The `report` step is on by default, so every run reports on itself. The headline is read tracking: how many reads and sequences survive each step, per sample, so a failed sample (or a contaminated blank) is obvious at a glance.
 
 <p align="center">
-  <img src="media/reporting.svg" width="100%" alt="read tracking: reads surviving each step">
+  <img src="media/reporting.svg" width="100%" alt="read_tracking.csv preview with a low-retention row flagged">
 </p>
 
-Each run writes these to `<paths.output>/04_report/<marker>/`:
+Each run writes three files under `<paths.output>/04_report/<marker>/`:
 
-```
-read_tracking.csv / .txt    reads & sequences surviving each step, per sample
-step_summary.csv            run totals: reads + ASVs/OTUs after each step
-report.html                 self-contained visual report (no JS, no CDN)
-```
+<p align="center">
+  <img src="media/report-tree.svg" width="100%" alt="report folder: read_tracking, step_summary, report.html">
+</p>
 
 Read tracking records reads in/out of every step plus `pct_retained`, and raises data-loss warnings against `report.warn_below_retention_pct` (default 30) and `report.warn_step_loss_pct` (default 70). A count that cannot be measured is written as `NA` with a `[WARN]`, never a misleading `0`. Regenerate the report from an existing run any time (never re-runs the pipeline):
 
