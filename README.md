@@ -198,7 +198,7 @@ The `report` step is on by default, so every run reports on itself. The headline
 Each run writes three files under `<paths.output>/04_report/<marker>/`:
 
 <p align="center">
-  <img src="media/report-tree.svg" width="100%" alt="report folder: read_tracking, step_summary, report.html">
+  <img src="media/report-files.svg" width="100%" alt="report folder: read_tracking, step_summary, report.html">
 </p>
 
 Read tracking records reads in/out of every step plus `pct_retained`, and raises data-loss warnings against `report.warn_below_retention_pct` (default 30) and `report.warn_step_loss_pct` (default 70). A count that cannot be measured is written as `NA` with a `[WARN]`, never a misleading `0`. Regenerate the report from an existing run any time (never re-runs the pipeline):
