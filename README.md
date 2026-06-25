@@ -38,13 +38,13 @@ flowchart LR
     raw[Raw FASTQ<br/>R1 / R2]:::io
     trim[Trim<br/>Cutadapt 2-pass]:::pass
 
-    subgraph s2 [STEP 2 · Cluster (pick one)]
+    subgraph s2 [STEP 2 · Cluster, pick one]
         direction TB
         swarm[SWARM<br/>VSEARCH + SWARM]:::reco
         dada2[DADA2<br/>R / Bioconductor]:::alt
     end
 
-    subgraph s3 [STEP 3 · Taxonomy (pick one)]
+    subgraph s3 [STEP 3 · Taxonomy, pick one]
         direction TB
         blast[BLAST + LCA<br/>default]:::reco
         rdp[DADA2 RDP]:::alt
