@@ -27,6 +27,10 @@ The `<method>` token in output filenames is the `taxonomy.method` value, with on
 
 **Lowest Common Ancestor (LCA)** is the recurring idea behind every method here. When a sequence matches several references that disagree on, say, which species but agree on the genus, the assignment is reported only as deep as the references actually agree: the disagreed rank and all finer ranks are set to null. This avoids guessing a single species when the data only support a genus, and it is why a finer rank can be blank while a coarser one is filled.
 
+<p align="center">
+  <img src="../media/lca.svg" width="100%" alt="LCA example: three Salmo species hits disagree on species but share the genus, so the assignment backs off to genus Salmo and species is nulled">
+</p>
+
 ## 🔬 BLAST + LCA (recommended)
 
 The default method. `makeblastdb` builds a nucleotide database from the reference FASTA (if not already present), then each query is searched with `blastn`, taxonomy is parsed from the reference headers, and a per-rank cascade plus a top-bitscore LCA decide how deep each call is reported.
@@ -74,6 +78,10 @@ Each of the five ranks class through species has a percent-identity threshold. W
 | `threshold_family` | 90.0 |
 | `threshold_order` | 80.0 |
 | `threshold_class` | 70.0 |
+
+<p align="center">
+  <img src="../media/cascade.svg" width="100%" alt="cascade thresholds ruler: a hit at 94% identity reaches family but is nulled at genus and species">
+</p>
 
 Each is also settable on the `blast` and `assign-taxonomy` CLI commands via the matching `--threshold-<rank>` flag, with the same default.
 

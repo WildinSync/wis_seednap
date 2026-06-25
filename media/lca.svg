@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 340" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
+  <rect x="0.5" y="0.5" width="859" height="339" rx="12" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
+  <text x="24" y="28" font-size="12.5" fill="#7d8590" letter-spacing="1">lowest common ancestor (LCA)</text>
+  <rect x="345" y="62" width="170" height="40" rx="9" fill="#161B22" stroke="#30363d" stroke-width="1.6"/>
+  <text x="430" y="82" text-anchor="middle" font-size="13.5"  fill="#e6edf3">Salmonidae</text>
+  <text x="430" y="98" text-anchor="middle" font-size="11" fill="#7d8590">family</text>
+  <rect x="335" y="140" width="190" height="46" rx="9" fill="#0a6b32" stroke="#00C853" stroke-width="1.6"/>
+  <text x="430" y="160" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#7ee787">Salmo</text>
+  <text x="430" y="176" text-anchor="middle" font-size="11" fill="#9be9b4">genus</text>
+  <rect x="530" y="150" width="58" height="22" rx="11" fill="#00C853"/><text x="559" y="165" text-anchor="middle" font-size="11" font-weight="bold" fill="#0D1117">LCA</text>
+  <rect x="70" y="238" width="180" height="46" rx="9" fill="#161B22" stroke="#2ea043" stroke-width="1.6"/>
+  <text x="160" y="258" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#e6edf3">S. trutta</text>
+  <text x="160" y="274" text-anchor="middle" font-size="11" fill="#e3b341">98.8%  hit</text>
+  <rect x="340" y="238" width="180" height="46" rx="9" fill="#161B22" stroke="#2ea043" stroke-width="1.6"/>
+  <text x="430" y="258" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#e6edf3">S. salar</text>
+  <text x="430" y="274" text-anchor="middle" font-size="11" fill="#e3b341">98.5%  hit</text>
+  <rect x="610" y="238" width="180" height="46" rx="9" fill="#161B22" stroke="#2ea043" stroke-width="1.6"/>
+  <text x="700" y="258" text-anchor="middle" font-size="13.5" font-weight="bold" fill="#e6edf3">S. marmoratus</text>
+  <text x="700" y="274" text-anchor="middle" font-size="11" fill="#e3b341">98.1%  hit</text>
+  <line x1="430" y1="102" x2="430" y2="140" stroke="#3fb950" stroke-width="1.6"/>
+  <line x1="430" y1="186" x2="160" y2="238" stroke="#3fb950" stroke-width="1.6"/>
+  <line x1="430" y1="186" x2="430" y2="238" stroke="#3fb950" stroke-width="1.6"/>
+  <line x1="430" y1="186" x2="700" y2="238" stroke="#3fb950" stroke-width="1.6"/>
+  <text x="24" y="316" font-size="11.5" fill="#6e7681">three top hits disagree on species but share the genus, so the call backs off to genus Salmo; species is set to null</text>
+</svg>

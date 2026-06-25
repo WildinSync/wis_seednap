@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 250" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
+  <rect x="0.5" y="0.5" width="859" height="249" rx="12" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
+  <text x="24" y="28" font-size="12.5" fill="#7d8590" letter-spacing="1">cascade thresholds: a hit's % identity sets the deepest rank</text>
+  <rect x="90" y="124" width="568" height="52" fill="#0a6b32" fill-opacity="0.16"/>
+  <rect x="658" y="124" width="142" height="52" fill="#d29922" fill-opacity="0.12"/>
+  <line x1="90" y1="150" x2="800" y2="150" stroke="#484f58" stroke-width="1.5"/>
+  <line x1="90" y1="143" x2="90" y2="157" stroke="#3fb950" stroke-width="2"/>
+  <text x="90" y="136" text-anchor="middle" font-size="12" font-weight="bold" fill="#3fb950">class</text>
+  <text x="90" y="174" text-anchor="middle" font-size="11" fill="#8b949e">70%</text>
+  <line x1="327" y1="143" x2="327" y2="157" stroke="#3fb950" stroke-width="2"/>
+  <text x="327" y="136" text-anchor="middle" font-size="12" font-weight="bold" fill="#3fb950">order</text>
+  <text x="327" y="174" text-anchor="middle" font-size="11" fill="#8b949e">80%</text>
+  <line x1="563" y1="143" x2="563" y2="157" stroke="#3fb950" stroke-width="2"/>
+  <text x="563" y="136" text-anchor="middle" font-size="12" font-weight="bold" fill="#3fb950">family</text>
+  <text x="563" y="174" text-anchor="middle" font-size="11" fill="#8b949e">90%</text>
+  <line x1="705" y1="143" x2="705" y2="157" stroke="#d29922" stroke-width="2"/>
+  <text x="705" y="136" text-anchor="middle" font-size="12" font-weight="bold" fill="#d29922">genus</text>
+  <text x="705" y="174" text-anchor="middle" font-size="11" fill="#8b949e">96%</text>
+  <line x1="776" y1="143" x2="776" y2="157" stroke="#d29922" stroke-width="2"/>
+  <text x="776" y="136" text-anchor="middle" font-size="12" font-weight="bold" fill="#d29922">species</text>
+  <text x="776" y="174" text-anchor="middle" font-size="11" fill="#8b949e">99%</text>
+  <line x1="658" y1="110" x2="658" y2="184" stroke="#e6edf3" stroke-width="1.5" stroke-dasharray="4 3"/>
+  <text x="658" y="104" text-anchor="middle" font-size="12" font-weight="bold" fill="#e6edf3">this hit: 94%</text>
+  <text x="374" y="202" text-anchor="middle" font-size="11.5" fill="#3fb950">assigned: kingdom to family</text>
+  <text x="729" y="202" text-anchor="middle" font-size="11.5" fill="#d29922">genus, species to null</text>
+  <text x="24" y="234" font-size="11.5" fill="#6e7681">each rank has a % identity threshold; a hit is called only as deep as its identity clears (here 94% reaches family, not genus)</text>
+</svg>
