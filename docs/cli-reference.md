@@ -24,17 +24,9 @@ How a command reads, global options before the command, the argument and `--opti
 
 `run-pipeline` writes under the canonical output tree rooted at `paths.output` (default `outputs/`):
 
-| Path | Contents |
-|---|---|
-| `<output>/01_trim/<marker>/` | Trimmed reads (and `demux/` for the demultiplex step) |
-| `<output>/02_dada2/<marker>/` or `<output>/02_swarm/<marker>/` | ASV or OTU tables |
-| `<output>/03_taxo/<marker>/` | Taxonomy intermediates (BLAST TSV, etc.) |
-| `<output>/04_report/<marker>/` | `read_tracking.{csv,txt}`, `step_summary.csv`, `report.html` |
-| `<output>/<marker>_<method>.csv` | Final merged taxonomy + abundance table |
-| `<output>/<marker>_<method>_cleaned.csv` | Cleaned table, written only when the `clean` step runs |
-| `<output>/<marker>_<method>_gbif.csv` | Final GBIF long-format table |
-| `<output>/.<marker>_state.json` | Pipeline state JSON (drives `--resume`) |
-| `<output>/.<marker>_config.snapshot.yaml` | Effective merged config recorded for the run |
+<p align="center">
+  <img src="../media/output-tree.svg" width="100%" alt="run-pipeline output tree: per-step folders (01_trim, 02_swarm/02_dada2, 03_taxo, 04_report) and the final tables under paths.output">
+</p>
 
 `<method>` is the `taxonomy.method` token, except the DADA2 taxonomy table uses `dada2RDP` (so `<marker>_dada2RDP.csv`; the GBIF and cleaned files still use the plain `dada2` token). The standalone commands write where you point `-o`/`--output`; the example paths below assume the default tree.
 
