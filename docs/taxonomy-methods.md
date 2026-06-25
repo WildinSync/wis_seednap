@@ -25,7 +25,7 @@ All four methods produce the same output schema: identical column names, identic
 
 The `<method>` token in output filenames is the `taxonomy.method` value, with one exception: the DADA2 path writes `<marker>_dada2RDP.csv`, not `<marker>_dada2.csv`. The other methods use `blast`, `decipher`, or `ecotag` directly.
 
-**Lowest Common Ancestor (LCA)** is the recurring idea behind every method here. When a sequence matches several references that disagree on, say, which species but agree on the genus, the assignment is reported only as deep as the references actually agree: the disagreed rank and all finer ranks are set to null. This avoids guessing a single species when the data only support a genus, and it is why a finer rank can be blank while a coarser one is filled.
+**Lowest Common Ancestor (LCA)** is the recurring idea behind every method here: when a sequence's references agree only down to a given rank, the call stops there and every finer rank is set to null. That is why a coarser rank can be filled while a finer one is blank.
 
 <p align="center">
   <img src="../media/lca.svg" width="100%" alt="LCA example: three Salmo species hits disagree on species but share the genus, so the assignment backs off to genus Salmo and species is nulled">
@@ -93,6 +93,32 @@ Each is also settable on the `blast` and `assign-taxonomy` CLI commands via the 
 
 When an OTU has several good hits, the resolver decides how deep to call it. It pools all hits whose *bitscore* (BLAST's alignment-quality score; higher is a better match) is within `top_bitscore_pct` (default 10 percent) of the best hit's bitscore, rather than requiring exact ties, which are brittle when references are near-duplicates. An in-band identity floor `lca_pident_delta` (default 1.0 percent-identity points below the best in the pool) keeps a single near-identity off-target hit from dragging the whole pool down. Ranks on which the pooled hits disagree are nulled (this is the LCA step). Setting `top_bitscore_pct: 0` reverts to exact-tie behavior.
 
+### Alternative LCA resolver: collapsed-taxonomy (eDNAFlow / OceanOmics)
+
+`lca_algorithm` selects the resolver. The default `cascade` is the per-rank threshold plus top-bitscore steps above. The alternative `collapsed_taxonomy` is the percent-identity-window collapse used by eDNAFlow and OceanOmics:
+
+1. Discard every hit below `lca_pid` (default 90.0), a hard percent-identity floor.
+2. Among survivors, keep all hits within `lca_diff` (default 1.0) identity points of the best (the identity window).
+3. Collapse the windowed lineages to their LCA: ranks they disagree on, and every finer rank, are nulled.
+
+| | `cascade` (default) | `collapsed_taxonomy` |
+|---|---|---|
+| Identity controls | per-rank `threshold_*` (species 99 / genus 96 / family 90 / order 80 / class 70) | `lca_pid` floor + `lca_diff` window; `threshold_*` ignored |
+| Hit pooling | `top_bitscore_pct` band + `lca_pident_delta` | `lca_diff` identity window |
+| Low identity | nulls below per-rank thresholds | more permissive: a 90-96% hit can still resolve to its windowed LCA |
+| Disagreement | resolved by per-rank threshold | more conservative: any disagreement in the window collapses to the LCA |
+
+Both resolvers are header-based (lineage from the CRABS FASTA headers, no NCBI taxids or taxdump). `lca_algorithm: fishbase_tiered` is accepted by the schema but not implemented; selecting it raises `NotImplementedError` at run time.
+
+```yaml
+taxonomy:
+  databases:
+    blast:
+      lca_algorithm: "collapsed_taxonomy"   # (default: "cascade")
+      lca_pid: 90.0                         # (default: 90.0) hard %identity floor
+      lca_diff: 1.0                         # (default: 1.0) identity-window width
+```
+
 ### Output merging and contamination flagging
 
 Taxonomy is **left-joined** onto the OTU/ASV abundance table so that OTUs without any BLAST hit surface as `Unassigned` rows rather than being silently dropped.
@@ -147,42 +173,6 @@ taxonomy:
 ```
 
 Only the `databases.<method>` block for the selected method is read; the others are ignored. You do not need to fill in `databases.dada2` when `method: "blast"`.
-
-<details>
-<summary><b>Alternative LCA resolver: collapsed-taxonomy (eDNAFlow/OceanOmics)</b></summary>
-
-`lca_algorithm` selects the LCA resolver. The default is `cascade` (the per-rank threshold and top-bitscore steps above). An alternative is `collapsed_taxonomy`, the percent-identity-window collapse used by eDNAFlow and OceanOmics.
-
-`collapsed_taxonomy` works as follows:
-
-1. Discard every hit below `lca_pid` (default 90.0), a hard percent-identity floor.
-2. Among survivors, take the best percent identity and keep all hits within `lca_diff` (default 1.0) identity points of it (the "identity window").
-3. Collapse the windowed lineages to their Lowest Common Ancestor: ranks on which they disagree are nulled, and every finer rank cascades to null.
-
-| | `cascade` (default) | `collapsed_taxonomy` |
-|---|---|---|
-| Identity controls | Per-rank `threshold_*` (species 99 / genus 96 / family 90 / order 80 / class 70) | `lca_pid` floor + `lca_diff` window only; `threshold_*` ignored |
-| Hit pooling | `top_bitscore_pct` band + `lca_pident_delta` | `lca_diff` identity window |
-| Low identity | Nulls below per-rank thresholds | More permissive: a 90-96% hit can still resolve to its windowed LCA |
-| Disagreement | Resolved by per-rank threshold | More conservative: any disagreement in the window collapses to the LCA |
-| Lineage source | Header-based, offline | Header-based, offline |
-
-Both resolvers are **header-based**: the lineage comes from the CRABS reference FASTA headers, needing no NCBI taxids and no `taxdump`. Query coverage is enforced the same way for both, at the `blastn` step via `qcov_hsp_perc`.
-
-`lca_algorithm: fishbase_tiered` is accepted by the schema but not implemented; selecting it raises `NotImplementedError` at run time.
-
-```yaml
-taxonomy:
-  method: "blast"
-  databases:
-    blast:
-      fasta: "/path/to/reference.fasta"    # REQUIRED
-      lca_algorithm: "collapsed_taxonomy"   # (default: "cascade")
-      lca_pid: 90.0                         # (default: 90.0) hard %identity floor
-      lca_diff: 1.0                         # (default: 1.0) identity-window width
-```
-
-</details>
 
 ## ⚙️ DADA2 RDP classifier
 
