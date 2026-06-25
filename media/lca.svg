@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 340" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
-  <rect x="0.5" y="0.5" width="859" height="339" rx="12" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 300" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
+  <rect x="0.5" y="0.5" width="859" height="299" rx="12" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
   <text x="24" y="28" font-size="12.5" fill="#7d8590" letter-spacing="1">lowest common ancestor (LCA)</text>
   <rect x="345" y="62" width="170" height="40" rx="9" fill="#161B22" stroke="#30363d" stroke-width="1.6"/>
   <text x="430" y="82" text-anchor="middle" font-size="13.5"  fill="#e6edf3">Salmonidae</text>
@@ -21,5 +21,4 @@
   <line x1="430" y1="186" x2="160" y2="238" stroke="#3fb950" stroke-width="1.6"/>
   <line x1="430" y1="186" x2="430" y2="238" stroke="#3fb950" stroke-width="1.6"/>
   <line x1="430" y1="186" x2="700" y2="238" stroke="#3fb950" stroke-width="1.6"/>
-  <text x="24" y="316" font-size="11.5" fill="#6e7681">three top hits disagree on species but share the genus, so the call backs off to genus Salmo; species is set to null</text>
 </svg>

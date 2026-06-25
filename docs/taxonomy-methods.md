@@ -30,6 +30,7 @@ The `<method>` token in output filenames is the `taxonomy.method` value, with on
 <p align="center">
   <img src="../media/lca.svg" width="100%" alt="LCA example: three Salmo species hits disagree on species but share the genus, so the assignment backs off to genus Salmo and species is nulled">
 </p>
+<p align="center"><em>Three top hits disagree on species but share the genus, so the call backs off to genus <code>Salmo</code> and species is set to null.</em></p>
 
 ## 🔬 BLAST + LCA (recommended)
 
@@ -82,6 +83,7 @@ Each of the five ranks class through species has a percent-identity threshold. W
 <p align="center">
   <img src="../media/cascade.svg" width="100%" alt="cascade thresholds ruler: a hit at 94% identity reaches family but is nulled at genus and species">
 </p>
+<p align="center"><em>Each rank has a % identity threshold; a hit is called only as deep as its identity clears. Here 94% reaches family, but genus (96%) and species (99%) are nulled.</em></p>
 
 Each is also settable on the `blast` and `assign-taxonomy` CLI commands via the matching `--threshold-<rank>` flag, with the same default.
 
