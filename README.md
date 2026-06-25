@@ -162,28 +162,11 @@ pipeline:
 
 ## ⌨️ CLI commands
 
-| Command | Description |
-|---|---|
-| `run-pipeline CONFIG` | Run the full pipeline from a YAML config |
-| `init` | Generate an example config file |
-| `validate CONFIG` | Schema check **+ preflight** (fails if referenced files / databases are missing) |
-| `trim INPUT_DIR` | Primer trimming with Cutadapt |
-| `swarm MARKER READS_DIR` | SWARM OTU clustering |
-| `dada2 MARKER READS_DIR` | DADA2 ASV processing |
-| `blast QUERY REF COUNTS` | BLAST taxonomic assignment with LCA |
-| `assign-taxonomy METHOD MARKER QUERY COUNTS` | Generic taxonomy (blast / dada2 / decipher / ecotag) |
-| `format-gbif INPUT` | Convert results to GBIF long format |
-| `create-gbif TAXO SAMPLE_META PROJECT_META OUTPUT` | Build the DarwinCore occurrence CSV |
-| `wis-metadata --marker M --output-dir DIR …` | Generate the export's metadata CSVs from the WIS database <sub>(needs `pip install 'seednap[wis]'`)</sub> |
-| `demultiplex READS LIB META` | Demultiplex ligation-based libraries |
-| `manifest FIELD_META` | Build a canonical FAIRe sample manifest from lab CSVs |
-| `clean ABUNDANCE FIELD_META OUTPUT` | Decontaminate an abundance table against its controls |
-| `report MARKER` | Build the read-tracking report (`--html` for the visual report) |
-| `monitor MARKER` | Summarise a run from its state JSON |
-| `explain [CODE]` | Explain a seednap error code (no arg → list all) |
-| `version` | Print the installed version |
+<p align="center">
+  <img src="media/cli.svg" width="100%" alt="seednap CLI commands">
+</p>
 
-Run `seednap <command> --help` for full options.
+Run `seednap <command> --help` for full options. Every command, with all of its arguments and flags, is documented in **[docs/cli-reference.md](docs/cli-reference.md)**.
 
 <details>
 <summary><b>Metadata-join &amp; preflight notes</b></summary>
