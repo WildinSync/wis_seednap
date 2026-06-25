@@ -54,6 +54,12 @@ docs = [
     "mkdocs-material>=9.0",
     "mkdocstrings[python]>=0.22",
 ]
+# WIS database bridge (`seednap wis-metadata`): optional so the core pipeline stays
+# dependency-light. psycopg2-binary ships its own libpq, easing install on the server.
+wis = [
+    "sqlalchemy>=2.0",
+    "psycopg2-binary>=2.9",
+]
 
 [project.scripts]
 seednap = "seednap.cli:main"
@@ -153,5 +159,7 @@ module = [
     "Bio.*",
     "pandas.*",
     "dotenv.*",
+    "sqlalchemy.*",
+    "psycopg2.*",
 ]
 ignore_missing_imports = true

@@ -247,6 +247,59 @@ are optional at load time.
 > An `eventID` that looks control-like but cannot be classified is kept and
 > reported with a `[WARN]` rather than silently dropped.
 
+## Sourcing metadata from the WIS database
+
+The two metadata CSVs above don't have to be hand-written. When your samples are registered in
+the **WIS database** (the normalized PostgreSQL/PostGIS schema built by `wis_database_creator`),
+`seednap wis-metadata` reads the per-sample field metadata straight from the database and writes
+the two CSVs the export consumes:
+
+```bash
+pip install 'seednap[wis]'   # one-time: adds SQLAlchemy + psycopg2 (optional, not in the core install)
+
+seednap wis-metadata \
+  --database-url postgresql://user:pass@host:5432/wis \
+  --marker teleo \
+  --monitoring fw_ch_rechy \
+  --recorded-by "ELE Lab" \
+  --identification-remarks "BLAST + LCA" \
+  --identification-references "10.1038/nmeth.3869" \
+  --output-dir metadata/
+```
+
+This writes `metadata/teleo_sample_metadata.csv` and `metadata/teleo_project_metadata.csv`; point
+`report.sample_metadata` / `report.project_metadata` (or the `create-gbif` arguments) at them.
+
+What it maps, from the WIS schema to the export contract:
+
+| Export field | WIS source |
+|---|---|
+| `eventID` | `sample_metadata.sample_id` (default) or `material_sample_id` (`--event-id-field`) |
+| `eventDate` | `sample_metadata.event_date`, formatted `yyyy.mm.dd` |
+| `decimalLatitude` / `decimalLongitude` | `ST_Y` / `ST_X` of the sample's `COORDINATE` point in `gis_point.geom` (SRID 4326) |
+| `depth` / `size_frac` / `samp_size` | `sample_depth` / `sample_size_frac` / `sample_size` |
+| `env_medium` | mapped from the controlled `sample_type` code (see below) |
+| project row | `--marker` / `--recorded-by` / `--identification-*` (the WIS schema has no equivalent of these) |
+
+Filter to one site with `--monitoring <monitoring_id>` or one campaign with `--mission <mission_id>`.
+
+> [!IMPORTANT]
+> **`env_medium` mapping.** The WIS database stores the environmental medium as a controlled
+> `sample_type` code, not as an ENVO term. The bridge maps the aquatic / soil / sediment codes to
+> the vocabulary the DarwinCore builder recognises: `FW`/`SU` → `water`, `MA` → `marine`,
+> `SE` → `sediment`, `SO` → `soil` (the builder then maps those to ENVO). A code with no such
+> analogue (`AI` air, `BL` blood, `HN` honey, `DW` deadwood) is passed through as its raw label
+> with a `[WARN]`, so the builder fails loudly rather than mislabelling a published record. Extend
+> `WIS_SAMPLE_TYPE_TO_ENV_MEDIUM` (and the builder's `_ENVO_TERMS`) to publish a new medium.
+
+> [!NOTE]
+> **`eventID` must match your sample names.** The export joins on `eventID`, so the WIS identifier
+> you choose has to correspond to the per-sample names in the taxonomy table (derived from the
+> FASTQ filenames). The default is the short `sample_id`; switch to `material_sample_id` with
+> `--event-id-field` if that is what your FASTQs are named after. The reference database (`otu_db`)
+> and chimera-removal provenance are filled by the `darwincore` pipeline step from the run config,
+> so they are not written by this command.
+
 ## See also
 
 - [configuration.md](configuration.md) for the `export` block and `pipeline.steps`.

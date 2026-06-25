@@ -178,6 +178,7 @@ External tool versions are pinned in `environment.yml` to the set we validate ag
 | `assign-taxonomy METHOD MARKER QUERY COUNTS` | Generic taxonomy (blast/dada2/decipher/ecotag) |
 | `format-gbif INPUT` | Convert results to GBIF long format |
 | `create-gbif TAXO SAMPLE_META PROJECT_META OUTPUT` | Build DarwinCore GBIF occurrence CSV |
+| `wis-metadata --marker M --output-dir DIR ...` | Generate the GBIF export's sample + project metadata CSVs from the WIS database (needs `pip install 'seednap[wis]'`) |
 | `demultiplex READS LIB META` | Demultiplex ligation-based libraries; META is a CSV with `eventID`, `tag_demultiplex`, and `library` columns |
 | `manifest FIELD_META` | Build (and optionally validate) a canonical FAIRe sample manifest from lab CSVs |
 | `clean ABUNDANCE FIELD_META OUTPUT` | Decontaminate an abundance table against its negative controls (flag or subtract) |
@@ -202,6 +203,13 @@ Run `seednap --help` or `seednap <command> --help` for full options.
 > and writes the canonical dashed form to the output. If the normalized join still matches **zero**
 > rows, the command raises instead of emitting a CSV with every date and coordinate left blank; a
 > partial match emits a `[WARN]` listing the unmatched `eventID`s.
+
+> [!TIP]
+> The per-sample and project metadata CSVs don't have to be hand-written. If your samples live in
+> the **WIS database**, `seednap wis-metadata` pulls each sample's `eventID`, date, coordinates
+> (from the PostGIS point), environmental medium and size straight from the database and writes the
+> two CSVs the export consumes. It is an optional feature (`pip install 'seednap[wis]'`); see
+> [docs/gbif-export.md](docs/gbif-export.md#sourcing-metadata-from-the-wis-database).
 
 ## Configuration
 

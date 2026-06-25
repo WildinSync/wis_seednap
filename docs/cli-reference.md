@@ -393,6 +393,48 @@ See [gbif-export.md](gbif-export.md) for the metadata column requirements.
 
 ---
 
+## `wis-metadata`
+
+Generate the GBIF export's sample and project metadata CSVs from the **WIS
+database** (the PostgreSQL/PostGIS schema built by `wis_database_creator`),
+instead of hand-writing them. Reads each sample's `eventID`, date, coordinates
+(from the PostGIS point), environmental medium and size, and writes
+`<marker>_sample_metadata.csv` + `<marker>_project_metadata.csv`.
+
+Optional feature: install the database extra first with `pip install 'seednap[wis]'`
+(adds SQLAlchemy + psycopg2; intentionally not in the core install).
+
+```
+seednap wis-metadata --database-url URL --marker MARKER --output-dir DIR \
+  --recorded-by NAME --identification-remarks TEXT --identification-references TEXT [OPTIONS]
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `--database-url` | `$WIS_DATABASE_URL` | SQLAlchemy URL, e.g. `postgresql://user:pass@host:5432/wis` (required) |
+| `--marker` | — | Marker name; used for the project row and the output filenames (required) |
+| `--output-dir` | — | Directory for the two CSVs (required) |
+| `--monitoring` | none | Restrict to one WIS `monitoring_id` (site / long-term project) |
+| `--mission` | none | Restrict to one WIS `mission_id` (sampling campaign) |
+| `--event-id-field` | `sample_id` | WIS identifier used as `eventID` (`sample_id` or `material_sample_id`); match your FASTQ naming |
+| `--recorded-by` | — | DwC `recordedBy` for the project row (required) |
+| `--identification-remarks` | — | Identification-method note for the project row (required) |
+| `--identification-references` | — | Reference-DB / method citation for the project row (required) |
+| `--seq-meth` | empty | Sequencing-method description |
+| `--otu-seq-comp-appr` | empty | OTU/ASV sequence-comparison approach |
+
+```bash
+seednap wis-metadata --database-url postgresql://user:pass@host:5432/wis \
+  --marker teleo --monitoring fw_ch_rechy --output-dir metadata/ \
+  --recorded-by "ELE Lab" --identification-remarks "BLAST + LCA" \
+  --identification-references "10.1038/nmeth.3869"
+```
+
+See [gbif-export.md](gbif-export.md#sourcing-metadata-from-the-wis-database) for
+the full WIS-to-DarwinCore field mapping and the `env_medium` / `eventID` notes.
+
+---
+
 ## `demultiplex`
 
 Demultiplex ligation-based libraries (Cutadapt under the hood).

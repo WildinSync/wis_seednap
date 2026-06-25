@@ -679,6 +679,157 @@ def create_gbif(
         sys.exit(1)
 
 
+@main.command("wis-metadata")
+@click.option(
+    "--database-url",
+    envvar="WIS_DATABASE_URL",
+    required=True,
+    help="SQLAlchemy URL for the WIS database, or set WIS_DATABASE_URL "
+    "(e.g. postgresql://user:pass@host:5432/wis).",
+)
+@click.option(
+    "--marker",
+    required=True,
+    help="Marker name (e.g. teleo); used for the project row and the output filenames.",
+)
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    required=True,
+    help="Directory for <marker>_sample_metadata.csv and <marker>_project_metadata.csv.",
+)
+@click.option(
+    "--monitoring",
+    default=None,
+    help="Restrict to one WIS monitoring_id (the site / long-term project).",
+)
+@click.option(
+    "--mission",
+    default=None,
+    help="Restrict to one WIS mission_id (the sampling campaign).",
+)
+@click.option(
+    "--event-id-field",
+    type=click.Choice(["sample_id", "material_sample_id"]),
+    default="sample_id",
+    show_default=True,
+    help="Which WIS identifier becomes eventID; match your FASTQ/sample naming.",
+)
+@click.option(
+    "--recorded-by",
+    required=True,
+    help="DwC recordedBy (data contributor) for the project row.",
+)
+@click.option(
+    "--identification-remarks",
+    required=True,
+    help="Identification-method note for the project row.",
+)
+@click.option(
+    "--identification-references",
+    required=True,
+    help="Reference-DB / method citation for the project row.",
+)
+@click.option(
+    "--seq-meth", default="", help="Optional sequencing-method description (DwC seq_meth)."
+)
+@click.option(
+    "--otu-seq-comp-appr", default="", help="Optional OTU/ASV sequence-comparison approach."
+)
+@click.pass_context
+def wis_metadata(
+    ctx: click.Context,
+    database_url: str,
+    marker: str,
+    output_dir: Path,
+    monitoring: Optional[str],
+    mission: Optional[str],
+    event_id_field: str,
+    recorded_by: str,
+    identification_remarks: str,
+    identification_references: str,
+    seq_meth: str,
+    otu_seq_comp_appr: str,
+) -> None:
+    """Generate the GBIF export's metadata CSVs from the WIS database.
+
+    Reads per-sample field metadata (eventID, eventDate, coordinates, env_medium, depth, size)
+    from the WIS PostgreSQL/PostGIS database and writes the two CSVs the DarwinCore export
+    consumes: ``<marker>_sample_metadata.csv`` (one row per sample) and
+    ``<marker>_project_metadata.csv`` (one project row). Point ``report.sample_metadata`` /
+    ``report.project_metadata`` (or the ``create-gbif`` arguments) at the generated files.
+
+    \b
+    Requires the optional database extra:  pip install 'seednap[wis]'
+    (adds SQLAlchemy + psycopg2). The reference-database and chimera-removal provenance are
+    filled by the 'darwincore' pipeline step from the run config, so they are not written here.
+
+    Args:
+        ctx: Click context (carries the global verbose flag).
+        database_url: SQLAlchemy URL for the WIS database (or the WIS_DATABASE_URL env var).
+        marker: Marker name for the project row and the output filenames.
+        output_dir: Directory for the two output CSVs.
+        monitoring: Optional ``monitoring_id`` (site/project) filter.
+        mission: Optional ``mission_id`` (campaign) filter.
+        event_id_field: WIS identifier used as eventID (``sample_id`` or ``material_sample_id``).
+        recorded_by: DwC ``recordedBy`` for the project row.
+        identification_remarks: Identification-method note for the project row.
+        identification_references: Reference-DB / method citation for the project row.
+        seq_meth: Optional sequencing-method description.
+        otu_seq_comp_appr: Optional OTU/ASV sequence-comparison approach.
+
+    Returns:
+        None. Writes the two CSVs and prints their paths.
+
+    Raises:
+        SystemExit: Code 1 if the optional dependency is missing, no samples match the
+            selector, or any other failure occurs.
+    """
+    from seednap.steps.formatting.wis_metadata import WisMetadataExporter
+
+    _add_command_log_file(output_dir, "wis_metadata")
+
+    console.print("\n[bold]Generating GBIF metadata from the WIS database[/bold]")
+    console.print(f"  Marker:        {marker}")
+    console.print(f"  Output dir:    {output_dir}")
+    console.print(f"  Filter:        monitoring={monitoring or '—'}, mission={mission or '—'}")
+    console.print(f"  eventID field: {event_id_field}")
+    console.print()
+
+    try:
+        sample_csv, project_csv = WisMetadataExporter(database_url).export(
+            output_dir=output_dir,
+            marker=marker,
+            recorded_by=recorded_by,
+            identification_remarks=identification_remarks,
+            identification_references=identification_references,
+            monitoring=monitoring,
+            mission=mission,
+            event_id_field=event_id_field,
+            seq_meth=seq_meth,
+            otu_seq_comp_appr=otu_seq_comp_appr,
+        )
+        print_success(f"Wrote sample metadata to {sample_csv}")
+        print_success(f"Wrote project metadata to {project_csv}")
+        console.print(
+            "\nNext: set report.sample_metadata / report.project_metadata to these files "
+            "(or pass them to create-gbif)."
+        )
+    except ValueError as e:
+        print_error(f"Validation error: {e}")
+        sys.exit(1)
+    except RuntimeError as e:
+        print_error(str(e))
+        sys.exit(1)
+    except Exception as e:
+        print_error(f"Failed to generate WIS metadata: {e}")
+        if ctx.obj.get("verbose"):
+            import traceback
+
+            console.print(traceback.format_exc())
+        sys.exit(1)
+
+
 @main.command()
 @click.argument("query_fasta", type=click.Path(exists=True, path_type=Path))
 @click.argument("ref_fasta", type=click.Path(exists=True, path_type=Path))
