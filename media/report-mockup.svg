@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 330" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
+  <rect x="0.5" y="0.5" width="859" height="329" rx="11" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
+  <path d="M 0 11 a 11 11 0 0 1 11 -11 h 838 a 11 11 0 0 1 11 11 v 29 h -860 z" fill="#161B22"/>
+  <line x1="0" y1="40" x2="860" y2="40" stroke="#30363d"/>
+  <circle cx="22" cy="20" r="6" fill="#ff5f56"/><circle cx="42" cy="20" r="6" fill="#febc2e"/><circle cx="62" cy="20" r="6" fill="#27c93f"/>
+  <text x="430" y="24" text-anchor="middle" font-size="12.5" fill="#7d8590">report.html  ·  self-contained, no JS</text>
+  <rect x="0" y="40" width="860" height="36" fill="#0d1117"/><line x1="0" y1="76" x2="860" y2="76" stroke="#30363d"/>
+  <text x="22" y="63" font-size="10" fill="#7d8590">Summary</text>
+  <text x="74" y="63" font-size="10" fill="#7d8590">Dataset</text>
+  <text x="126" y="63" font-size="10" font-weight="bold" fill="#00C853">Read tracking</text>
+  <line x1="126" y1="70" x2="204" y2="70" stroke="#00C853" stroke-width="2"/>
+  <text x="214" y="63" font-size="10" fill="#7d8590">Per-sample</text>
+  <text x="284" y="63" font-size="10" fill="#7d8590">Taxonomy</text>
+  <text x="342" y="63" font-size="10" fill="#7d8590">OTU QC</text>
+  <text x="388" y="63" font-size="10" fill="#7d8590">Controls</text>
+  <text x="446" y="63" font-size="10" fill="#7d8590">Provenance</text>
+  <text x="516" y="63" font-size="10" fill="#7d8590">Run log</text>
+  <text x="568" y="63" font-size="10" fill="#7d8590">Notes</text>
+  <text x="26" y="106" font-size="15" font-weight="bold" fill="#e6edf3" font-family="Georgia,'Times New Roman',serif">Read tracking</text>
+  <text x="26" y="124" font-size="10.5" fill="#7d8590">reads surviving each step, per sample</text>
+  <text x="150" y="157" text-anchor="end" font-size="10.5" fill="#adbac7">raw</text>
+  <rect x="162" y="146" width="300" height="15" rx="3" fill="#00C853"/>
+  <text x="470" y="157" font-size="9.5" fill="#6e7681">100%</text>
+  <text x="150" y="179" text-anchor="end" font-size="10.5" fill="#adbac7">trimmed</text>
+  <rect x="162" y="168" width="282" height="15" rx="3" fill="#00C853"/>
+  <text x="452" y="179" font-size="9.5" fill="#6e7681">94%</text>
+  <text x="150" y="201" text-anchor="end" font-size="10.5" fill="#adbac7">denoised</text>
+  <rect x="162" y="190" width="240" height="15" rx="3" fill="#00C853"/>
+  <text x="410" y="201" font-size="9.5" fill="#6e7681">80%</text>
+  <text x="150" y="223" text-anchor="end" font-size="10.5" fill="#adbac7">nonchim</text>
+  <rect x="162" y="212" width="210" height="15" rx="3" fill="#00C853"/>
+  <text x="380" y="223" font-size="9.5" fill="#6e7681">70%</text>
+  <text x="560" y="140" font-size="10.5" fill="#7d8590">per-sample retention</text>
+  <rect x="560" y="160" width="15" height="46" rx="2" fill="#2ea043"/>
+  <rect x="584" y="154" width="15" height="52" rx="2" fill="#2ea043"/>
+  <rect x="608" y="166" width="15" height="40" rx="2" fill="#2ea043"/>
+  <rect x="632" y="151" width="15" height="55" rx="2" fill="#2ea043"/>
+  <rect x="656" y="176" width="15" height="30" rx="2" fill="#2ea043"/>
+  <rect x="680" y="156" width="15" height="50" rx="2" fill="#2ea043"/>
+  <rect x="704" y="158" width="15" height="48" rx="2" fill="#2ea043"/>
+  <rect x="728" y="173" width="15" height="33" rx="2" fill="#2ea043"/>
+  <rect x="752" y="152" width="15" height="54" rx="2" fill="#2ea043"/>
+  <rect x="776" y="162" width="15" height="44" rx="2" fill="#2ea043"/>
+  <rect x="26" y="284" width="320" height="26" rx="6" fill="#d29922" fill-opacity="0.12"/><rect x="26" y="284" width="3" height="26" rx="1.5" fill="#d29922"/>
+  <text x="40" y="301" font-size="10.5" fill="#d29922">[WARN]  2 samples below the 30% retention floor</text>
+  <text x="26" y="318" font-size="10" fill="#6e7681">pure-CSS tabs: one panel on screen, all panels expand when printed</text>
+</svg>

@@ -35,6 +35,10 @@ The table records per-sample read counts at each stage. The stages depend on the
 
 For DADA2, `denoised` is reads after the error model corrects sequencing errors, `merged` is forward/reverse reads joined into one amplicon, and `nonchim` is reads left after chimeras (artefactual sequences formed when two real templates join during PCR) are removed.
 
+<p align="center">
+  <img src="../media/reporting.svg" width="100%" alt="read_tracking.csv preview: per-sample counts at each step with a low-retention blank row flagged">
+</p>
+
 | Source | Counts |
 |---|---|
 | Cutadapt logs (`logs/<sample>_trim_pass{1,2}.txt`) | `raw` (pass-1 read pairs processed), `trimmed` (pass-2 pairs written) |
@@ -68,6 +72,10 @@ This is the "reads and ASVs/OTUs lost at each step" table commonly reported in e
 ## 🔬 HTML run report
 
 A single self-contained `.html` file (no external assets, no CDN, no JavaScript; charts are embedded as base64 PNGs) styled like a typeset scientific paper. A sticky top navigation bar carries one button per section; clicking a button shows that panel (pure-CSS tabs: one panel visible at a time on screen, all panels expanded when printed).
+
+<p align="center">
+  <img src="../media/report-mockup.svg" width="100%" alt="HTML report mockup: a browser window with a tabbed nav (Summary, Dataset, Read tracking, and so on) showing the Read-tracking panel with the read funnel, per-sample retention bars, and a data-loss warning">
+</p>
 
 Seven sections are always present; three are conditional on their input data being available:
 
