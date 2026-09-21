@@ -28,6 +28,7 @@ Click CLI; it delegates the heavy lifting to the processors under
 ``src/seednap/steps/`` and tracks progress via ``pipeline/state.py``.
 """
 
+import shutil
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -378,11 +379,9 @@ class PipelineOrchestrator:
         forces ``trim`` to run before dada2/swarm, so that step is always present;
         the fall-back to raw_data is therefore only reached if trim is absent.
 
-        Note: this deliberately does NOT read the demultiplex step's ``trimmed_dir``
-        output. The ligation-demux path returns a ``trimmed_dir`` (see
-        _run_ligation_demux), but nothing consumes it: the ``trim`` step re-runs over
-        raw_data and produces the directory used here. The demux ``trimmed_dir`` is
-        effectively unused in the dada2/swarm data flow.
+        Note: this does not read the demultiplex step's output directly. When
+        demultiplex ran, the ``trim`` step reads its ``samples_dir`` (see
+        _trim_input_dir) and produces the directory used here.
 
         Args:
             None.
@@ -447,24 +446,34 @@ class PipelineOrchestrator:
         return self._execute_step("demultiplex", body)
 
     def _run_ligation_demux(self) -> Dict[str, Path]:
-        """Demultiplex a ligation-protocol library and trim primers in one pass.
+        """Demultiplex every ligation-protocol library listed in the metadata CSV.
 
-        Ligation-protocol libraries carry the sample tag ligated onto the read; a
-        single multiplexed FASTQ is split into per-sample files using the
-        tag-to-sample mapping in the metadata CSV, and primers are trimmed at the
-        same time via LigationTrimmer. A sample failing to meet the configured
+        Ligation-protocol libraries carry the sample tag ligated onto the read; each
+        multiplexed library FASTQ pair is split into per-sample files using the
+        tag-to-sample mapping in the metadata CSV, and reads are primer-oriented at
+        the same time via LigationTrimmer. The libraries to process are the distinct
+        values of the metadata ``library`` column (each is also the raw-file prefix,
+        ``<library>*_R1.fastq.gz``), restricted to rows whose ``pcr_primer_forward``
+        matches this marker's forward primer when that column is present. The marker
+        name is NOT a library name and is not used to find raw files.
+
+        Each library is processed in its own subdirectory, then its per-sample FASTQs
+        are gathered into one flat ``samples`` directory, which the ``trim`` step reads
+        instead of ``paths.raw_data``. A sample failing to meet the configured
         failure-rate threshold aborts the step (enforced inside the trimmer).
 
         Args:
             None.
 
         Returns:
-            Dictionary with ``demux_dir`` (the per-sample output directory under
-            ``01_trim/<marker>/demux``) and ``trimmed_dir`` (the trimmer's returned
-            per-sample result).
+            Dictionary with ``demux_dir`` (``01_trim/<marker>/demux``), ``samples_dir``
+            (the flat per-sample directory consumed by trim) and ``libraries`` (the
+            library names processed).
 
         Raises:
-            ValueError: If ``demultiplex.metadata`` (the sample-tag CSV) is not set.
+            ValueError: If ``demultiplex.metadata`` (the sample-tag CSV) is not set, if
+                no library in it matches this marker, or if two libraries produce the
+                same sample name.
         """
         if self.config.demultiplex.metadata is None:
             raise ValueError(
@@ -486,19 +495,94 @@ class PipelineOrchestrator:
         output_dir = (
             self.config.paths.output / "01_trim" / self.config.marker.name / "demux"
         )
+        samples_dir = output_dir / "samples"
 
-        # Process library
-        outputs = trimmer.process_library(
-            raw_reads_dir=self.config.paths.raw_data,
-            library_name=self.config.marker.name,
-            metadata_csv=self.config.demultiplex.metadata,
-            output_base_dir=output_dir,
-            forward_primer=self.config.marker.primers.forward,
-            reverse_primer=self.config.marker.primers.reverse,
-            max_sample_failure_rate=self.config.demultiplex.max_sample_failure_rate,
+        libraries = self._ligation_libraries(trimmer)
+        logger.info(
+            f"Ligation demultiplex: {len(libraries)} library(ies) from "
+            f"{self.config.demultiplex.metadata}: {libraries}"
         )
 
-        return {"demux_dir": output_dir, "trimmed_dir": outputs}
+        # Clear per-sample FASTQs from a previous run so trim cannot pick up stale
+        # samples (same reasoning as the trim step's own cleanup).
+        if samples_dir.exists():
+            shutil.rmtree(samples_dir)
+        samples_dir.mkdir(parents=True, exist_ok=True)
+
+        sample_origin: Dict[str, str] = {}
+        for library in libraries:
+            realigned_dir = trimmer.process_library(
+                raw_reads_dir=self.config.paths.raw_data,
+                library_name=library,
+                metadata_csv=self.config.demultiplex.metadata,
+                output_base_dir=output_dir / library,
+                forward_primer=self.config.marker.primers.forward,
+                reverse_primer=self.config.marker.primers.reverse,
+                max_sample_failure_rate=self.config.demultiplex.max_sample_failure_rate,
+            )
+            for fq in sorted(realigned_dir.glob("*.R[12].fastq*")):
+                sample = fq.name.split(".R")[0]
+                previous = sample_origin.setdefault(sample, library)
+                if previous != library:
+                    raise ValueError(
+                        f"Sample '{sample}' was demultiplexed from both library "
+                        f"'{previous}' and library '{library}'. eventID values must be "
+                        f"unique across libraries in {self.config.demultiplex.metadata} "
+                        f"(add a PCR-replicate/library suffix to disambiguate)."
+                    )
+                shutil.move(str(fq), str(samples_dir / fq.name))
+
+        logger.info(
+            f"Ligation demultiplex: gathered {len(sample_origin)} sample(s) into "
+            f"{samples_dir}"
+        )
+        return {
+            "demux_dir": output_dir,
+            "samples_dir": samples_dir,
+            "libraries": libraries,
+        }
+
+    def _ligation_libraries(self, trimmer: LigationTrimmer) -> List[str]:
+        """Return the library names to demultiplex for this marker.
+
+        Reads the distinct ``library`` values from ``demultiplex.metadata``. When the
+        CSV has a ``pcr_primer_forward`` column, only libraries with rows matching this
+        marker's forward primer are kept, so a metadata file shared by several markers
+        only demultiplexes this marker's libraries.
+
+        Args:
+            trimmer: The LigationTrimmer whose tag generator reads the metadata (reused
+                so the delimiter sniffing matches the tag-file generation).
+
+        Returns:
+            Sorted list of library names.
+
+        Raises:
+            ValueError: If the CSV has no ``library`` column or no library matches.
+        """
+        metadata_csv = Path(self.config.demultiplex.metadata)
+        df = trimmer.tag_generator._read_metadata(metadata_csv)
+        if "library" not in df.columns:
+            raise ValueError(
+                f"Metadata CSV {metadata_csv} has no 'library' column; ligation "
+                f"demultiplexing needs it to know which raw library files to split. "
+                f"Found columns: {list(df.columns)}."
+            )
+        if "pcr_primer_forward" in df.columns:
+            primer = self.config.marker.primers.forward.upper()
+            matching = df[df["pcr_primer_forward"].astype(str).str.upper() == primer]
+            if matching.empty:
+                raise ValueError(
+                    f"No row of {metadata_csv} has pcr_primer_forward equal to the "
+                    f"marker's forward primer ({primer}), so no library to demultiplex "
+                    f"for marker '{self.config.marker.name}'. Primers found: "
+                    f"{sorted(df['pcr_primer_forward'].astype(str).unique())[:10]}."
+                )
+            df = matching
+        libraries = sorted(df["library"].dropna().astype(str).unique())
+        if not libraries:
+            raise ValueError(f"The 'library' column of {metadata_csv} is empty.")
+        return libraries
 
     def _run_standard_demux(self) -> Dict[str, Path]:
         """Run standard (tag-based) demultiplexing.
@@ -526,7 +610,8 @@ class PipelineOrchestrator:
         Every read still begins/ends with the PCR primer sequences used to amplify
         the marker; these are technical, not biological, and must be removed before
         denoising or clustering or they corrupt feature inference. This step locates
-        each sample's R1/R2 FASTQ pair under ``paths.raw_data`` and runs the
+        each sample's R1/R2 FASTQ pair under ``paths.raw_data`` (or, when the
+        demultiplex step ran, under its per-sample ``samples_dir``) and runs the
         StandardTrimmer (cutadapt) to strip the forward/reverse primers, writing the
         trimmed pairs under ``01_trim/<marker>``.
 
@@ -1658,6 +1743,30 @@ class PipelineOrchestrator:
 
         return self.state
 
+    def _trim_input_dir(self) -> Path:
+        """Directory the trim step reads per-sample FASTQs from.
+
+        When the demultiplex step has completed, trim must read its per-sample
+        output, not ``paths.raw_data`` (which still holds the multiplexed library
+        files). Otherwise this is ``paths.raw_data``.
+
+        Returns:
+            The demultiplex step's ``samples_dir`` (or, for state files written before
+            that key existed, its ``trimmed_dir``) when demultiplex completed; else
+            ``paths.raw_data``.
+        """
+        if self.state.is_step_completed("demultiplex"):
+            step = self.state.get_step("demultiplex")
+            outputs = step.outputs if step else {}
+            demux_samples = outputs.get("samples_dir") or outputs.get("trimmed_dir")
+            if demux_samples is None:
+                raise ValueError(
+                    "Demultiplex step completed but recorded no samples_dir in its "
+                    "outputs (stale state file); re-run the demultiplex step."
+                )
+            return Path(demux_samples)
+        return self.config.paths.raw_data
+
     def _get_sample_list(self) -> List[str]:
         """
         Discover sample names by scanning the raw data directory for R1 FASTQs.
@@ -1677,7 +1786,7 @@ class PipelineOrchestrator:
         """
         import re
 
-        raw_dir = self.config.paths.raw_data
+        raw_dir = self._trim_input_dir()
         if not raw_dir.exists():
             raise FileNotFoundError(
                 f"Raw data directory not found: {raw_dir}. This is paths.raw_data in your config; "
@@ -1742,7 +1851,7 @@ class PipelineOrchestrator:
         Raises:
             FileNotFoundError: If read file not found
         """
-        raw_dir = self.config.paths.raw_data
+        raw_dir = self._trim_input_dir()
 
         # Try different file name patterns (support both _R1 and .R1 naming)
         patterns = [
