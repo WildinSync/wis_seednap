@@ -100,7 +100,7 @@ marker:
 | `primers.forward` | str | required | Forward primer, 5' to 3' |
 | `primers.reverse` | str | required | Reverse primer, 5' to 3' |
 
-Primers are validated for IUPAC DNA bases (A C G T R Y M K S W H B V D N) and must be at least 10 bp.
+Primers are validated for IUPAC DNA bases (A C G T R Y M K S W H B V D N) and must be at least 10 bp. Inosine (`I`) is also accepted: it is converted to `N` (which matches any base) and a `[WARN]` in the log shows the converted primer.
 
 ## 📁 `paths`
 

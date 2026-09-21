@@ -3,9 +3,16 @@
 from pathlib import Path
 from typing import Any, Literal, Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 
 from seednap.config.models.base import StrictModel
+from seednap.utils.logging import get_logger
+
+logger = get_logger(__name__)
+
+# (field, primer) pairs already reported as inosine-converted: the config is parsed more
+# than once per command (validate, then load), so warn once per primer per process.
+_INOSINE_WARNED: set = set()
 
 
 # ===========================================================================
@@ -18,7 +25,7 @@ class PrimerConfig(StrictModel):
 
     Primers are the short oligonucleotides that bracket and amplify the target barcode region;
     trimming removes them from the reads before clustering. Both are given 5' to 3' and may use
-    IUPAC ambiguity codes.
+    IUPAC ambiguity codes. Inosine (``I``) is accepted and converted to ``N``.
 
     Attributes:
         forward: Forward primer sequence, 5' to 3' (>= 10 bases).
@@ -30,26 +37,41 @@ class PrimerConfig(StrictModel):
 
     @field_validator("forward", "reverse")
     @classmethod
-    def validate_dna_sequence(cls, v: str) -> str:
+    def validate_dna_sequence(cls, v: str, info: ValidationInfo) -> str:
         """Validate that a primer contains only valid DNA bases (incl. IUPAC ambiguity codes).
+
+        Inosine (``I``) is not an IUPAC code, but degenerate primers often use it
+        because it pairs with any base. It is replaced by ``N``, which Cutadapt and the
+        reverse-complement helper understand, and a ``[WARN]`` records the conversion.
 
         Args:
             v: A primer sequence string (any casing).
+            info: Pydantic validation context; ``info.field_name`` names the primer.
 
         Returns:
-            The sequence upper-cased.
+            The sequence upper-cased, with any ``I`` replaced by ``N``.
 
         Raises:
             ValueError: if the sequence contains any character outside the IUPAC DNA alphabet
-                ``ACGTRYMKSWHBVDN``; the message lists the offending bases.
+                ``ACGTRYMKSWHBVDN`` (plus ``I``); the message lists the offending bases.
         """
         valid_bases = set("ACGTRYMKSWHBVDN")
         v_upper = v.upper()
+        if "I" in v_upper:
+            converted = v_upper.replace("I", "N")
+            if (info.field_name, v_upper) not in _INOSINE_WARNED:
+                _INOSINE_WARNED.add((info.field_name, v_upper))
+                logger.warning(
+                    f"[WARN] primers.{info.field_name}: inosine (I) is not an IUPAC base, "
+                    f"treated as N ({v_upper} -> {converted})"
+                )
+            v_upper = converted
         if not all(base in valid_bases for base in v_upper):
             invalid_bases = set(v_upper) - valid_bases
             raise ValueError(
                 f"Invalid DNA sequence. Contains invalid bases: {invalid_bases}. "
-                f"Valid bases are: {', '.join(sorted(valid_bases))}"
+                f"Valid bases are: {', '.join(sorted(valid_bases))} "
+                f"(inosine I is also accepted and treated as N)"
             )
         return v_upper
 
