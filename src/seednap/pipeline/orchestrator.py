@@ -1056,25 +1056,8 @@ class PipelineOrchestrator:
 
             from seednap.steps.report import ReadTrackingBuilder
 
-            marker = self.config.marker.name
-            out = self.config.paths.output
             report_dir = self._report_dir()
-            kwargs: Dict[str, Any] = {
-                "marker": marker,
-                # Cutadapt per-sample logs are written by the trim step under
-                # <output>/01_trim/<marker>/logs (see trimming_pipeline.StandardTrimmer,
-                # log_dir = output_dir / "logs"). Read them from the same place so the
-                # report can recover raw/trimmed counts; otherwise % retained is NA.
-                "logs_dir": out / "01_trim" / marker / "logs",
-                "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
-                "warn_step_loss_pct": self.config.report.warn_step_loss_pct,
-            }
-            if method == "dada2":
-                kwargs["dada2_dir"] = out / "02_dada2" / marker
-            elif method == "swarm":
-                kwargs["swarm_otu_table"] = out / "02_swarm" / marker / "otu_table.csv"
-
-            builder = ReadTrackingBuilder(**kwargs)
+            builder = ReadTrackingBuilder(**self._read_tracking_kwargs(method))
             df = builder.build()
             builder.write(report_dir, df=df)
             # Run-level step summary: total reads + ASV/OTU count after each step.
@@ -1114,6 +1097,48 @@ class PipelineOrchestrator:
                 f"[WARN] read_tracking report: expected=read-tracking table for "
                 f"'{method}', got=error ({exc}), fallback=skipped (pipeline unaffected)",
             )
+
+    def _read_tracking_kwargs(self, method: Optional[str]) -> Dict[str, Any]:
+        """Constructor arguments for :class:`ReadTrackingBuilder`, shared by every report.
+
+        Both the read-tracking table and the HTML report build their counts through this
+        one helper, so they read the same inputs and cannot disagree (the HTML report
+        once read ``<output>/logs``, found no Cutadapt logs, and showed raw and
+        % retained as NA while ``read_tracking.csv`` was correct).
+
+        Args:
+            method: The feature step, ``"dada2"`` or ``"swarm"``; ``None`` reports
+                raw/trimmed only.
+
+        Returns:
+            Keyword arguments for ``ReadTrackingBuilder``.
+        """
+        marker = self.config.marker.name
+        out = self.config.paths.output
+        kwargs: Dict[str, Any] = {
+            "marker": marker,
+            # Cutadapt per-sample logs are written by the trim step under
+            # <output>/01_trim/<marker>/logs (see trimming_pipeline.StandardTrimmer,
+            # log_dir = output_dir / "logs"). Read them from the same place so the
+            # report can recover raw/trimmed counts; otherwise % retained is NA.
+            "logs_dir": out / "01_trim" / marker / "logs",
+            "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
+            "warn_step_loss_pct": self.config.report.warn_step_loss_pct,
+        }
+        # Raw FASTQs the trim step read: lets the builder count raw reads directly for a
+        # sample whose Cutadapt log is missing.
+        try:
+            kwargs["raw_dir"] = self._trim_input_dir()
+        except ValueError as exc:
+            logger.warning(
+                f"[WARN] read_tracking: expected=raw FASTQ dir, got=error ({exc}), "
+                f"fallback=raw counts from Cutadapt logs only",
+            )
+        if method == "dada2":
+            kwargs["dada2_dir"] = out / "02_dada2" / marker
+        elif method == "swarm":
+            kwargs["swarm_otu_table"] = out / "02_swarm" / marker / "otu_table.csv"
+        return kwargs
 
     def _validate_manifest_against_abundance(self, method: str) -> None:
         """Cross-check the FAIRe manifest's eventIDs against the abundance table.
@@ -1184,19 +1209,12 @@ class PipelineOrchestrator:
             marker = self.config.marker.name
             out = self.config.paths.output
             steps = set(self.config.pipeline.steps)
-            kwargs: Dict[str, Any] = {
-                "marker": marker, "logs_dir": out / "logs",
-                "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
-                "warn_step_loss_pct": self.config.report.warn_step_loss_pct,
-            }
+            method = "dada2" if "dada2" in steps else "swarm" if "swarm" in steps else None
             otu_full = None
-            if "dada2" in steps:
-                kwargs["dada2_dir"] = out / "02_dada2" / marker
-            elif "swarm" in steps:
-                kwargs["swarm_otu_table"] = out / "02_swarm" / marker / "otu_table.csv"
+            if method == "swarm":
                 otu_full = out / "02_swarm" / marker / "otu_table_full.csv"
 
-            builder = ReadTrackingBuilder(**kwargs)
+            builder = ReadTrackingBuilder(**self._read_tracking_kwargs(method))
             df = builder.build()
             warns = builder.warnings(df, log=False)
             step_summary_df = builder.step_summary(df)

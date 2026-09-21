@@ -605,6 +605,29 @@ class HTMLReportBuilder:
             bits.append(f"{len(tax):,} {'ASVs' if self.is_dada2 else 'OTUs'}")
         return ", ".join(bits)
 
+    def _funnel_totals(self) -> List[float]:
+        """Run-total reads at each step (Figure 1 bars), summed over measured samples.
+
+        Returns:
+            One total per step in ``self.steps`` order; ``0`` for an unmeasured step.
+        """
+        return [float(pd.to_numeric(self.df[s], errors="coerce").sum(skipna=True)) for s in self.steps]
+
+    def _funnel_base(self) -> Optional[str]:
+        """Step that Figure 1's percentages are relative to.
+
+        The earliest step measured for every sample with a positive total, normally
+        ``raw``. A step measured for only some samples would give a base that is too
+        small, and percentages far above 100% for the steps after it.
+
+        Returns:
+            The step name, or ``None`` when no step is measured for every sample.
+        """
+        for step, total in zip(self.steps, self._funnel_totals()):
+            if total > 0 and pd.to_numeric(self.df[step], errors="coerce").notna().all():
+                return step
+        return None
+
     def _abstract(self) -> str:
         """Compose the prose run abstract that leads the Summary tab.
 
@@ -774,13 +797,15 @@ class HTMLReportBuilder:
         with mpl.rc_context(PAPER_RC):
             # F: read funnel (totals per step), final bar accented + % labels.
             if not self.df.empty:
-                totals = [pd.to_numeric(self.df[s], errors="coerce").sum(skipna=True) for s in self.steps]
+                totals = self._funnel_totals()
                 if any(t > 0 for t in totals):
                     fig, ax = plt.subplots(figsize=(5.5, 2.7))
                     colors = [GREY] * len(self.steps); colors[-1] = ACCENT
                     bars = ax.bar(self.steps, totals, color=colors, width=.62)
-                    base = totals[0] if totals[0] else 1
-                    ax.bar_label(bars, labels=[f"{int(t):,}\n{t / base * 100:.0f}%" for t in totals],
+                    base_step = self._funnel_base()
+                    base = totals[self.steps.index(base_step)] if base_step else 0
+                    ax.bar_label(bars, labels=[f"{int(t):,}\n{t / base * 100:.0f}%" if base else f"{int(t):,}"
+                                               for t in totals],
                                  fontsize=7.5, color=INK, padding=2)
                     ax.margins(y=.22); ax.set_ylabel("read pairs"); ax.set_title("Reads surviving each step")
                     figs["funnel"] = emit(fig)
@@ -1034,9 +1059,17 @@ class HTMLReportBuilder:
                 f"counted from the stage where a feature table first exists; the earlier read-level "
                 f"steps carry no feature count.",
                 ["step", "total reads", feat], ss_rows))
+        base_step = self._funnel_base()
+        if base_step == "raw":
+            pct_note = "the percentage of raw input"
+        elif base_step:
+            pct_note = (f"the percentage of the {base_step} step (raw counts were not measured "
+                        f"for every sample)")
+        else:
+            pct_note = "no percentage (no step was measured for every sample)"
         parts.append(self._fig(figs.get("funnel"),
                      f"Total read pairs retained after each step, summed across all {n} samples; "
-                     f"labels give absolute counts and the percentage of raw input."))
+                     f"labels give absolute counts and {pct_note}."))
         pr = pd.to_numeric(self.df.get("pct_retained", pd.Series(dtype=float)), errors="coerce").dropna()
         n_below = int((pr < self.warn_pct).sum()) if not pr.empty else 0
         if len(pr) > 50:

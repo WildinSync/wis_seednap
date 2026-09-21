@@ -4,7 +4,8 @@ Assembles the classic eDNA "read tracking" table -- how many reads/sequences
 survive each step -- from artifacts the pipeline already writes:
 
 - **raw / trimmed** come from the per-sample Cutadapt logs
-  (``<sample>_trim_pass1.txt`` / ``_trim_pass2.txt``);
+  (``<sample>_trim_pass1.txt`` / ``_trim_pass2.txt``); when a sample has no
+  pass-1 log, **raw** is counted directly from its raw R1 FASTQ (``raw_dir``);
 - **DADA2 path** (``filtered -> denoised -> merged -> nonchim``) comes from the
   ``track_reads.csv`` emitted by ``seednap/scripts/dada2_process.R``;
 - **SWARM path** (``clustered``) comes from per-sample column sums of
@@ -18,7 +19,9 @@ zero" are distinguished, and an absent count raises a ``[WARN]`` so a broken
 measurement is never mistaken for real data loss.
 """
 
+import gzip
 import re
+from glob import escape as glob_escape
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union, cast
 
@@ -90,6 +93,33 @@ def _first_match(path: Path, pattern: re.Pattern) -> Optional[int]:
     return None
 
 
+_R1_PATTERNS = ("{s}_R1*.fastq.gz", "{s}_R1*.fastq", "{s}.R1.fastq.gz", "{s}.R1.fastq")
+
+
+def _count_fastq_reads(path: Path) -> int:
+    """Number of reads in a (possibly gzipped) FASTQ file: line count / 4.
+
+    Args:
+        path: FASTQ file, gzipped when its name ends in ``.gz``.
+
+    Returns:
+        The number of 4-line FASTQ records.
+
+    Raises:
+        OSError: If the file cannot be read or decompressed.
+    """
+    opener = gzip.open if path.name.endswith(".gz") else open
+    lines = 0
+    last = b"\n"
+    with opener(path, "rb") as handle:
+        while chunk := handle.read(1 << 20):
+            lines += chunk.count(b"\n")
+            last = chunk[-1:]
+    if last != b"\n":  # final record without a trailing newline
+        lines += 1
+    return lines // 4
+
+
 class ReadTrackingBuilder:
     """Build the per-sample read-tracking table from on-disk artifacts.
 
@@ -109,6 +139,7 @@ class ReadTrackingBuilder:
         logs_dir: Union[str, Path],
         dada2_dir: Optional[Union[str, Path]] = None,
         swarm_otu_table: Optional[Union[str, Path]] = None,
+        raw_dir: Optional[Union[str, Path]] = None,
         warn_below_retention_pct: float = 30.0,
         warn_step_loss_pct: float = 70.0,
     ) -> None:
@@ -128,6 +159,10 @@ class ReadTrackingBuilder:
                 (and ``dada2_dir`` is not), the SWARM chain (raw -> trimmed ->
                 clustered) is reported. ``dada2_dir`` takes precedence if both
                 are given.
+            raw_dir: Directory holding the raw ``<sample>_R1*.fastq[.gz]`` files the
+                trim step read. When a sample has no pass-1 Cutadapt log, its raw
+                count is the number of reads in its R1 FASTQ here (with a ``[WARN]``).
+                ``None`` leaves such a sample's raw count NA.
             warn_below_retention_pct: Overall-retention threshold, in percent of
                 raw reads surviving to the final step; samples below it raise a
                 low-retention ``[WARN]``. Defaults to 30.0.
@@ -139,6 +174,7 @@ class ReadTrackingBuilder:
         self.logs_dir = Path(logs_dir)
         self.dada2_dir = Path(dada2_dir) if dada2_dir else None
         self.swarm_otu_table = Path(swarm_otu_table) if swarm_otu_table else None
+        self.raw_dir = Path(raw_dir) if raw_dir else None
         self.warn_below_retention_pct = warn_below_retention_pct
         self.warn_step_loss_pct = warn_step_loss_pct
         if self.dada2_dir is not None:
@@ -216,6 +252,51 @@ class ReadTrackingBuilder:
             return None
         loss_pct = (1 - trimmed_total / raw_total) * 100
         return raw_total, trimmed_total, loss_pct
+
+    def _raw_fastq_count(self, sample: str) -> Optional[int]:
+        """Count a sample's raw read pairs from its R1 FASTQ under ``raw_dir``.
+
+        Fallback for a sample with no pass-1 Cutadapt log (e.g. logs deleted, or
+        trimming re-run for a subset). Searches the top level of ``raw_dir``, then
+        its subdirectories (per-library layout), like the trim step's discovery.
+        Several matching R1 files (e.g. one per lane) are summed.
+
+        Args:
+            sample: Sample name, as used in the trim log and DADA2 file names.
+
+        Returns:
+            The raw read-pair count, or ``None`` when ``raw_dir`` is unset or no
+            readable R1 FASTQ is found. Every outcome is reported as a ``[WARN]``.
+        """
+        if self.raw_dir is None or not self.raw_dir.is_dir():
+            return None
+        files: List[Path] = []
+        for finder in (self.raw_dir.glob, self.raw_dir.rglob):
+            for pattern in _R1_PATTERNS:
+                files.extend(finder(pattern.format(s=glob_escape(sample))))
+            if files:
+                break
+        files = sorted(set(files))
+        if not files:
+            logger.warning(
+                f"[WARN] read_tracking {sample}: expected=Cutadapt pass-1 log or raw R1 "
+                f"FASTQ in {self.raw_dir}, got=neither, fallback=raw NA",
+            )
+            return None
+        try:
+            total = sum(_count_fastq_reads(f) for f in files)
+        except (OSError, EOFError) as exc:
+            logger.warning(
+                f"[WARN] read_tracking {sample}: expected=readable raw FASTQ, "
+                f"got=unreadable ({exc}), fallback=raw NA",
+            )
+            return None
+        logger.warning(
+            f"[WARN] read_tracking {sample}: expected=Cutadapt pass-1 log in "
+            f"{self.logs_dir}, got=missing, fallback=raw={total:,} counted from "
+            f"{', '.join(f.name for f in files)}",
+        )
+        return total
 
     def _dada2_counts(self) -> pd.DataFrame:
         """Read the DADA2 ``track_reads.csv`` (filtered/denoised/merged/nonchim).
@@ -331,6 +412,8 @@ class ReadTrackingBuilder:
             t = trim.get(sample, {})
             row["raw"] = t.get("raw")
             row["trimmed"] = t.get("trimmed")
+            if row["raw"] is None:
+                row["raw"] = self._raw_fastq_count(sample)
             if self.dada2_dir is not None:
                 if sample in dada.index:
                     d = dada.loc[sample]
@@ -390,7 +473,8 @@ class ReadTrackingBuilder:
             if absent:
                 msgs.append(
                     f"[WARN] read_tracking {sample}: expected=counts for "
-                    f"{absent}, got=absent (not measured), fallback=NA"
+                    f"{absent}, got=absent (not measured), fallback=NA "
+                    f"(looked for: {self._sources(absent)})"
                 )
             pr = r["pct_retained"]
             if pd.notna(pr) and pr < self.warn_below_retention_pct:
@@ -413,6 +497,27 @@ class ReadTrackingBuilder:
             for m in msgs:
                 logger.warning(m)
         return msgs
+
+    def _sources(self, steps: List[str]) -> str:
+        """Where the counts for ``steps`` are read from, for the absent-count warning.
+
+        Args:
+            steps: Step names whose counts are absent.
+
+        Returns:
+            A short ``"; "``-joined list of the files each step is read from.
+        """
+        src = []
+        if {"raw", "trimmed"} & set(steps):
+            s = f"<sample>_trim_pass1/2.txt in {self.logs_dir}"
+            if "raw" in steps and self.raw_dir is not None:
+                s += f" or <sample>_R1 FASTQ in {self.raw_dir}"
+            src.append(s)
+        if self.dada2_dir is not None and {"filtered", "denoised", "merged", "nonchim"} & set(steps):
+            src.append(f"row in {self.dada2_dir / 'track_reads.csv'}")
+        if self.swarm_otu_table is not None and "clustered" in steps:
+            src.append(f"column in {self.swarm_otu_table}")
+        return "; ".join(src)
 
     def write(
         self, output_dir: Union[str, Path], df: Optional[pd.DataFrame] = None
