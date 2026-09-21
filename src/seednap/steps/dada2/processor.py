@@ -41,7 +41,7 @@ class Dada2Processor:
         Initialize DADA2 processor.
 
         Args:
-            marker: Marker name (e.g., 'teleo', 'amph'); lowercased internally.
+            marker: Marker name (e.g., 'teleo', 'amph'), used verbatim in output paths.
             trimmed_reads_dir: Directory with primer-trimmed paired-end FASTQ files
                 (the DADA2 input).
             output_base_dir: Base output directory; DADA2 outputs are written under
@@ -51,7 +51,7 @@ class Dada2Processor:
         Raises:
             FileNotFoundError: If ``trimmed_reads_dir`` does not exist.
         """
-        self.marker = marker.lower()
+        self.marker = marker
         self.trimmed_reads_dir = Path(trimmed_reads_dir)
         self.output_base_dir = Path(output_base_dir)
 

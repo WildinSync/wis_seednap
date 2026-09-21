@@ -36,7 +36,7 @@ if (length(args) < 1) {
   stop("Please provide marker argument.")
 }
 
-marker <- tolower(args[1])
+marker <- args[1]
 input_dir <- if (length(args) >= 2) args[2] else file.path("outputs", "01_trim", marker)
 output_dir <- if (length(args) >= 3) args[3] else "outputs"
 max_ee <- if (length(args) >= 4) as.numeric(args[4]) else 2

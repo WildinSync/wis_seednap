@@ -51,7 +51,7 @@ class SwarmProcessor:
         PATH). Output is written under ``<output_base_dir>/02_swarm/<marker>/``.
 
         Args:
-            marker: Marker name (e.g., 'teleo', 'amph'); lowercased and used
+            marker: Marker name (e.g., 'teleo', 'amph'), used verbatim
                 as the per-marker output subdirectory name.
             trimmed_reads_dir: Directory holding the primer-trimmed paired-end
                 FASTQ files to cluster (R1/R2 pairs).
@@ -65,7 +65,7 @@ class SwarmProcessor:
             SwarmError: If the swarm binary is not on PATH (from SwarmClusterer).
             VsearchError: If the vsearch binary is not on PATH (from VsearchRunner).
         """
-        self.marker = marker.lower()
+        self.marker = marker
         self.trimmed_reads_dir = Path(trimmed_reads_dir)
         self.output_base_dir = Path(output_base_dir)
 

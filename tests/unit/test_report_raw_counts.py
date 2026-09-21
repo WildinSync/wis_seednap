@@ -46,3 +46,37 @@ def test_report_reads_logs_from_the_trim_output_dir_not_run_root():
     needle = '"01_trim" / marker / "logs"'
     assert needle in inspect.getsource(orch), "orchestrator report logs_dir must use 01_trim/<marker>/logs"
     assert needle in inspect.getsource(cli), "report command logs_dir must use 01_trim/<marker>/logs"
+
+
+def test_step_output_dirs_keep_marker_case(tmp_path, monkeypatch):
+    """A mixed-case marker (e.g. ``euka_V9``) must land in the same subdirectory the
+    report reads. The DADA2/SWARM/taxonomy steps used to lowercase it (``euka_v9``),
+    so the report found no track_reads.csv and every DADA2 column came out NA."""
+    import seednap.steps.dada2.processor as dada2_mod
+    import seednap.steps.swarm.processor as swarm_mod
+    from seednap.steps.taxonomic_assignment.assigner import TaxonomicAssigner
+
+    monkeypatch.setattr(dada2_mod, "Dada2Runner", lambda **_: None)
+    for name in ("VsearchRunner", "SwarmClusterer"):
+        monkeypatch.setattr(swarm_mod, name, lambda **_: None)
+
+    marker = "euka_V9"
+    trimmed = tmp_path / "01_trim" / marker
+    trimmed.mkdir(parents=True)
+
+    dada2 = dada2_mod.Dada2Processor(marker, trimmed, tmp_path)
+    swarm = swarm_mod.SwarmProcessor(marker, trimmed, tmp_path)
+    taxo = TaxonomicAssigner("blast", marker, tmp_path)
+
+    assert dada2.output_dir == tmp_path / "02_dada2" / marker
+    assert swarm.output_dir == tmp_path / "02_swarm" / marker
+    assert taxo.taxo_dir == tmp_path / "03_taxo" / marker
+
+
+def test_dada2_r_script_keeps_marker_case():
+    """dada2_process.R builds 02_dada2/<marker>/ itself; it must not lowercase the marker."""
+    from importlib.resources import files
+
+    src = files("seednap").joinpath("scripts/dada2_process.R").read_text()
+    assert "marker <- args[1]" in src
+    assert "tolower(args[1])" not in src

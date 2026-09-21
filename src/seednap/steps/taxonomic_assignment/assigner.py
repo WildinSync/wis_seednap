@@ -54,7 +54,7 @@ class TaxonomicAssigner:
         Args:
             method: Assignment method ('blast', 'dada2', 'ecotag', or 'decipher'),
                 as a string or TaxonomyMethod enum.
-            marker: Marker name (e.g., 'teleo', 'amph'); lower-cased internally.
+            marker: Marker name (e.g., 'teleo', 'amph'), used verbatim in output paths.
             output_dir: Base output directory under which per-marker outputs are written.
 
         Raises:
@@ -64,7 +64,7 @@ class TaxonomicAssigner:
             method = TaxonomyMethod(method.lower())
 
         self.method = method
-        self.marker = marker.lower()
+        self.marker = marker
         self.output_dir = Path(output_dir)
         self.taxo_dir = self.output_dir / "03_taxo" / self.marker
         self.taxo_dir.mkdir(parents=True, exist_ok=True)
