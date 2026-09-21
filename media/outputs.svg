@@ -1,5 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 366" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
-  <rect x="0.5" y="0.5" width="939" height="365" rx="11" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 940 320" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
+  <rect x="0.5" y="0.5" width="939" height="319" rx="11" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
   <path d="M 0 11 a 11 11 0 0 1 11 -11 h 918 a 11 11 0 0 1 11 11 v 31 h -940 z" fill="#161B22"/>
   <line x1="0" y1="42" x2="940" y2="42" stroke="#30363d" stroke-width="1"/>
   <path d="M 22 16 h 7 l 2 3 h 9 a 2 2 0 0 1 2 2 v 6 a 2 2 0 0 1 -2 2 h -18 a 2 2 0 0 1 -2 -2 v -9 a 2 2 0 0 1 2 -2 z" fill="#00C853"/>
@@ -18,12 +18,8 @@
   <text x="430" y="212" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="12.5" fill="#6e7681" xml:space="preserve">merged taxonomy + abundance table</text>
   <text x="26" y="235" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="13.5" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">&lt;marker&gt;_&lt;method&gt;_gbif.csv</tspan></text>
   <text x="430" y="235" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="12.5" fill="#6e7681" xml:space="preserve">GBIF long-format table</text>
-  <text x="26" y="258" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="13.5" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">&lt;marker&gt;_&lt;method&gt;_darwincore.csv</tspan></text>
-  <text x="430" y="258" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="12.5" fill="#6e7681" xml:space="preserve">DarwinCore occurrence file</text>
-  <text x="26" y="281" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="13.5" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">&lt;marker&gt;_&lt;method&gt;_darwincore_dropped.csv</tspan></text>
-  <text x="430" y="281" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="12.5" fill="#6e7681" xml:space="preserve">removed rows (control / non-target)</text>
-  <text x="26" y="304" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="13.5" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">.&lt;marker&gt;_state.json</tspan></text>
-  <text x="430" y="304" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="12.5" fill="#6e7681" xml:space="preserve">run state, drives --resume</text>
-  <text x="26" y="327" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="13.5" xml:space="preserve"><tspan fill="#484f58">└── </tspan><tspan fill="#e6edf3">.&lt;marker&gt;_config.snapshot.yaml</tspan></text>
-  <text x="430" y="327" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="12.5" fill="#6e7681" xml:space="preserve">effective config snapshot</text>
+  <text x="26" y="258" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="13.5" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">.&lt;marker&gt;_state.json</tspan></text>
+  <text x="430" y="258" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="12.5" fill="#6e7681" xml:space="preserve">run state, drives --resume</text>
+  <text x="26" y="281" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="13.5" xml:space="preserve"><tspan fill="#484f58">└── </tspan><tspan fill="#e6edf3">.&lt;marker&gt;_config.snapshot.yaml</tspan></text>
+  <text x="430" y="281" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace" font-size="12.5" fill="#6e7681" xml:space="preserve">effective config snapshot</text>
 </svg>

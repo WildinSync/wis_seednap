@@ -9,17 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- WIS database bridge (`seednap wis-metadata`): generate the GBIF export's
-  per-sample and project metadata CSVs straight from the WIS PostgreSQL/PostGIS
-  database (the schema built by `wis_database_creator`) instead of hand-writing
-  them. Reads each sample's `eventID`, date, coordinates (from the PostGIS
-  point), environmental medium (mapped from the controlled `sample_type` code to
-  the builder's ENVO vocabulary; an unmapped medium passes through with a `[WARN]`
-  rather than being mislabelled) and size, and writes the two CSVs the DarwinCore
-  export already consumes. The DarwinCore builder is unchanged. SQLAlchemy and a
-  PostgreSQL driver are an optional dependency (`pip install 'seednap[wis]'`);
-  the core pipeline stays dependency-light and the bridge fails with a clear
-  install hint if they are absent.
 - Error-explainability module with a `seednap explain` command: errors carry
   stable codes and actionable what / why / how-to-fix detail, and the codes can
   be looked up from the CLI.
@@ -38,15 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   FASTQs into the default `trimming.discard_untrimmed: true` path (set it to
   `false`); a genuine low yield (off-target amplification, primer mismatch) is
   flagged too so the warning is not misread.
-- New `darwincore` pipeline step: builds the GBIF-ready DarwinCore occurrence
-  file in-pipeline (joining the long-format export to `report.sample_metadata` +
-  `report.project_metadata`, with `export.darwincore` flags), rather than only
-  via the standalone `create-gbif` command. Opt-in via `pipeline.steps`; required
-  metadata is checked at config preflight. The reference-database (`otu_db`) and
-  chimera-removal (`chimera_check`) provenance are filled automatically from the
-  run config (a differing project-metadata value is warned and overridden). It also
-  writes a deleted-entries report (`<output>_dropped.csv`) of the occurrences removed
-  by the control and non-target filters, for QA.
 
 ### Changed
 

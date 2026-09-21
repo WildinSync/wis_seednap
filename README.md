@@ -166,7 +166,6 @@ Run `seednap <command> --help` for full options. Every command, with all of its 
 
 - **`validate` / `run-pipeline` preflight** fails fast if raw data or reference databases are missing on disk, or the taxonomy database block is unresolved, before any compute.
 - **`create-gbif`** joins taxonomy to your sample metadata on `eventID`, normalizing dot/dash/underscore separators (so `DAR-2023-0025` matches a `make.names()`-dotted `DAR.2023.0025`). A **zero-match** join raises rather than emitting blank dates/coordinates; a partial match warns with the unmatched IDs.
-- **`wis-metadata`** pulls each sample's `eventID`, date, coordinates (PostGIS point), environmental medium and size from the WIS database into the two CSVs the export consumes. See [docs/gbif-export.md](docs/gbif-export.md#sourcing-metadata-from-the-wis-database).
 
 </details>
 

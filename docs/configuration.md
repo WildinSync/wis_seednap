@@ -397,30 +397,16 @@ export:
   gbif:                            # the `export` step (long-format table)
     add_rank: true                 # add taxonomic rank column
     add_taxon: true                # add lowest taxon column
-  darwincore:                      # the `darwincore` step (DarwinCore occurrence file)
-    summarise_pcr_replicates: false  # collapse PCR-replicate suffixes, summing reads per sample
-    skip_enrichment: false           # skip NCBI/WoRMS kingdom/phylum enrichment (offline/faster)
 ```
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `gbif.add_rank` | bool | `true` | Add a taxonomic rank column |
 | `gbif.add_taxon` | bool | `true` | Add a lowest-available-taxon column |
-| `darwincore.summarise_pcr_replicates` | bool | `false` | Collapse PCR-replicate suffixes, summing reads per sample |
-| `darwincore.skip_enrichment` | bool | `false` | Skip the NCBI/WoRMS higher-rank enrichment |
 
 ASV summary stats are collected by the DADA2 step via `dada2.collect_metrics`. There is no separate `metrics` section.
 
-<details>
-<summary><b>The <code>darwincore</code> step: occurrence file, provenance, dropped-rows QA</b></summary>
-
-The `darwincore` step builds the GBIF-ready DarwinCore occurrence file (one row per occurrence with `eventID`, coordinates, `scientificName`, a deterministic `occurrenceID`, `contamination_flag`). List `darwincore` after `export` in `pipeline.steps`; it joins the long-format table to `report.sample_metadata` + `report.project_metadata` (both required, checked at preflight) and, unless `skip_enrichment`, fills higher ranks from NCBI/WoRMS. Output: `<output>/<marker>_<method>_darwincore.csv`.
-
-When run in-pipeline, the reference-database (`otu_db`) and chimera-removal (`chimera_check`) provenance are filled automatically from the run config, so they need not be re-entered in the project metadata; a differing project-metadata value is used only as a fallback and the disagreement is logged with a `[WARN]`. It also writes `<output>_dropped.csv`, listing every occurrence the control and non-target filters removed and why (for QA). (The same builder is also available afterwards as the `create-gbif` command, which takes those values from the project CSV.)
-
-See [gbif-export.md](gbif-export.md) for the full export guide.
-
-</details>
+See [gbif-export.md](gbif-export.md) for the full export guide, including building the DarwinCore occurrence file with `create-gbif`.
 
 ## 📝 `report`
 
