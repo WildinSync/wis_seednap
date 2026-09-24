@@ -15,7 +15,7 @@ paths:
   raw_data: /path/to/raw/fastq       # directory of paired-end FASTQ (the only path you must set)
 
 taxonomy:
-  method: blast                      # blast | dada2 | ecotag | decipher (fill only this method's block below)
+  method: blast                      # blast | dada2 | ecotag (fill only this method's block below)
   databases:
     blast:
       fasta: /path/to/blast_db.fasta

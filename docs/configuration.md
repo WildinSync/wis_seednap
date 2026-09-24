@@ -34,7 +34,7 @@ A minimal config must set exactly these (everything else has a default):
 - `marker.name`
 - `marker.primers.forward` and `marker.primers.reverse`
 - `taxonomy.method`
-- the required path(s) in the selected database block: `blast.fasta`; `dada2.all`; `ecotag.tree` and `fasta`; or `decipher.trained`
+- the required path(s) in the selected database block: `blast.fasta`; `dada2.all`; or `ecotag.tree` and `fasta`
 
 `paths.raw_data` has a schema default of `data/raw`, but a run effectively requires it to point at your FASTQ directory. Set it per dataset; the default is rarely correct.
 
@@ -68,7 +68,7 @@ Your YAML is merged over the model defaults: any field with a default may be omi
 | `<output>/<marker>_<method>_cleaned.csv` | `clean` (the cleaned/annotated abundance table) |
 | `<output>/<marker>_<method>_gbif.csv` | `export` (GBIF/DarwinCore table) |
 
-For the merged table, `<method>` is the `taxonomy.method` value, except the DADA2 RDP classifier writes `<marker>_dada2RDP.csv` (the others are `<marker>_blast.csv`, `<marker>_ecotag.csv`, `<marker>_decipher.csv`).
+For the merged table, `<method>` is the `taxonomy.method` value, except the DADA2 RDP classifier writes `<marker>_dada2RDP.csv` (the others are `<marker>_blast.csv`, `<marker>_ecotag.csv`).
 
 <details>
 <summary><b>Hidden state files: how a run is reconstructed</b></summary>
@@ -265,7 +265,7 @@ dada2:
 
 ```yaml
 taxonomy:
-  method: "blast"           # "blast", "dada2", "decipher", "ecotag"
+  method: "blast"           # "blast", "dada2", "ecotag"
   contaminants:             # default: [] (empty -> nothing flagged)
     - "Homo_sapiens"
     - "Bos_taurus"
@@ -277,7 +277,7 @@ taxonomy:
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `method` | "blast" \| "dada2" \| "decipher" \| "ecotag" | required | Taxonomic assignment method |
+| `method` | "blast" \| "dada2" \| "ecotag" | required | Taxonomic assignment method |
 | `contaminants` | list[str] | `[]` | Species to flag as candidate contaminants |
 | `databases` | map | `{}` | Per-method database blocks (see below) |
 
@@ -371,22 +371,6 @@ databases:
 | --- | --- | --- | --- |
 | `tree` | path | required | NCBI taxonomy tree directory |
 | `fasta` | path | required | Reference FASTA database |
-
-### `databases.decipher`
-
-```yaml
-databases:
-  decipher:
-    trained: "/path/to/trained.rds"   # trained classifier (required)
-    threshold: 60
-    processors: 8
-```
-
-| Key | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `trained` | path | required | Trained DECIPHER RDS file |
-| `threshold` | int (0-100) | `60` | Confidence threshold for assignment |
-| `processors` | int (>= 1) | `8` | CPU cores |
 
 ## 📊 `export`
 

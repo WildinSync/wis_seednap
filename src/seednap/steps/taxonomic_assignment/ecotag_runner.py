@@ -491,7 +491,7 @@ class EcotagRunner:
         Maps the OBITools obitab schema (numeric NCBI taxids in order/family/genus/
         species, scientific names in the *_name columns) onto the shared 7-rank
         schema, then delegates to the shared taxonomy post-processor so ecotag,
-        DECIPHER, DADA2 RDP, and BLAST all share the same output schema and the same
+        DADA2 RDP, and BLAST all share the same output schema and the same
         correctness guarantees (left-merge from the abundance side, cascade null,
         contaminant flagging, stable column order).
 

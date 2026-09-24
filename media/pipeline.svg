@@ -19,7 +19,7 @@
   <text x="66" y="187" font-size="12" fill="#8b949e">OTUs (clustered) or ASVs (denoised); PCR chimeras removed</text>
   <circle cx="40" cy="222" r="11" fill="#00C853"/>
   <text x="40" y="226.5" text-anchor="middle" font-size="12.5" font-weight="bold" fill="#0D1117">3</text>
-  <text x="66" y="220" font-size="14.5"><tspan font-weight="bold" fill="#e6edf3">Taxonomy</tspan><tspan fill="#484f58">  ·  </tspan><tspan fill="#7ee787" font-size="12.5">BLAST / DADA2 / DECIPHER / ecotag</tspan></text>
+  <text x="66" y="220" font-size="14.5"><tspan font-weight="bold" fill="#e6edf3">Taxonomy</tspan><tspan fill="#484f58">  ·  </tspan><tspan fill="#7ee787" font-size="12.5">BLAST / DADA2 / ecotag</tspan></text>
   <text x="66" y="237" font-size="12" fill="#8b949e">one taxon per feature; BLAST + LCA is the default</text>
   <circle cx="40" cy="272" r="11" fill="#0D1117" stroke="#2ea043" stroke-width="1.5" stroke-dasharray="2.5 2"/>
   <text x="40" y="276" text-anchor="middle" font-size="12" fill="#2ea043">+</text>

@@ -244,7 +244,7 @@ marker:
 paths:
   raw_data: "data/raw"                 # directory of paired-end FASTQ
 taxonomy:
-  method: "blast"                      # blast | dada2 | ecotag | decipher (fill only this method's block)
+  method: "blast"                      # blast | dada2 | ecotag (fill only this method's block)
   databases:
     blast:
       fasta: "references/{marker}/blast_db.fasta"
@@ -324,8 +324,6 @@ taxonomy:
     ecotag:
       tree: "references/{marker}/taxonomy/"
       fasta: "references/{marker}/ecotag_db.fasta"
-    decipher:
-      trained: "references/{marker}/decipher_trained.rds"
 
 export:                      # runs only if "export" is in pipeline.steps (after taxonomy)
   gbif:

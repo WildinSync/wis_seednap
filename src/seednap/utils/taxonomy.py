@@ -1,7 +1,7 @@
 """Shared taxonomy utilities for linking taxonomy results with abundance tables.
 
 This module provides `link_taxonomy_with_abundance`, the canonical post-processor
-for any taxonomy method (DECIPHER, ecotag, DADA2 RDP) that produces a
+for any taxonomy method (ecotag, DADA2 RDP) that produces a
 (sequence, rank_columns) table. It guarantees the same output schema and the
 same correctness properties as the BLAST + LCA path:
 
@@ -126,9 +126,9 @@ def link_taxonomy_with_abundance(
 ) -> Path:
     """Merge a taxonomy table with a DADA2/SWARM abundance table on sequence.
 
-    Used by ecotag (TSV taxonomy), DECIPHER (CSV taxonomy), and DADA2 RDP
-    (CSV taxonomy). Produces a CSV with the same schema as BLAST output so
-    downstream consumers (GBIF export, plotting, reporting) see one shape.
+    Used by ecotag (TSV taxonomy) and DADA2 RDP (CSV taxonomy). Produces a CSV
+    with the same schema as BLAST output so downstream consumers (GBIF export,
+    plotting, reporting) see one shape.
 
     Args:
         taxonomy_path: Path to taxonomy file (CSV or TSV).
@@ -155,7 +155,7 @@ def link_taxonomy_with_abundance(
             BLAST path). If not provided (or absent), the output's pident is NaN.
             The DADA2 RDP path wires this as `bootstrap_min` (see
             _assign_dada2 in assigner.py), exposing the RDP bootstrap as pident;
-            the DECIPHER and ecotag paths do not pass it, so their pident is NaN.
+            the ecotag path does not pass it, so its pident is NaN.
         unassigned_label: Label for missing taxonomy entries.
 
     Returns:

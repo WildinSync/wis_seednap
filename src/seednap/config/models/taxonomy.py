@@ -13,7 +13,6 @@ _REQUIRED_DB_PATHS: Dict[str, str] = {
     "blast": "fasta",
     "dada2": "all + species",
     "ecotag": "tree + fasta",
-    "decipher": "trained",
 }
 
 
@@ -226,38 +225,6 @@ class EcotagDatabaseConfig(StrictModel):
         return v.expanduser().resolve()
 
 
-class DecipherDatabaseConfig(StrictModel):
-    """Trained classifier and settings for the DECIPHER ``IdTaxa`` taxonomy method.
-
-    DECIPHER classifies each amplicon against a pre-trained model (an ``.rds`` file built from
-    a reference set) and reports an assignment per rank above the confidence threshold.
-
-    Attributes:
-        trained: Path to the trained DECIPHER model (``.rds``).
-        threshold: Minimum confidence (0-100) for an assignment to be kept.
-        processors: Number of CPU cores DECIPHER may use (>= 1).
-    """
-
-    trained: Path = Field(..., description="Path to trained DECIPHER RDS file")
-    threshold: int = Field(
-        default=60, ge=0, le=100, description="Confidence threshold for assignment"
-    )
-    processors: int = Field(default=8, ge=1, description="Number of CPU cores to use")
-
-    @field_validator("trained")
-    @classmethod
-    def expand_path(cls, v: Path) -> Path:
-        """Expand ``~`` and resolve the trained-model path to an absolute path.
-
-        Args:
-            v: The configured trained DECIPHER ``.rds`` path.
-
-        Returns:
-            The path with ``~`` expanded and resolved to absolute.
-        """
-        return v.expanduser().resolve()
-
-
 # Maps each taxonomy method to the strict model that validates its database block. Single source
 # of truth for both load-time validation (validate_databases) and runtime dispatch
 # (get_database_config), so the two cannot drift.
@@ -265,7 +232,6 @@ _DATABASE_MODELS: Dict[str, type] = {
     "dada2": Dada2DatabaseConfig,
     "blast": BlastDatabaseConfig,
     "ecotag": EcotagDatabaseConfig,
-    "decipher": DecipherDatabaseConfig,
 }
 
 
@@ -277,7 +243,7 @@ class TaxonomicAssignmentConfig(StrictModel):
     one used at run time, though every present block is validated at load time.
 
     Attributes:
-        method: The assignment method to run (dada2 / blast / ecotag / decipher).
+        method: The assignment method to run (dada2 / blast / ecotag).
         databases: Open dict keyed by method name; each value is that method's database block.
             Only the selected method's block is used at run time.
         contaminants: Species names (CRABS underscore format, e.g. ``"Homo_sapiens"``) to
@@ -285,10 +251,10 @@ class TaxonomicAssignmentConfig(StrictModel):
             but are never deleted.
     """
 
-    method: Literal["dada2", "blast", "ecotag", "decipher"] = Field(
+    method: Literal["dada2", "blast", "ecotag"] = Field(
         ..., description="Taxonomic assignment method"
     )
-    # Open dict keyed by method name ("blast"/"dada2"/"ecotag"/"decipher"); each value is that
+    # Open dict keyed by method name ("blast"/"dada2"/"ecotag"); each value is that
     # method's database block. Only the selected method's block is used at run time
     # (get_database_config), but validate_databases parses EVERY present block into its strict
     # model at load time so a typo or missing path errors during `seednap validate`, not mid-run.

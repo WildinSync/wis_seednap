@@ -70,14 +70,14 @@ conda install -c bioconda vsearch=2.30.5 swarm=3.1.6
 # BLAST taxonomy
 conda install -c bioconda blast=2.17.0
 
-# DADA2 / DECIPHER R stack. r-base, r-tidyverse and r-patchwork come from
+# DADA2 R stack. r-base, r-tidyverse and r-patchwork come from
 # conda-forge; the bioconductor-* packages come from bioconda, so give both channels.
 conda install -c conda-forge -c bioconda r-base=4.2 r-tidyverse=2.0.0 r-patchwork=1.2.0 \
-  bioconductor-biostrings=2.66.0 bioconductor-dada2=1.26.0 bioconductor-decipher=2.26.0
+  bioconductor-biostrings=2.66.0 bioconductor-dada2=1.26.0
 ```
 
 > [!WARNING]
-> Install the full R stack, not just dada2 and DECIPHER. The R scripts also call `library(Biostrings)`, `library(dplyr)`, `library(ggplot2)` (the last two ship with `r-tidyverse`), and `library(patchwork)`; a partial install passes `pip install -e .` and Python import checks but fails at runtime the first time an R step loads a missing package.
+> Install the full R stack, not just dada2. The R scripts also call `library(Biostrings)`, `library(dplyr)`, `library(ggplot2)` (the last two ship with `r-tidyverse`), and `library(patchwork)`; a partial install passes `pip install -e .` and Python import checks but fails at runtime the first time an R step loads a missing package.
 
 Note that `environment.yml` does not install OBITools (the optional `ecotag` taxonomy method); set it up separately if you need it, per [ecotag-setup.md](ecotag-setup.md).
 
@@ -112,16 +112,15 @@ The conda environment pins each tool to the version validated on the ETH ELE eDN
 | VSEARCH | 2.30.5 | Read merging, dereplication, chimera detection | `conda install -c bioconda vsearch=2.30.5` |
 | SWARM | 3.1.6 | OTU clustering (groups near-identical reads into operational taxonomic units) | `conda install -c bioconda swarm=3.1.6` |
 | BLAST+ | 2.17.0 | BLAST taxonomic assignment | `conda install -c bioconda blast=2.17.0` |
-| R | 4.2 | DADA2 (ASV inference) and DECIPHER taxonomy methods | `conda install -c conda-forge r-base=4.2` |
+| R | 4.2 | DADA2 (ASV inference) and DADA2 RDP taxonomy method | `conda install -c conda-forge r-base=4.2` |
 
-### R packages (DADA2 / DECIPHER)
+### R packages (DADA2)
 
-Loaded by the R scripts and pinned in `environment.yml`. ASV inference and merging come from DADA2; DECIPHER is the alternative taxonomy classifier; the rest support sequence I/O and the diagnostic plots:
+Loaded by the R scripts and pinned in `environment.yml`. ASV inference and merging come from DADA2; the rest support sequence I/O and the diagnostic plots:
 
 | conda package | Pinned version | Source |
 |---|---|---|
 | `bioconductor-dada2` | 1.26.0 | Bioconductor |
-| `bioconductor-decipher` | 2.26.0 | Bioconductor |
 | `bioconductor-biostrings` | 2.66.0 | Bioconductor |
 | `r-tidyverse` (provides `dplyr`, `ggplot2`) | 2.0.0 | conda-forge |
 | `r-patchwork` | 1.2.0 | conda-forge |

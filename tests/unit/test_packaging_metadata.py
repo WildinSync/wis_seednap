@@ -80,7 +80,7 @@ def test_python_dotenv_is_a_runtime_dependency() -> None:
 
 
 def test_r_scripts_ship_as_package_data() -> None:
-    """The DADA2/DECIPHER R scripts must be packaged so they ship in the wheel."""
+    """The DADA2 R scripts must be packaged so they ship in the wheel."""
     data = _load_pyproject()
     patterns = data["tool"]["setuptools"]["package-data"]["seednap"]
     assert "scripts/*.R" in patterns
@@ -112,7 +112,6 @@ def test_pinned_versions_consistent_between_files() -> None:
     "pin",
     [
         "bioconductor-dada2=1.26.0",
-        "bioconductor-decipher=2.26.0",
         "bioconductor-biostrings=2.66.0",
         "r-tidyverse=2.0.0",
         "r-patchwork=1.2.0",

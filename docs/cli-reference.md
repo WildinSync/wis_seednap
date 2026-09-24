@@ -218,10 +218,10 @@ See [configuration.md](configuration.md#taxonomy).
 
 ## 🔬 `assign-taxonomy`
 
-Generic taxonomic assignment supporting all four methods.
+Generic taxonomic assignment supporting all three methods.
 
 ```
-seednap assign-taxonomy {blast|dada2|ecotag|decipher} MARKER QUERY_FASTA ASV_COUNT_CSV [OPTIONS]
+seednap assign-taxonomy {blast|dada2|ecotag} MARKER QUERY_FASTA ASV_COUNT_CSV [OPTIONS]
 ```
 
 Each method requires specific database options:
@@ -231,10 +231,9 @@ Each method requires specific database options:
 | `blast` | `--reference-fasta PATH` |
 | `dada2` | `--rdp-db PATH`, `--species-db PATH` |
 | `ecotag` | `--taxonomy-db PATH`, `--reference-db PATH` |
-| `decipher` | `--trained-classifier PATH` |
 
 <details>
-<summary><b>Additional options (thresholds, LCA, processors)</b></summary>
+<summary><b>Additional options (thresholds, LCA)</b></summary>
 
 | Option | Default | Description |
 |---|---|---|
@@ -250,8 +249,6 @@ Each method requires specific database options:
 | `--lca-pident-delta FLOAT` | `1.0` | cascade LCA: in-band hits within this %id of the best in-band hit (BLAST) |
 | `--lca-pid FLOAT` | `90.0` | collapsed_taxonomy: hard %identity floor (BLAST) |
 | `--lca-diff FLOAT` | `1.0` | collapsed_taxonomy: identity-window width collapsed to the LCA (BLAST) |
-| `--confidence-threshold INTEGER` | `60` | Confidence threshold (DECIPHER) |
-| `-c, --processors INTEGER` | `8` | CPU cores |
 
 </details>
 
@@ -269,7 +266,7 @@ seednap format-gbif INPUT_FILE [OPTIONS]
 
 | Option | Required | Description |
 |---|---|---|
-| `-f, --format {dada2\|ecotag\|blast\|decipher}` | Yes | Input format type |
+| `-f, --format {dada2\|ecotag\|blast}` | Yes | Input format type |
 | `-o, --output PATH` | No | Output path (default: `<input>_gbif_input.csv`) |
 
 ```bash
@@ -448,7 +445,7 @@ seednap version
 |---|---|
 | [configuration.md](configuration.md) | Every config key with type, default, and meaning |
 | [pipeline-steps.md](pipeline-steps.md) | Per-stage behavior and algorithms |
-| [taxonomy-methods.md](taxonomy-methods.md) | BLAST/DADA2/DECIPHER/ecotag details |
+| [taxonomy-methods.md](taxonomy-methods.md) | BLAST/DADA2/ecotag details |
 | [gbif-export.md](gbif-export.md) | DarwinCore export and metadata columns |
 | [reporting.md](reporting.md) | Read tracking and the HTML run report |
 </content>

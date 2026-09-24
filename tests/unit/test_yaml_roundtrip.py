@@ -43,7 +43,7 @@ def test_blast_db_config_roundtrip(yaml_path: Path) -> None:
     assert hasattr(db, "threshold_class")
     assert hasattr(db, "top_bitscore_pct")
     # Contaminants moved to TaxonomicAssignmentConfig in Commit F so all
-    # methods (BLAST, DECIPHER, ecotag, DADA2) can share it.
+    # methods (BLAST, ecotag, DADA2) can share it.
     assert hasattr(cfg.taxonomy, "contaminants")
 
     # Sanity ranges

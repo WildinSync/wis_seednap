@@ -18,7 +18,7 @@ The stages, in pipeline order, are:
    SWARM produces OTUs (Operational Taxonomic Units, clusters of similar
    sequences). Both remove chimeras (artefactual sequences made of two parents).
 4. Taxonomic assignment: label each ASV/OTU with a species/genus/family name
-   by comparing it to a reference database (BLAST, DADA2 RDP, DECIPHER, ecotag).
+   by comparing it to a reference database (BLAST, DADA2 RDP, ecotag).
 5. Cleaning (optional): subtract contamination seen in negative controls.
 6. Export: reshape the table into the GBIF / Darwin Core format for submission.
 7. Reporting: read-tracking table and a self-contained HTML run report.
@@ -1272,7 +1272,7 @@ class PipelineOrchestrator:
         family, ...). This step picks up the query FASTA and count table from the
         completed feature step (DADA2 or SWARM), selects the method-specific
         parameters and reference database from the config (``blast``, ``dada2`` RDP,
-        ``ecotag``, or ``decipher``), and delegates to the TaxonomicAssigner, which
+        or ``ecotag``), and delegates to the TaxonomicAssigner, which
         writes a merged taxonomy+abundance table.
 
         Returns:
@@ -1371,13 +1371,6 @@ class PipelineOrchestrator:
                 kwargs = {
                     "taxonomy_db": db_config.tree,
                     "reference_db": db_config.fasta,
-                    "contaminants": self.config.taxonomy.contaminants,
-                }
-            elif self.config.taxonomy.method == "decipher":
-                kwargs = {
-                    "trained_classifier_path": db_config.trained,
-                    "threshold": db_config.threshold,
-                    "processors": db_config.processors,
                     "contaminants": self.config.taxonomy.contaminants,
                 }
 
@@ -1589,7 +1582,7 @@ class PipelineOrchestrator:
                     "Export cannot start: the completed taxonomy step recorded no "
                     "'final_table' output, so there is no merged taxonomy+abundance CSV "
                     "to format for GBIF. In a normal single-version run every method "
-                    "(blast/dada2/ecotag/decipher) writes final_table, so the usual "
+                    "(blast/dada2/ecotag) writes final_table, so the usual "
                     "cause is resuming export against a state JSON "
                     "(<paths.output>/.<marker>_state.json) written by an older seednap "
                     "that used a different output key. Fix: look for the merged table at "

@@ -1,7 +1,7 @@
 """GBIF formatter for converting taxonomic assignments to GBIF-compatible format.
 
 First step of the formatting stage, run by the ``format-gbif`` command. Each
-taxonomic-assignment method (DADA2 RDP, ecotag, BLAST, DECIPHER) writes its
+taxonomic-assignment method (DADA2 RDP, ecotag, BLAST) writes its
 result as a wide table: one row per OTU/ASV (the clustered or denoised sequence
 variant standing in for a taxon) with the taxonomy columns plus one numeric
 column per sample holding that OTU's read count. This module normalises the
@@ -28,7 +28,7 @@ class GBIFFormatter:
     Format taxonomic assignment outputs to GBIF-compatible format.
 
     This class converts outputs from different taxonomic assignment methods
-    (DADA2, ecotag, BLAST, DECIPHER) into a standardized GBIF format suitable
+    (DADA2, ecotag, BLAST) into a standardized GBIF format suitable
     for biodiversity databases.
     """
 
@@ -247,7 +247,7 @@ class GBIFFormatter:
         Dispatch to the correct formatter based on taxonomy method name.
 
         Args:
-            method: Taxonomy method ('dada2', 'ecotag', 'blast', 'decipher').
+            method: Taxonomy method ('dada2', 'ecotag', 'blast').
             input_path: Path to taxonomy CSV file.
             output_path: Optional path to output GBIF CSV file.
             add_rank: Whether to add 'rank' column (default: True).
@@ -263,7 +263,6 @@ class GBIFFormatter:
             "dada2": self.from_dada2_rdp,
             "ecotag": self.from_ecotag,
             "blast": self.from_blast,
-            "decipher": self.from_decipher,
         }
         formatter_fn = dispatch.get(method)
         if formatter_fn is None:
@@ -299,9 +298,9 @@ class GBIFFormatter:
             add_rank: Whether to add 'rank' column (default: True)
             add_taxon: Whether to add 'taxon' column (default: True)
             _source_format: Internal label naming the actual source format
-                (dada2/blast/decipher) for the INFO log line. The BLAST and
-                DECIPHER outputs share this DADA2-shaped path; this parameter
-                keeps the log truthful about which method produced the input.
+                (dada2/blast) for the INFO log line. The BLAST output shares
+                this DADA2-shaped path; this parameter keeps the log truthful
+                about which method produced the input.
 
         Returns:
             DataFrame in GBIF-compatible long format
@@ -598,37 +597,4 @@ class GBIFFormatter:
         # BLAST output should already be in a similar format to DADA2
         return self.from_dada2_rdp(
             input_path, output_path, add_rank, add_taxon, _source_format="blast"
-        )
-
-    def from_decipher(
-        self,
-        input_path: Union[str, Path],
-        output_path: Optional[Union[str, Path]] = None,
-        add_rank: bool = True,
-        add_taxon: bool = True,
-    ) -> pd.DataFrame:
-        """
-        Convert DECIPHER output to GBIF format.
-
-        DECIPHER (IdTaxa) taxonomy output shares the DADA2 wide-table schema, so
-        this delegates to ``from_dada2_rdp`` with a ``decipher`` source label for
-        the log.
-
-        Args:
-            input_path: Path to DECIPHER output CSV file
-            output_path: Optional path to output GBIF CSV file
-            add_rank: Whether to add 'rank' column (default: True)
-            add_taxon: Whether to add 'taxon' column (default: True)
-
-        Returns:
-            DataFrame in GBIF-compatible long format
-
-        Raises:
-            FileNotFoundError: If the input file does not exist.
-            ValueError: If the CSV is empty/invalid or required columns are
-                missing.
-        """
-        # DECIPHER output should be similar to DADA2
-        return self.from_dada2_rdp(
-            input_path, output_path, add_rank, add_taxon, _source_format="decipher"
         )

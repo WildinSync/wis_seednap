@@ -36,7 +36,7 @@ _MISSING_HINTS = {
     ),
     "taxonomy.method": (
         "method selects which classifier runs and which database block is required",
-        "set `taxonomy.method:` to one of blast, dada2, ecotag, decipher",
+        "set `taxonomy.method:` to one of blast, dada2, ecotag",
     ),
 }
 

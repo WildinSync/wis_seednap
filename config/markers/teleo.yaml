@@ -78,7 +78,7 @@ dada2:
 
 # Taxonomic assignment configuration
 taxonomy:
-  method: "blast"  # Options: "dada2", "decipher", "ecotag", "blast"
+  method: "blast"  # Options: "dada2", "ecotag", "blast"
 
   # Marker-level contaminant list applied regardless of method.
   # Flagged in `is_contaminant_candidate` column; never deleted from output.
@@ -134,10 +134,6 @@ taxonomy:
     ecotag:
       tree: "/home/shared/edna/reference_database/2023_06/teleo_custom_embl/customtaxonomy/"
       fasta: "/home/shared/edna/reference_database/2023_06/teleo_custom_embl/db_teleo_custom_and_embl.fasta"
-
-    # DECIPHER taxonomic assignment (no longer maintained)
-    decipher:
-      trained: "/home/shared/edna/reference_database/decipher/teleo_trained.rds"
 
 # Export configuration. Runs ONLY if you add "export" to pipeline.steps (after "taxonomy").
 export:

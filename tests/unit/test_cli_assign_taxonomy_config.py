@@ -171,7 +171,7 @@ def test_config_method_mismatch_errors(tmp_path: Path) -> None:
             main,
             [
                 "assign-taxonomy",
-                "decipher",  # mismatched against the blast config
+                "ecotag",  # mismatched against the blast config
                 "teleo",
                 str(inputs["query"]),
                 str(inputs["counts"]),
@@ -184,5 +184,5 @@ def test_config_method_mismatch_errors(tmp_path: Path) -> None:
         )
 
     assert res.exit_code == 1, res.output
-    assert "blast" in res.output and "decipher" in res.output
+    assert "blast" in res.output and "ecotag" in res.output
     fake_cls.return_value.assign_taxonomy.assert_not_called()

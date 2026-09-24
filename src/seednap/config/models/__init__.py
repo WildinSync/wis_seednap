@@ -6,8 +6,8 @@ what differs from the defaults.
 
 Required keys (the only ``Field(...)`` without a default): ``marker.name``,
 ``marker.primers.forward``/``reverse``, ``taxonomy.method``, and the required path(s) inside the
-SELECTED database block (``blast.fasta``; ``dada2.all``; ``ecotag.tree`` + ``fasta``;
-``decipher.trained``). Everything else has a default and may be omitted.
+SELECTED database block (``blast.fasta``; ``dada2.all``; ``ecotag.tree`` + ``fasta``).
+Everything else has a default and may be omitted.
 
 Section -> consumer map (which pipeline step reads each top-level section):
     marker, paths        -> all steps
@@ -56,7 +56,6 @@ from seednap.config.models.taxonomy import (
     _DATABASE_MODELS,
     BlastDatabaseConfig,
     Dada2DatabaseConfig,
-    DecipherDatabaseConfig,
     EcotagDatabaseConfig,
     TaxonomicAssignmentConfig,
 )
@@ -80,7 +79,6 @@ __all__ = [
     "Dada2DatabaseConfig",
     "BlastDatabaseConfig",
     "EcotagDatabaseConfig",
-    "DecipherDatabaseConfig",
     "TaxonomicAssignmentConfig",
     "GbifExportConfig",
     "ExportConfig",

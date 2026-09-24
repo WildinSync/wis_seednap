@@ -177,7 +177,7 @@ class Dada2Runner(RScriptRunner):
             Dada2Error: If packages are not installed
         """
         r_code = """
-        packages <- c("dada2", "Biostrings", "DECIPHER", "dplyr", "ggplot2", "patchwork")
+        packages <- c("dada2", "Biostrings", "dplyr", "ggplot2", "patchwork")
         versions <- sapply(packages, function(pkg) {
             if (requireNamespace(pkg, quietly = TRUE)) {
                 as.character(packageVersion(pkg))
@@ -208,8 +208,8 @@ class Dada2Runner(RScriptRunner):
             if missing:
                 raise Dada2Error(
                     f"Required R packages not installed: {', '.join(missing)}. "
-                    f"DADA2 and DECIPHER need these in the active R environment "
-                    f"(Bioconductor: dada2, Biostrings, DECIPHER; CRAN: dplyr, ggplot2, patchwork). "
+                    f"DADA2 needs these in the active R environment "
+                    f"(Bioconductor: dada2, Biostrings; CRAN: dplyr, ggplot2, patchwork). "
                     f"Activate the conda env that provides them "
                     f"(conda activate /home/shared/edna/envs/seednap) or install the missing ones there."
                 )

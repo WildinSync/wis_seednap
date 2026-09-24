@@ -1,8 +1,8 @@
 """Base class for running R scripts via Rscript subprocess.
 
 Provides shared logic for R availability checks, script execution,
-log file writing, and error handling. Used by DADA2, DADA2 taxonomy,
-and DECIPHER runners.
+log file writing, and error handling. Used by the DADA2 and DADA2 taxonomy
+runners.
 """
 
 import logging
@@ -26,8 +26,8 @@ def r_script_path(name: str) -> Path:
     """Return the absolute path to a bundled R script, independent of CWD.
 
     Resolves ``seednap/scripts/<name>`` against the installed package (e.g.
-    dada2_process.R, taxo_dada2_marker.R, taxo_decipher_marker.R) so the
-    correct packaged script is used regardless of the working directory.
+    dada2_process.R, taxo_dada2_marker.R) so the correct packaged script is used
+    regardless of the working directory.
 
     Args:
         name: File name of the bundled R script (e.g. 'dada2_process.R').
@@ -46,8 +46,8 @@ def r_script_path(name: str) -> Path:
 class RScriptError(Exception):
     """Base exception for R script execution errors.
 
-    Raised when Rscript is unavailable or when a bundled R script (DADA2 /
-    DECIPHER) exits with an error. Subclassed by the DADA2 and DECIPHER runners
+    Raised when Rscript is unavailable or when a bundled R script (DADA2 ASV
+    inference or DADA2 RDP taxonomy) exits with an error. Subclassed by the DADA2 runners
     so callers can distinguish which R step failed.
     """
 
@@ -58,7 +58,7 @@ class RScriptRunner:
     """
     Base class for executing R scripts via Rscript.
 
-    DADA2 (ASV inference) and DADA2-RDP / DECIPHER (taxonomic assignment) are
+    DADA2 (ASV inference) and DADA2-RDP (taxonomic assignment) are
     implemented in R; this base wraps invoking them as Rscript subprocesses so
     the Python orchestrator can call them uniformly. Subclasses should set their
     own error class via `_error_class` and call `super().__init__(timeout)` in
@@ -91,8 +91,8 @@ class RScriptRunner:
         Verify that Rscript is installed and on PATH.
 
         Runs `Rscript --version` with a short timeout; on failure, re-raises
-        with guidance that the environment also needs the dada2 and DECIPHER R
-        packages. DADA2 and the DADA2-RDP / DECIPHER taxonomy steps cannot run
+        with guidance that the environment also needs the dada2 R package.
+        DADA2 and the DADA2-RDP taxonomy step cannot run
         without R, so this fails fast at construction rather than mid-pipeline.
 
         Returns:
@@ -110,9 +110,8 @@ class RScriptRunner:
         except self._error_class as e:
             raise self._error_class(
                 f"{e}\n"
-                f"  R (Rscript) drives seednap's DADA2 ASV inference and the DADA2-RDP / DECIPHER "
-                f"taxonomy steps, so the environment also needs the 'dada2' and 'DECIPHER' R "
-                f"packages. Once R is on PATH, verify the packages with: "
+                f"  R (Rscript) drives seednap's DADA2 ASV inference and the DADA2-RDP "
+                f"taxonomy step, so the environment also needs the 'dada2' R package. Once R is on PATH, verify the packages with: "
                 f"Rscript -e 'packageVersion(\"dada2\")'"
             ) from e
 
@@ -155,8 +154,7 @@ class RScriptRunner:
                 f"problem. Fix: reinstall from a complete checkout with `pip install -e .` from the "
                 f"seednap repo root inside the active conda environment (on the ETH ELE eDNA "
                 f"server: /home/shared/edna/envs/seednap), then confirm the scripts are present "
-                f"with `ls {SCRIPTS_DIR}` (expect dada2_process.R, taxo_dada2_marker.R, "
-                f"taxo_decipher_marker.R)."
+                f"with `ls {SCRIPTS_DIR}` (expect dada2_process.R and taxo_dada2_marker.R)."
             )
 
         cmd = ["Rscript", str(script_path)] + [str(arg) for arg in args]

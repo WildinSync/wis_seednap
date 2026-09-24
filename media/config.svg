@@ -36,7 +36,7 @@
   <text x="300" y="299" font-size="12" fill="#6e7681" xml:space="preserve"># assign a taxon to each feature  (required)</text>
   <text x="30" y="320" text-anchor="end" font-size="11" fill="#484f58">13</text>
   <text x="68" y="320" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">method</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> blast</tspan></text>
-  <text x="300" y="320" font-size="12" fill="#6e7681" xml:space="preserve"># blast | dada2 | decipher | ecotag</text>
+  <text x="300" y="320" font-size="12" fill="#6e7681" xml:space="preserve"># blast | dada2 | ecotag</text>
   <text x="30" y="341" text-anchor="end" font-size="11" fill="#484f58">14</text>
   <text x="68" y="341" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">databases</tspan><tspan fill="#8b949e">:</tspan></text>
   <text x="30" y="362" text-anchor="end" font-size="11" fill="#484f58">15</text>

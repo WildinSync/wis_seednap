@@ -1,7 +1,7 @@
 """Unified taxonomic assignment interface for all methods.
 
 This module provides a high-level interface for taxonomic assignment that supports
-multiple methods (BLAST, DADA2, ecotag, DECIPHER) with a consistent API.
+multiple methods (BLAST, DADA2, ecotag) with a consistent API.
 """
 
 import logging
@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 
 from seednap.steps.taxonomic_assignment.blast_runner import BlastRunner, BlastTaxonomicAssigner
-from seednap.steps.taxonomic_assignment.decipher_runner import DecipherRunner
 from seednap.steps.taxonomic_assignment.ecotag_runner import EcotagRunner
 
 logger = logging.getLogger(__name__)
@@ -22,7 +21,6 @@ class TaxonomyMethod(str, Enum):
     BLAST = "blast"
     DADA2 = "dada2"
     ECOTAG = "ecotag"
-    DECIPHER = "decipher"
 
 
 class TaxonomicAssigner:
@@ -36,7 +34,6 @@ class TaxonomicAssigner:
     - BLAST: BLAST search with LCA resolution
     - DADA2: Naive Bayesian classifier (RDP)
     - ecotag: OBITools taxonomic assignment
-    - DECIPHER: DECIPHER IdTaxa classifier
     """
 
     def __init__(
@@ -52,7 +49,7 @@ class TaxonomicAssigner:
         so the chosen method has somewhere to write its intermediate files.
 
         Args:
-            method: Assignment method ('blast', 'dada2', 'ecotag', or 'decipher'),
+            method: Assignment method ('blast', 'dada2', or 'ecotag'),
                 as a string or TaxonomyMethod enum.
             marker: Marker name (e.g., 'teleo', 'amph'), used verbatim in output paths.
             output_dir: Base output directory under which per-marker outputs are written.
@@ -111,8 +108,6 @@ class TaxonomicAssigner:
             return self._assign_dada2(query_fasta, asv_count_csv, **method_specific_kwargs)
         elif self.method == TaxonomyMethod.ECOTAG:
             return self._assign_ecotag(query_fasta, asv_count_csv, **method_specific_kwargs)
-        elif self.method == TaxonomyMethod.DECIPHER:
-            return self._assign_decipher(query_fasta, asv_count_csv, **method_specific_kwargs)
         else:
             raise ValueError(f"Unsupported taxonomy method: {self.method}")
 
@@ -368,67 +363,6 @@ class TaxonomicAssigner:
 
         return outputs
 
-    def _assign_decipher(
-        self,
-        query_fasta: Path,
-        asv_count_csv: Path,
-        trained_classifier_path: Optional[Union[str, Path]] = None,
-        threshold: int = 60,
-        processors: int = 8,
-        contaminants: Optional[List[str]] = None,
-        **kwargs: Any,
-    ) -> Dict[str, Path]:
-        """
-        Assign taxonomy using DECIPHER.
-
-        Args:
-            query_fasta: Query FASTA file; the sequences to classify, read directly by the R script
-            asv_count_csv: ASV count table
-            trained_classifier_path: Path to trained DECIPHER classifier (.rds, required)
-            threshold: Confidence threshold (0-100, default: 60)
-            processors: Number of CPU cores (default: 8)
-            contaminants: Optional list of species to flag as contaminants
-
-        Returns:
-            Dictionary with 'taxonomy' (per-sequence taxonomy CSV) and 'final_table'
-            (merged taxonomy+abundance CSV) path keys.
-
-        Raises:
-            ValueError: If trained_classifier_path is None.
-            FileNotFoundError: If the classifier or the query FASTA does not exist.
-            DecipherError: If the DECIPHER R assignment step fails.
-        """
-        if trained_classifier_path is None:
-            raise ValueError("trained_classifier_path is required for DECIPHER method")
-
-        trained_classifier_path = Path(trained_classifier_path)
-
-        logger.info("Running DECIPHER taxonomic assignment")
-
-        runner = DecipherRunner()
-        outputs = runner.run_decipher_assignment(
-            marker=self.marker,
-            output_dir=self.output_dir,
-            trained_classifier_path=trained_classifier_path,
-            query_fasta=query_fasta,
-            threshold=threshold,
-            processors=processors,
-        )
-
-        # The R script writes only the per-sequence taxonomy CSV; do the merge
-        # with the abundance table in Python via the shared post-processor so
-        # we get LEFT-merge + cascade-null + contaminant flag + BLAST schema.
-        runner.link_with_abundance_table(
-            taxonomy_csv=outputs["taxonomy"],
-            abundance_csv=asv_count_csv,
-            output_csv=outputs["final_table"],
-            contaminants=contaminants,
-        )
-
-        logger.info(f"DECIPHER assignment completed: {outputs['final_table']}")
-
-        return outputs
-
     @staticmethod
     def get_method_requirements(method: Union[str, TaxonomyMethod]) -> Dict[str, str]:
         """
@@ -466,11 +400,6 @@ class TaxonomicAssigner:
             TaxonomyMethod.ECOTAG: {
                 "taxonomy_db": "Path to NCBI taxonomy database",
                 "reference_db": "Path to reference sequence database",
-            },
-            TaxonomyMethod.DECIPHER: {
-                "trained_classifier_path": "Path to trained DECIPHER classifier (.rds file)",
-                "threshold": "Confidence threshold 0-100 (optional, default: 60)",
-                "processors": "Number of CPU cores (optional, default: 8)",
             },
         }
 

@@ -8,7 +8,7 @@ config helpers (``init``, ``validate``, ``explain``), and post-processing comman
 
 In pipeline terms this module is the thin user-facing shell. Each command parses
 options, sets up logging, then delegates the actual biology (primer trimming, ASV
-denoising with DADA2, OTU clustering with SWARM, BLAST/ecotag/DECIPHER taxonomy,
+denoising with DADA2, OTU clustering with SWARM, BLAST/ecotag/DADA2 RDP taxonomy,
 DarwinCore/GBIF export) to the processors and runners under ``seednap.steps`` and the
 orchestrator under ``seednap.pipeline``. No biological computation happens here; this
 file only wires arguments, reports progress to the console, persists [WARN] safety
@@ -167,7 +167,7 @@ def _assign_kwargs_from_config(config: Any, method: str) -> Dict[str, Any]:
         config: A loaded ``PipelineConfig`` for the marker. Only its ``taxonomy`` block is
             read (the selected database config and the marker-level ``contaminants`` list).
         method: Which taxonomy method's parameter block to extract: one of ``"blast"``,
-            ``"dada2"``, ``"ecotag"``, or ``"decipher"``.
+            ``"dada2"``, or ``"ecotag"``.
 
     Returns:
         A dict of keyword arguments for ``TaxonomicAssigner.assign_taxonomy`` matching the
@@ -216,13 +216,6 @@ def _assign_kwargs_from_config(config: Any, method: str) -> Dict[str, Any]:
         return {
             "taxonomy_db": db.tree,
             "reference_db": db.fasta,
-            "contaminants": contaminants,
-        }
-    if method == "decipher":
-        return {
-            "trained_classifier_path": db.trained,
-            "threshold": db.threshold,
-            "processors": db.processors,
             "contaminants": contaminants,
         }
     return {}
@@ -466,7 +459,7 @@ def init(output: Path, marker: str, minimal: bool, force: bool) -> None:
     "--format",
     "-f",
     "format_type",
-    type=click.Choice(["dada2", "ecotag", "blast", "decipher"]),
+    type=click.Choice(["dada2", "ecotag", "blast"]),
     required=True,
     help="Input format type",
 )
@@ -497,7 +490,7 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
         input_file: Path to the taxonomic assignment CSV produced by an ``assign-taxonomy``
             run. Must already exist (enforced by Click).
         format_type: Which producing method wrote ``input_file``: one of ``"dada2"``,
-            ``"ecotag"``, ``"blast"``, or ``"decipher"``. Selects the matching reshape
+            ``"ecotag"``, or ``"blast"``. Selects the matching reshape
             logic and must match the method that generated the file.
         output: Path for the long-format GBIF CSV. If ``None``, defaults to the input
             file's directory with a ``_gbif_input`` suffix.
@@ -544,7 +537,7 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
     except ValueError as e:
         print_error(
             f"Invalid input for format '{format_type}': {e}. The CSV does not have the "
-            f"columns this format expects. -f dada2/blast/decipher all expect a wide "
+            f"columns this format expects. -f dada2/blast both expect a wide "
             f"taxonomy table with columns kingdom,phylum,class,order,family,genus,species,"
             f"sequence plus one numeric column per sample; -f ecotag expects an "
             f"ecotag-derived CSV with *_name columns. Re-check that the file came from the "
@@ -1475,7 +1468,7 @@ def swarm(
 
 
 @main.command()
-@click.argument("method", type=click.Choice(["blast", "dada2", "ecotag", "decipher"]))
+@click.argument("method", type=click.Choice(["blast", "dada2", "ecotag"]))
 @click.argument("marker", type=str)
 @click.argument("query_fasta", type=click.Path(exists=True, path_type=Path))
 @click.argument("asv_count_csv", type=click.Path(exists=True, path_type=Path))
@@ -1517,11 +1510,6 @@ def swarm(
     "--reference-db",
     type=click.Path(exists=True, path_type=Path),
     help="Reference sequence database (for ecotag method)",
-)
-@click.option(
-    "--trained-classifier",
-    type=click.Path(exists=True, path_type=Path),
-    help="Trained DECIPHER classifier .rds file (for DECIPHER method)",
 )
 @click.option(
     "--threshold-species",
@@ -1583,19 +1571,6 @@ def swarm(
     default=1.0,
     help="collapsed_taxonomy: identity-window width collapsed to the LCA (BLAST; default: 1.0)",
 )
-@click.option(
-    "--confidence-threshold",
-    type=int,
-    default=60,
-    help="Confidence threshold for DECIPHER (0-100, default: 60)",
-)
-@click.option(
-    "--processors",
-    "-c",
-    type=int,
-    default=8,
-    help="Number of CPU cores (default: 8)",
-)
 @click.pass_context
 def assign_taxonomy(
     ctx: click.Context,
@@ -1610,7 +1585,6 @@ def assign_taxonomy(
     species_db: Optional[Path],
     taxonomy_db: Optional[Path],
     reference_db: Optional[Path],
-    trained_classifier: Optional[Path],
     threshold_species: float,
     threshold_genus: float,
     threshold_family: float,
@@ -1621,13 +1595,11 @@ def assign_taxonomy(
     lca_algorithm: str,
     lca_pid: float,
     lca_diff: float,
-    confidence_threshold: int,
-    processors: int,
 ) -> None:
     """
     Assign taxonomy to ASVs using various methods.
 
-    METHOD: Taxonomic assignment method (blast, dada2, ecotag, decipher).
+    METHOD: Taxonomic assignment method (blast, dada2, ecotag).
     MARKER: Marker name (e.g., teleo, amph).
     QUERY_FASTA: Query FASTA file with ASV sequences.
     ASV_COUNT_CSV: ASV count table (seqtab_clean.csv or _t.csv).
@@ -1638,7 +1610,6 @@ def assign_taxonomy(
     BLAST: --reference-fasta
     DADA2: --rdp-db and --species-db
     ecotag: --taxonomy-db and --reference-db
-    DECIPHER: --trained-classifier
 
     Pass --config <marker.yaml> to use that marker's taxonomy.databases.<method>
     block (database path plus method parameters, e.g. BLAST evalue/task/thresholds)
@@ -1646,17 +1617,16 @@ def assign_taxonomy(
     overrides the corresponding config value.
 
     Taxonomic assignment is the step that names each ASV/OTU sequence by comparing it to a
-    reference database. The four methods differ in approach: BLAST (alignment + LCA),
-    DADA2 (naive Bayesian classifier), ecotag (OBITools tree-based assignment), and
-    DECIPHER (IdTaxa classifier). This command is the standalone counterpart to the
+    reference database. The three methods differ in approach: BLAST (alignment + LCA),
+    DADA2 (naive Bayesian classifier), and ecotag (OBITools tree-based assignment).
+    This command is the standalone counterpart to the
     taxonomy step of ``run-pipeline``.
 
     Args:
         ctx: The Click context, used both for the global verbose flag and to detect which
             options the user actually typed (so config values are only overridden by
             explicit CLI flags, not by click defaults).
-        method: Assignment method: one of ``"blast"``, ``"dada2"``, ``"ecotag"``,
-            ``"decipher"``.
+        method: Assignment method: one of ``"blast"``, ``"dada2"``, ``"ecotag"``.
         marker: Marker name (e.g. ``teleo``, ``amph``). Names the output subtree.
         query_fasta: Query FASTA of ASV/OTU sequences to assign. Must exist.
         asv_count_csv: ASV/OTU count table (``seqtab_clean.csv`` or ``_t.csv``). Must
@@ -1670,8 +1640,6 @@ def assign_taxonomy(
         species_db: Species-level taxonomy database (DADA2 method). Must exist if given.
         taxonomy_db: NCBI taxonomy database (ecotag method). Must exist if given.
         reference_db: Reference sequence database (ecotag method). Must exist if given.
-        trained_classifier: Trained DECIPHER classifier ``.rds`` file (DECIPHER method).
-            Must exist if given.
         threshold_species: BLAST: minimum percent identity to assign at species rank.
         threshold_genus: BLAST: minimum percent identity to assign at genus rank.
         threshold_family: BLAST: minimum percent identity to assign at family rank.
@@ -1683,8 +1651,6 @@ def assign_taxonomy(
         lca_algorithm: BLAST LCA algorithm: ``cascade`` or ``collapsed_taxonomy``.
         lca_pid: BLAST collapsed_taxonomy: hard percent-identity floor.
         lca_diff: BLAST collapsed_taxonomy: identity-window width collapsed to the LCA.
-        confidence_threshold: DECIPHER confidence threshold (0-100) for accepting a rank.
-        processors: Number of CPU cores (used by DECIPHER).
 
     Returns:
         None. Writes the taxonomy outputs for the chosen method and prints their paths on
@@ -1810,20 +1776,6 @@ def assign_taxonomy(
                     sys.exit(1)
                 kwargs["reference_db"] = reference_db
 
-        elif method == "decipher":
-            if _given("trained_classifier") or "trained_classifier_path" not in kwargs:
-                if not trained_classifier:
-                    print_error(
-                        "--trained-classifier is required for DECIPHER method "
-                        "(or pass --config with a taxonomy.databases.decipher.trained path)"
-                    )
-                    sys.exit(1)
-                kwargs["trained_classifier_path"] = trained_classifier
-            if _given("confidence_threshold") or "threshold" not in kwargs:
-                kwargs["threshold"] = confidence_threshold
-            if _given("processors") or "processors" not in kwargs:
-                kwargs["processors"] = processors
-
         # Run taxonomic assignment
         console.print(f"[bold]Running {method.upper()} taxonomic assignment...[/bold]")
         outputs = assigner.assign_taxonomy(
@@ -1849,10 +1801,9 @@ def assign_taxonomy(
     except Exception as e:
         from seednap.steps.taxonomic_assignment.blast_runner import BlastError
         from seednap.steps.taxonomic_assignment.dada2_taxonomy_runner import Dada2TaxonomyError
-        from seednap.steps.taxonomic_assignment.decipher_runner import DecipherError
         from seednap.steps.taxonomic_assignment.ecotag_runner import EcotagError
 
-        if isinstance(e, (EcotagError, BlastError, DecipherError, Dada2TaxonomyError)):
+        if isinstance(e, (EcotagError, BlastError, Dada2TaxonomyError)):
             # These carry self-contained, actionable messages (e.g. the OBITools-missing
             # what/why/fix block); print verbatim rather than mislabeling them as a crash.
             print_error(str(e))
@@ -1892,7 +1843,7 @@ def run_pipeline(
     1. Demultiplexing (optional)
     2. Primer trimming with cutadapt
     3. DADA2 processing (filtering, denoising, merging, chimera removal)
-    4. Taxonomic assignment (DADA2/BLAST/ecotag/DECIPHER)
+    4. Taxonomic assignment (DADA2/BLAST/ecotag)
     5. Export to GBIF format
 
     CONFIG: Path to pipeline configuration YAML file
@@ -2196,7 +2147,7 @@ def report(
                     print_warning(f"Could not read state file {state_file}; timeline omitted.")
             # Locate the final taxonomy table (for the taxonomy/contamination panels).
             taxo = None
-            for suffix in ("blast", "dada2RDP", "dada2", "ecotag", "decipher"):
+            for suffix in ("blast", "dada2RDP", "dada2", "ecotag"):
                 cand = out / f"{marker}_{suffix}.csv"
                 if cand.exists():
                     taxo = cand

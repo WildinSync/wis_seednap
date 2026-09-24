@@ -39,6 +39,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paths, so an unedited run fails the config preflight instead of silently
   processing a bundled example dataset.
 
+### Removed
+
+- The DECIPHER (IdTaxa) taxonomy method. `taxonomy.method: decipher`, the
+  `decipher` choice of `assign-taxonomy` and `format-gbif -f`, the
+  `--trained-classifier` / `--confidence-threshold` / `--processors` options of
+  `assign-taxonomy`, and the `bioconductor-decipher` conda pin are gone. A
+  leftover `taxonomy.databases.decipher` block in an old config is ignored.
+
 ### Fixed
 
 - Correctness sweep across the pipeline focused on data integrity, removing

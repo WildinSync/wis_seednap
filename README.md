@@ -48,7 +48,6 @@ flowchart LR
         direction TB
         blast[BLAST + LCA<br/>default]:::reco
         rdp[DADA2 RDP]:::alt
-        decipher[DECIPHER]:::alt
         ecotag[ecotag]:::alt
     end
 
@@ -247,13 +246,13 @@ seednap/
       trimming/             # Cutadapt integration
       dada2/                # DADA2 R wrapper
       swarm/                # VSEARCH + SWARM clustering
-      taxonomic_assignment/ # BLAST, DADA2, DECIPHER, ecotag
+      taxonomic_assignment/ # BLAST, DADA2, ecotag
       cleaning/             # Control decontamination ('clean' step)
       formatting/           # GBIF + DarwinCore export
       report/               # Read-tracking table + HTML run report
     errors/                 # Error codes + 'explain' / preflight machinery
     utils/                  # Subprocess, logging, sequence tools
-    scripts/                # Bundled R scripts (DADA2, DECIPHER)
+    scripts/                # Bundled R scripts (DADA2)
     data/templates/         # Bundled CSV templates (primers, GBIF)
   config/markers/           # Example YAML configs
 ```

@@ -34,10 +34,10 @@ seednap format-gbif outputs/teleo_blast.csv -f blast -o outputs/teleo_gbif.csv
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
 | `INPUT_FILE` (arg) | path | required | Wide taxonomy CSV from the taxonomy step |
-| `-f` / `--format` | choice | required | Input parser: `dada2`, `ecotag`, `blast`, or `decipher` |
+| `-f` / `--format` | choice | required | Input parser: `dada2`, `ecotag`, or `blast` |
 | `-o` / `--output` | path | `<input_stem>_gbif_input.csv` | Output path |
 
-`blast` and `decipher` are parsed identically to `dada2` (same wide-table schema). `ecotag` differs: it renames `*_name` columns and drops ecotag metadata columns before reshaping.
+`blast` is parsed identically to `dada2` (same wide-table schema). `ecotag` differs: it renames `*_name` columns and drops ecotag metadata columns before reshaping.
 
 ### What it does
 

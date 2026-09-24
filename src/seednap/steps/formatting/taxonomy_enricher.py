@@ -1,8 +1,8 @@
 """Enrich taxonomy DataFrames with missing kingdom/phylum via NCBI and WORMS.
 
 Runs inside the formatting stage, called by ``DarwinCoreBuilder`` while building
-the GBIF occurrence table. Taxonomic assignment (DADA2 RDP, BLAST, DECIPHER,
-ecotag) usually resolves a read to a low rank (species/genus) but leaves the
+the GBIF occurrence table. Taxonomic assignment (DADA2 RDP, BLAST, ecotag)
+usually resolves a read to a low rank (species/genus) but leaves the
 higher ranks (kingdom, phylum, sometimes class) blank, because the marker's
 reference database does not store the full lineage. GBIF expects those higher
 ranks populated. This module looks each name up in two public taxonomic

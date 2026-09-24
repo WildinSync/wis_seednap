@@ -232,9 +232,9 @@ When to use: runs spanning multiple sequencing runs, where run-specific error pr
 
 Input: representative sequences (`query.fasta`) and an abundance table (`otu_table.csv` from SWARM, or `seqtab_clean_t.csv` from DADA2). Output: a taxonomy CSV in `outputs/03_taxo/{marker}/` and a final table `outputs/{marker}_{token}.csv`.
 
-The final-table token depends on the method: `blast`, `ecotag`, `decipher`, or `dada2RDP` for the DADA2 RDP classifier (for example `teleo_dada2RDP.csv`). The taxonomy table uses the token `dada2RDP` for the DADA2 method, but the cleaned and GBIF tables (sections 3b and 4) use the raw `taxonomy.method` enum value `dada2`. So the DADA2 cleaned table is `{marker}_dada2_cleaned.csv`, not `{marker}_dada2RDP_cleaned.csv`.
+The final-table token depends on the method: `blast`, `ecotag`, or `dada2RDP` for the DADA2 RDP classifier (for example `teleo_dada2RDP.csv`). The taxonomy table uses the token `dada2RDP` for the DADA2 method, but the cleaned and GBIF tables (sections 3b and 4) use the raw `taxonomy.method` enum value `dada2`. So the DADA2 cleaned table is `{marker}_dada2_cleaned.csv`, not `{marker}_dada2RDP_cleaned.csv`.
 
-All four methods (BLAST, DADA2 RDP, DECIPHER, ecotag) share a post-processor (`seednap.utils.taxonomy.link_taxonomy_with_abundance`), so the output schema is identical regardless of method: same columns, same cascade-null semantics for missing ranks, and the same `is_contaminant_candidate` column when `taxonomy.contaminants` is set. The DADA2 RDP and DECIPHER paths take the query FASTA explicitly and work on either DADA2 ASVs or SWARM OTUs; they do not require a `seqtab_clean.rds`.
+All three methods (BLAST, DADA2 RDP, ecotag) share a post-processor (`seednap.utils.taxonomy.link_taxonomy_with_abundance`), so the output schema is identical regardless of method: same columns, same cascade-null semantics for missing ranks, and the same `is_contaminant_candidate` column when `taxonomy.contaminants` is set. The DADA2 RDP path takes the query FASTA explicitly and works on either DADA2 ASVs or SWARM OTUs; they do not require a `seqtab_clean.rds`.
 
 ### BLAST tuning keys
 
@@ -355,7 +355,7 @@ Each run is reconstructable from its outputs:
 
 - The state JSON records the `seednap_version` that wrote it. On `--resume`, if the running version differs from (or predates) the stored one, a `[WARN]` is logged because the already-completed steps were produced by a different version.
 - The effective merged config (your marker YAML layered over the built-in defaults) is snapshotted to `.{marker}_config.snapshot.yaml` in the output directory at the start of every run, and its path is recorded in the state JSON. The snapshot, not the original YAML, is the authoritative record of what the run actually used.
-- The R scripts for DADA2 and DECIPHER ship inside the installed package (`seednap/scripts/`), so a run uses the scripts bundled with that `seednap` version rather than whatever happens to sit in the working directory.
+- The R scripts for DADA2 ship inside the installed package (`seednap/scripts/`), so a run uses the scripts bundled with that `seednap` version rather than whatever happens to sit in the working directory.
 
 </details>
 
