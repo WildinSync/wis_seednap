@@ -232,7 +232,7 @@ dada2:
     max_mismatch: 0         # max mismatches in overlap
   chimera:
     method: "consensus"     # "consensus", "pooled", or "none"
-  pool: false               # pool samples for denoising
+  pool: false               # denoise all samples together (rare variants; slower)
   multithread: true         # use multithreading
   per_library: false        # learn a separate error model per library, then merge
   collect_metrics: true     # ASV summary stats -> metrics.json/csv + console
@@ -249,15 +249,21 @@ dada2:
 | `merge.min_overlap` | int | `20` | Minimum overlap for merging, bp |
 | `merge.max_mismatch` | int | `0` | Maximum mismatches in the overlap region |
 | `chimera.method` | "consensus" \| "pooled" \| "none" | `consensus` | Chimera detection method |
-| `pool` | bool | `false` | Pool samples for denoising |
+| `pool` | bool | `false` | Denoise all samples together instead of one by one: detects rare variants spread over several samples, but slower and heavier. With `per_library`, pools within each library only |
 | `multithread` | bool | `true` | Use multithreading |
-| `per_library` | bool | `false` | Learn a separate error model per sequencing library, then merge and collapse (see below). `false` uses one pooled model |
+| `per_library` | bool | `false` | Learn a separate error model per sequencing library, then merge and collapse (see below). `false` learns one model from all samples |
 | `collect_metrics` | bool | `true` | Write ASV summary stats to `metrics.json`/`csv` and console |
 
 <details>
 <summary><b><code>per_library</code>: where the library grouping comes from</b></summary>
 
-`per_library: true` learns a separate error model per sequencing library, then merges and collapses. The sample-to-library grouping comes from the manifest `seq_run_id` (`report.sample_metadata` / `demultiplex.metadata`); when no metadata is configured it is derived automatically from the per-library subfolders of `raw_data`. `false` uses one pooled model. Use for multi-run datasets.
+`per_library: true` learns a separate error model per sequencing library, then merges and collapses into one ASV table. The sample-to-library grouping comes from, first match wins:
+
+1. a `library`/`seq_run_id` column in `report.sample_metadata`;
+2. the `library` column of `demultiplex.metadata` (lab CSV);
+3. the per-library subfolders of `raw_data` (`raw_data/<library>/<sample>_R1.fastq.gz`), when neither CSV has a library column (including when the field CSV is set only for the report).
+
+If a CSV has a `pcr_primer_forward` column, only this marker's rows are used, so a lab CSV shared by several markers is safe. With no grouping or a single library, DADA2 runs single-batch with a `[WARN]`. SWARM ignores this key: it always clusters all libraries of the marker together. Details in [pipeline-steps.md](pipeline-steps.md) (DADA2 section).
 
 </details>
 

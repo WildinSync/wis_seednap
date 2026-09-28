@@ -49,6 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- DADA2-by-library: a lab CSV shared by several markers is now filtered on
+  `pcr_primer_forward`, so a sample listed for two markers in different
+  libraries no longer gets the other marker's library.
+- DADA2-by-library: the `raw_data` subfolder grouping is now used whenever the
+  metadata has no library column, including when `report.sample_metadata` is
+  set only for the report (it was previously ignored, giving a single batch).
+- DADA2-by-library now honors `dada2.pool` (pooling within each library);
+  it was silently ignored.
 - Correctness sweep across the pipeline focused on data integrity, removing
   silent fallbacks (fallbacks now warn or fail loudly), and catching
   wrong-environment misconfiguration earlier.

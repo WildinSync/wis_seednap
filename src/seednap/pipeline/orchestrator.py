@@ -954,14 +954,19 @@ class PipelineOrchestrator:
         )
 
     def _build_library_map(self) -> Optional[Path]:
-        """Write a ``sample,library`` CSV for DADA2-by-library, derived from the manifest's
-        seq_run_id grouping.
+        """Write a ``sample,library`` CSV for DADA2-by-library.
 
-        Grouping source precedence: report.sample_metadata (field CSV) is preferred over
-        demultiplex.metadata (lab CSV) as the primary manifest source (``src``). The lab CSV
-        is passed as the manifest's extra ``lab_csv`` only when it is distinct from ``src``
-        (i.e. when the field CSV was chosen as primary); if both point at the same file, no
-        extra lab CSV is supplied.
+        Grouping source precedence:
+
+        1. A ``library``/``seq_run_id`` column in report.sample_metadata (field CSV).
+        2. The ``library`` column of demultiplex.metadata (lab CSV), for samples the field
+           CSV does not group. When the lab CSV is the only metadata it is the primary source.
+        3. The per-library subdirectory layout of raw_data, used whenever neither CSV carries
+           a grouping (in particular when the field CSV is set for the report only).
+
+        Rows of either CSV are restricted to this marker's ``pcr_primer_forward`` when that
+        column exists, so a CSV shared by several markers cannot assign a sample another
+        marker's library.
 
         Returns the CSV path, or None when per_library is off or no grouping source exists
         (the R script then runs the standard single-batch path). A single-library grouping is
@@ -973,32 +978,36 @@ class PipelineOrchestrator:
         Returns:
             Path to the written ``library_map.csv`` (columns: ``sample``, ``library``)
             under ``02_dada2/<marker>``, or None when ``dada2.per_library`` is off, no
-            grouping source is configured, or building the map fails (a ``[WARN]`` is
-            logged in the latter two cases and DADA2 falls back to single-batch).
+            grouping source is found, or building the map fails (a ``[WARN]`` is logged in
+            the latter two cases and DADA2 falls back to single-batch).
         """
         if not self.config.dada2.per_library:
             return None
+        from seednap.config.manifest_migrate import has_run_grouping_column, migrate_to_manifest
+
         field_csv = self.config.report.sample_metadata
         lab_csv = self.config.demultiplex.metadata
         src = field_csv or lab_csv
-        if src is None:
-            # No metadata grouping configured. If raw_data is organized into per-library
-            # subdirectories (one folder per sequencing library/run of already-demultiplexed
-            # per-sample FASTQs), derive the sample->library map from the subfolder each
-            # sample's R1 file lives in -- no lab metadata needed.
+        try:
+            field_groups = field_csv is not None and has_run_grouping_column(Path(field_csv))
+        except Exception:  # noqa: BLE001 -- an unreadable CSV is reported by migrate below
+            field_groups = False
+        if lab_csv is None and not field_groups:
+            # No metadata grouping. If raw_data is organized into per-library subdirectories
+            # (one folder per sequencing library/run of already-demultiplexed per-sample
+            # FASTQs), derive the sample->library map from the subfolder each sample's R1
+            # file lives in. A field CSV set for the report only does not block this.
             subdir_map = self._library_map_from_subdirs()
             if subdir_map is not None:
                 return subdir_map
             logger.warning(
-                "[WARN] dada2 per_library: expected=report.sample_metadata or "
-                "demultiplex.metadata (or a per-library subdirectory layout under raw_data) "
-                "for the library grouping, got=none, fallback=standard single-batch DADA2"
+                "[WARN] dada2 per_library: expected=a 'library'/'seq_run_id' column in "
+                "report.sample_metadata, a demultiplex.metadata lab CSV, or >=2 per-library "
+                "subdirectories under raw_data, got=none, fallback=standard single-batch DADA2"
             )
             return None
         try:
             import pandas as pd
-
-            from seednap.config.manifest_migrate import migrate_to_manifest
 
             extra_lab = Path(lab_csv) if (lab_csv and str(lab_csv) != str(src)) else None
             manifest = migrate_to_manifest(
@@ -1006,6 +1015,7 @@ class PipelineOrchestrator:
                 lab_csv=extra_lab,
                 project_csv=self.config.report.project_metadata,
                 target_gene=self.config.marker.name,
+                primer_forward=self.config.marker.primers.forward,
             )
             df = pd.DataFrame(
                 [{"sample": r.eventID, "library": r.seq_run_id} for r in manifest.rows]

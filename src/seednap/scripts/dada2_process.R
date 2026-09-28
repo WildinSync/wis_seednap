@@ -8,7 +8,8 @@
 #   - Single batch (default): one error model is learned across all samples,
 #     then samples are denoised and merged (per-sample, or pooled if pool=TRUE).
 #   - DADA2-by-library: when library_map groups samples into >= 2 libraries,
-#     error models are learned per library and the per-library tables merged.
+#     error models are learned per library and the per-library tables merged
+#     (pool=TRUE then pools samples within each library, never across libraries).
 #
 # Output files written into output_dir/02_dada2/<marker>/:
 #   seqtab.rds, seqtab_clean.csv, seqtab_clean.rds, seqtab_clean_t.csv,
@@ -206,13 +207,28 @@ if (use_per_library) {
     lf <- filtFs[lib_samples]; lr <- filtRs[lib_samples]
     eF <- learnErrors(lf, nbases = 1e8, multithread = multithread)
     eR <- learnErrors(lr, nbases = 1e8, multithread = multithread)
-    lib_mergers <- vector("list", length(lib_samples)); names(lib_mergers) <- lib_samples
-    for (sam in lib_samples) {
-      derepF <- derepFastq(lf[[sam]]); ddF <- dada(derepF, err = eF, multithread = multithread)
-      derepR <- derepFastq(lr[[sam]]); ddR <- dada(derepR, err = eR, multithread = multithread)
-      lib_mergers[[sam]] <- mergePairs(ddF, derepF, ddR, derepR,
-                                       minOverlap = min_overlap, maxMismatch = max_mismatch)
-      denoisedF[[sam]] <- getN(ddF)
+    if (pool) {
+      # Pooled within this library only: libraries keep their own error model.
+      ddFs <- dada(lf, err = eF, multithread = multithread, pool = TRUE)
+      ddRs <- dada(lr, err = eR, multithread = multithread, pool = TRUE)
+      lib_mergers <- mergePairs(ddFs, lf, ddRs, lr,
+                                minOverlap = min_overlap, maxMismatch = max_mismatch)
+      # A one-sample library returns bare objects, not lists. Name by position (the
+      # sequence-table rows take these names), not by whatever names dada() assigned.
+      if (length(lib_samples) == 1) {
+        lib_mergers <- list(lib_mergers); ddFs <- list(ddFs)
+      }
+      names(lib_mergers) <- lib_samples
+      for (i in seq_along(lib_samples)) denoisedF[[lib_samples[i]]] <- getN(ddFs[[i]])
+    } else {
+      lib_mergers <- vector("list", length(lib_samples)); names(lib_mergers) <- lib_samples
+      for (sam in lib_samples) {
+        derepF <- derepFastq(lf[[sam]]); ddF <- dada(derepF, err = eF, multithread = multithread)
+        derepR <- derepFastq(lr[[sam]]); ddR <- dada(derepR, err = eR, multithread = multithread)
+        lib_mergers[[sam]] <- mergePairs(ddF, derepF, ddR, derepR,
+                                         minOverlap = min_overlap, maxMismatch = max_mismatch)
+        denoisedF[[sam]] <- getN(ddF)
+      }
     }
     seqtabs[[lib]] <- makeSequenceTable(lib_mergers)
     mergers <- c(mergers, lib_mergers)

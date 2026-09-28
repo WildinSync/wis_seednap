@@ -127,7 +127,7 @@ Each stage runs **only if listed in `pipeline.steps`**, the single ordered sourc
 - **Ordering rules (validated at load):** `demultiplex` → `trim` → a feature step (`dada2` **or** `swarm`, mutually exclusive) → `taxonomy` → `clean` → `export`. `clean` runs before `export` so the export uses the decontaminated table.
 - **`clean` step (presence-based, feature-level):** any feature with ≥1 read in an applicable negative control is treated as contamination. An **extraction blank** cleans only samples sharing its `extraction_ID`; a **PCR blank** cleans the whole dataset. `cleaning.mode` is `flag` (default, annotate only) or `subtract` (zero those reads, irreversible and opt-in). Driven by the FAIRe manifest; runs only when `clean` is in `pipeline.steps`.
 - **`taxonomy.contaminants`:** a separate list of species names flagged in the export `contamination_flag` column. Empty by default. Distinct from the manifest-driven `clean` step.
-- **DADA2 per-library:** `dada2.per_library` learns the error model per sequencing library; the grouping comes from the metadata `seq_run_id`, or is derived from per-library subfolders of `raw_data` when no metadata is given.
+- **DADA2 per-library:** `dada2.per_library` learns the error model per sequencing library; the grouping comes from a `library` column in the metadata (filtered on `pcr_primer_forward` when present), or from per-library subfolders of `raw_data` when the metadata has no library column. SWARM always clusters all libraries of a marker together.
 
 </details>
 

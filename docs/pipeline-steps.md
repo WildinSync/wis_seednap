@@ -219,10 +219,10 @@ This is the ASV path: instead of clustering, DADA2 models per-run sequencing err
 | `dada2.merge.min_overlap` | int | `20` | Min overlap for merging pairs. |
 | `dada2.merge.max_mismatch` | int | `0` | Max mismatches in the overlap region. |
 | `dada2.chimera.method` | `consensus` \| `pooled` \| `none` | `consensus` | De novo chimera detection mode (or skip). |
-| `dada2.pool` | bool | `False` | Pool samples for denoising. |
+| `dada2.pool` | bool | `False` | Denoise all samples together instead of one by one (more sensitive to rare variants, slower; see below). |
 | `dada2.multithread` | bool | `True` | Use multithreading. |
 | `dada2.collect_metrics` | bool | `True` | Write ASV summary stats (DADA2 path only). |
-| `dada2.per_library` | bool | `False` | Learn error models per sequencing library, then merge. |
+| `dada2.per_library` | bool | `False` | Learn error models per sequencing library, then merge (see below). |
 
 The algorithm runs in six stages:
 
@@ -238,14 +238,48 @@ When `dada2.collect_metrics: true` (default), ASV summary statistics are written
 <details>
 <summary><b>DADA2 per-library error models</b></summary>
 
-The `dada2.per_library` key (default `false`) controls how the error model is learned:
+DADA2 learns an error model (how often each base is misread, by quality score) and uses it to tell real sequences from sequencing errors. Error profiles differ between sequencing runs, so for a dataset spanning several libraries/runs one model averaged over all of them fits none of them well.
 
-- **Default (`false`):** DADA2 learns one pooled error model across all input samples (the legacy behavior).
-- **When `true`:** DADA2 groups samples by sequencing library, learns and denoises each library separately, then merges the per-library tables and collapses identical ASVs (`mergeSequenceTables` + `collapseNoMismatch`).
+The `dada2.per_library` key (default `false`) controls this:
 
-Where the grouping comes from: the manifest's `seq_run_id` (from `report.sample_metadata` or `demultiplex.metadata`). If no metadata is configured but `raw_data` is organized one folder per library/run (no FASTQs at the top level, per-sample reads in subfolders), the grouping is derived automatically from those subfolders, so already-demultiplexed multi-library data works with no metadata. With neither a metadata grouping nor a subfolder layout, it logs a `[WARN]` and falls back to the single pooled model.
+- **`false` (default):** one error model is learned from all samples together.
+- **`true`:** samples are grouped by library. Each library gets its own error model and is denoised and merged on its own. The per-library tables are then merged and identical ASVs collapsed (`mergeSequenceTables` + `collapseNoMismatch`), so the output is a single ASV table with every sample. With a single library this is a no-op.
 
-When to use: runs spanning multiple sequencing runs, where run-specific error profiles would otherwise be averaged together. It is a no-op for single-library datasets.
+To turn it on, set it in the marker config:
+
+```yaml
+dada2:
+  per_library: true
+```
+
+**Where the sample-to-library grouping comes from**, first match wins:
+
+1. A `library` (or `seq_run_id`) column in `report.sample_metadata` (field CSV).
+2. The `library` column of `demultiplex.metadata` (lab CSV), for samples the field CSV does not group. If the lab CSV is the only metadata configured, it is used on its own.
+3. The subfolders of `paths.raw_data`, when neither CSV has a library column (no metadata at all, or a field CSV set only for the report). This needs no FASTQs at the top level and one folder per library holding already-demultiplexed per-sample reads, for example `raw_data/LIB_A/S1_R1.fastq.gz`. The folder name is the library. A sample name found in two folders cancels the folder grouping (single-batch with a `[WARN]`).
+
+A library column in the metadata always wins over the folders.
+
+**Lab CSVs shared by several markers:** when a CSV has a `pcr_primer_forward` column, only the rows whose primer matches this marker's forward primer are used, as in the demultiplex step. The same `eventID` can therefore be in library A for one marker and library B for another. Without that column every row is used, and an `eventID` listed in two libraries gets a `[WARN]` (the last row wins).
+
+If no grouping source is found, or the grouping has only one library, DADA2 logs a `[WARN]` and runs the standard single-batch path. The map actually used is written to `outputs/02_dada2/{marker}/library_map.csv`.
+
+The `eventID`s in the metadata must match the sample file names, otherwise DADA2 stops and lists the samples missing from the map.
+
+**SWARM** has no per-library mode. All samples of the marker are dereplicated and clustered together, whatever library they came from, so every library of the same primer ends up in one OTU table.
+
+</details>
+
+<details>
+<summary><b>What <code>dada2.pool</code> does</b></summary>
+
+By default (`pool: false`) DADA2 denoises each sample on its own. A sequence is kept as a real variant only if the reads **of that sample** support it, so a variant present at a few reads in many samples can be dropped as noise in each of them.
+
+With `pool: true`, the reads of all samples are denoised together. A rare variant spread over several samples is then detected, which matters for rare taxa. The cost is a much longer run and more memory, and on large datasets it can become impractical.
+
+With `per_library: true`, pooling happens inside each library only: samples of one library are pooled together, never across libraries (each library keeps its own error model).
+
+This is unrelated to `chimera.method: pooled`, which only changes how chimeras are detected.
 
 </details>
 
