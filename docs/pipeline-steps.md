@@ -20,7 +20,7 @@ See [configuration.md](configuration.md) for the full config reference and [cli-
 
 ## 🏷️ 0. Demultiplex (optional)
 
-Tool: Cutadapt (tag generation + tag matching). Input: one multiplexed library FASTQ pair plus a sample-tag metadata CSV. Output: per-sample FASTQ pairs under `outputs/01_trim/{marker}/demux/`.
+Tool: Cutadapt (tag generation + tag matching). Input: one multiplexed library FASTQ pair per library plus a sample-tag metadata CSV. Output: gzipped per-sample FASTQ pairs under `outputs/01_trim/{marker}/demux/samples/`, read by the trim step.
 
 Multiplexing pools many samples into one sequencing run, each sample distinguished by a short tag (barcode) added during library prep. Demultiplexing reverses this: it reads the tag on each sequence and routes it to its sample. The ligation protocol generates per-sample tag files from the metadata, splits the library by tag, detects primers in both orientations, and realigns reads.
 
@@ -31,6 +31,26 @@ Multiplexing pools many samples into one sequencing run, each sample distinguish
 | `demultiplex.max_sample_failure_rate` | float | `0.5` | Abort the step if more than this fraction of samples fail. |
 
 Each sample is processed in its own `try`/`except`: one bad sample is logged and skipped, not fatal. If more than `demultiplex.max_sample_failure_rate` of samples fail, the step aborts so a broken library does not emit a mostly-empty output.
+
+### Intermediate files and disk usage
+
+Every FASTQ is gzipped, and each intermediate file is deleted as soon as the next stage has consumed it:
+
+```text
+01_trim/{marker}/demux/
+  cutadapt_tags/{library}.fasta   tag files, written once for this marker's libraries   kept
+  logs/                           Cutadapt reports, used by read tracking               kept
+    {library}_demultiplex.txt       tag assignment of the whole library
+    {sample}_primer_round{1,2}.txt  primer detection in each orientation
+  work/{library}/                 demultiplexed + primer-detection FASTQs               temporary
+  samples/{sample}.R{1,2}.fastq.gz  per-sample reads, trim's input                      temporary
+```
+
+- A sample's demultiplexed and primer-detection FASTQs are deleted as soon as its realigned output is written; `work/` is removed when the step ends, including after a failure.
+- Both orientations are merged by concatenating the gzip streams, with no decompression.
+- `samples/` is deleted once `trim` has completed and been recorded in the run state, so an interrupted `trim` can still `--resume` from it.
+- The whole `demux/` directory is cleared when the step starts, so a re-run cannot pick up stale samples or append to old Cutadapt reports.
+- An `eventID` listed under two libraries is rejected before any compute.
 
 > [!WARNING]
 > Listing `demultiplex` in `pipeline.steps` with any protocol other than `ligation` (including the default `none` and the unimplemented `standard`) is rejected at config load, before any step runs. If your reads already arrive as one FASTQ pair per sample (common for external collaborators), omit `demultiplex` from `pipeline.steps` so the pipeline starts at `trim`.
@@ -92,7 +112,7 @@ The per-sample read-tracking report (see step 4) still records retention for eve
 
 ### File naming
 
-The trimmer detects inputs in both `.R1.fastq` and `_R1.fastq` conventions (plus `_R1_001.fastq` and `.gz` variants). Trimmed outputs are always written as `{sample}.R1.fastq` / `{sample}.R2.fastq`.
+The trimmer detects inputs in both `.R1.fastq` and `_R1.fastq` conventions (plus `_R1_001.fastq` and `.gz` variants). Trimmed outputs are always written gzipped, as `{sample}.R1.fastq.gz` / `{sample}.R2.fastq.gz`; the pass-1 temporary files are gzipped too.
 
 ## 🧬 2. Cluster: pick a feature path
 
@@ -307,7 +327,7 @@ See [gbif-export.md](gbif-export.md) for the full DarwinCore publishing workflow
 
 ## 📊 5. Run report
 
-Tool: built-in. Input: Cutadapt logs, the cluster output (SWARM `otu_table` or DADA2 `track_reads.csv`), and, for the HTML report, the taxonomy table, the SWARM `otu_table_full.csv`, the run state JSON, and optional dataset metadata. Output: `read_tracking.{csv,txt}`, `step_summary.csv`, and `report.html` under the report directory (default `outputs/04_report/{marker}/`, configurable via `report.output_dir`).
+Tool: built-in. Input: Cutadapt logs, the cluster output (SWARM `otu_table` or DADA2 `track_reads.csv`), and, for the HTML report, the taxonomy table, the SWARM `otu_table_full.csv`, the run state JSON, and optional dataset metadata. Output: `read_tracking.{csv,txt}`, `step_summary.csv`, `demux_summary.csv` (only after ligation demultiplexing), and `report.html` under the report directory (default `outputs/04_report/{marker}/`, configurable via `report.output_dir`).
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -320,7 +340,7 @@ Tool: built-in. Input: Cutadapt logs, the cluster output (SWARM `otu_table` or D
 
 This step runs when `report` is in `pipeline.steps` (it is in the default steps). It always writes the read-tracking table and step summary; `report.html_report: false` skips just the HTML document.
 
-The read-tracking table records per-sample read/sequence counts at each step (`raw -> trimmed -> clustered` for SWARM; `raw -> trimmed -> filtered -> denoised -> merged -> nonchim` for DADA2) with a `% retained` column, and emits data-loss warnings against `report.warn_below_retention_pct` and `report.warn_step_loss_pct`. Counts that cannot be measured are recorded as `NA`, never a silent `0`: this is a deliberate correctness guarantee, since a silent zero would look like real data loss.
+The read-tracking table records per-sample read/sequence counts at each step (`raw -> trimmed -> clustered` for SWARM; `raw -> trimmed -> filtered -> denoised -> merged -> nonchim` for DADA2) with a `% retained` column. After ligation demultiplexing, `raw` is the read pairs assigned to the sample by its tag and a `primer_found` step (pairs carrying the primers in either orientation) sits between `raw` and `trimmed`. The table also emits data-loss warnings against `report.warn_below_retention_pct` and `report.warn_step_loss_pct`. Counts that cannot be measured are recorded as `NA`, never a silent `0`: this is a deliberate correctness guarantee, since a silent zero would look like real data loss.
 
 The HTML report is a single self-contained file with dataset provenance, the read-tracking funnel and per-sample retention, a taxonomy headline (assignment rate per rank, top taxa), feature QC (chimeras, length), a control/contamination check, the run timeline, and the full console run log colorized by level.
 

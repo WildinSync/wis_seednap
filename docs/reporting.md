@@ -22,6 +22,7 @@ Note that `report.html_report` has no effect unless `report` is in `pipeline.ste
 |---|---|---|
 | Read/sequence tracking table | `read_tracking.csv` + `read_tracking.txt` | Yes (when `report` runs) |
 | Run-level step summary | `step_summary.csv` | Yes (when `report` runs) |
+| Per-library demultiplexing summary | `demux_summary.csv` | Only when the run demultiplexed ligation libraries |
 | HTML run report | `report.html` | Only when `html_report` is on (or `--html`) |
 
 By default these go to `<paths.output>/04_report/<marker>/`. Set `report.output_dir` to redirect them (a per-marker subdirectory is created inside it).
@@ -34,6 +35,8 @@ The table records per-sample read counts at each stage. The stages depend on the
   <img src="../media/read-stages.svg" width="100%" alt="read-tracking stages: SWARM tracks raw, trimmed, clustered; DADA2 tracks raw, trimmed, filtered, denoised, merged, nonchim; both share raw and trimmed then diverge">
 </p>
 
+When the run starts with ligation demultiplexing (`demultiplex` in `pipeline.steps`), the chain starts earlier: `raw` is the read pairs assigned to the sample by its tag, and a `primer_found` step follows it, the pairs carrying the primers in either orientation (what primer trimming receives). So `raw -> primer_found -> trimmed -> ...` shows how many of each sample's reads survive from demultiplexing to primer trimming.
+
 For DADA2, `denoised` is reads after the error model corrects sequencing errors, `merged` is forward/reverse reads joined into one amplicon, and `nonchim` is reads left after chimeras (artefactual sequences formed when two real templates join during PCR) are removed.
 
 <p align="center">
@@ -43,6 +46,7 @@ For DADA2, `denoised` is reads after the error model corrects sequencing errors,
 | Source | Counts |
 |---|---|
 | Cutadapt logs (`logs/<sample>_trim_pass{1,2}.txt`) | `raw` (pass-1 read pairs processed), `trimmed` (pass-2 pairs written) |
+| Demux Cutadapt logs (`01_trim/<marker>/demux/logs/<sample>_primer_round{1,2}.txt`), only after demultiplexing | `raw` (round-1 pairs processed = pairs assigned by tag), `primer_found` (pairs written by both rounds); `raw` from the trim logs becomes `primer_found` |
 | DADA2 `track_reads.csv` (`02_dada2/<marker>/`) | `filtered`, `denoised`, `merged`, `nonchim` |
 | SWARM `otu_table.csv` (`02_swarm/<marker>/`) | `clustered` (per-sample column sums) |
 
@@ -182,6 +186,10 @@ If `--field-metadata` / `--project-metadata` are omitted, the command auto-locat
 
 The standalone `report` command loads no YAML config, so it always writes to `<-o>/04_report/<marker>/` and does not honor `report.output_dir`. Only the in-pipeline `report` step honors `report.output_dir`.
 
+## 🏷️ Demultiplexing summary (`demux_summary.csv`)
+
+Written only when the run demultiplexed ligation libraries, from `01_trim/<marker>/demux/logs/<library>_demultiplex.txt`. One row per library: `read_pairs` (pairs in the multiplexed library), `assigned` (pairs matching a sample tag) and `pct_assigned`. The HTML report shows it as a table in the Read-tracking section.
+
 During `run-pipeline`, the `report` step writes the read-tracking table, step summary, and (unless disabled with `html_report: false`) the HTML report together, after the rest of the pipeline has run, so the taxonomy and provenance sections are populated.
 
 ## 📂 Outputs
@@ -191,6 +199,7 @@ During `run-pipeline`, the `report` step writes the read-tracking table, step su
   read_tracking.csv      # per-sample counts at each step + % retained
   read_tracking.txt      # human-readable aligned table
   step_summary.csv       # run-level: total reads + ASV/OTU count after each step
+  demux_summary.csv      # per-library tag assignment (only after ligation demultiplexing)
   report.html            # self-contained HTML report (only with html_report / --html)
   cleaning_report.csv    # only when the clean step ran; co-located here
 ```

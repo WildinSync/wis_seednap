@@ -330,6 +330,7 @@ class HTMLReportBuilder:
         log_file: Optional[Union[str, Path]] = None,
         max_log_lines: int = 1500,
         step_summary_df: Optional[pd.DataFrame] = None,
+        demux_summary_df: Optional[pd.DataFrame] = None,
     ) -> None:
         """Collect the inputs for one run report.
 
@@ -342,6 +343,9 @@ class HTMLReportBuilder:
                 tracking table when omitted.
             step_summary_df: Optional run-level step summary (step, total_reads,
                 n_features); when given, a "Sequences and reads per step" table is shown.
+            demux_summary_df: Optional per-library tag assignment (library,
+                read_pairs, assigned, pct_assigned); when given and non-empty, a
+                demultiplexing table is shown.
             state: Pipeline state JSON (used for run date and step timing).
             taxonomy_csv: Optional taxonomy table CSV (enables taxonomy section).
             otu_table_full: Optional full OTU table CSV (enables feature-QC).
@@ -355,6 +359,7 @@ class HTMLReportBuilder:
         self.warnings = warnings or []
         self.summary = summary or {}
         self.step_summary_df = step_summary_df
+        self.demux_summary_df = demux_summary_df
         self.state = state or {}
         self.taxonomy_csv = Path(taxonomy_csv) if taxonomy_csv else None
         self.otu_table_full = Path(otu_table_full) if otu_table_full else None
@@ -1059,6 +1064,22 @@ class HTMLReportBuilder:
                 f"counted from the stage where a feature table first exists; the earlier read-level "
                 f"steps carry no feature count.",
                 ["step", "total reads", feat], ss_rows))
+        if self.demux_summary_df is not None and not self.demux_summary_df.empty:
+            dm_rows = []
+            for _, r in self.demux_summary_df.iterrows():
+                cells = [_esc(str(r["library"]))]
+                for col in ("read_pairs", "assigned"):
+                    v = r.get(col)
+                    cells.append('<span class="na">NA</span>' if pd.isna(v) else f"{int(v):,}")
+                pa = r.get("pct_assigned")
+                cells.append('<span class="na">NA</span>' if pd.isna(pa) else f"{float(pa):.1f}%")
+                dm_rows.append(cells)
+            parts.append(self._table(
+                "Ligation demultiplexing: read pairs in each multiplexed library and those "
+                "assigned to a sample by its tag. Per sample, <i>raw</i> is the assigned "
+                "pairs and <i>primer_found</i> the pairs carrying the primers in either "
+                "orientation, which primer trimming then receives.",
+                ["library", "read pairs", "assigned", "% assigned"], dm_rows))
         base_step = self._funnel_base()
         if base_step == "raw":
             pct_note = "the percentage of raw input"

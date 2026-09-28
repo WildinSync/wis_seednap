@@ -307,13 +307,14 @@ seednap demultiplex RAW_READS_DIR LIBRARY_NAME METADATA_CSV [OPTIONS]
 
 `METADATA_CSV` must contain `eventID`, `tag_demultiplex`, and `library` columns.
 
+Writes gzipped per-sample FASTQs to `<output-dir>/samples/`, the library's tag file to `<output-dir>/cutadapt_tags/`, and the Cutadapt reports to `<output-dir>/logs/`. Intermediate files are deleted as soon as they are consumed. The former `--no-gunzip` flag is still accepted but does nothing, since outputs are always gzipped.
+
 | Option | Required | Description |
 |---|---|---|
 | `-f, --forward-primer TEXT` | Yes | Forward primer sequence |
 | `-r, --reverse-primer TEXT` | Yes | Reverse primer sequence |
 | `-o, --output-dir PATH` | Yes | Output base directory |
 | `-c, --cores INTEGER` | No | CPU cores (default: 1) |
-| `--no-gunzip` | No | Keep output files gzipped (default: outputs are gunzipped) |
 
 > [!WARNING]
 > In `run-pipeline`, listing `demultiplex` in `pipeline.steps` with any `demultiplex.protocol` other than `ligation` is REJECTED AT CONFIG LOAD. Only the `ligation` protocol is implemented.

@@ -6,6 +6,11 @@ survive each step -- from artifacts the pipeline already writes:
 - **raw / trimmed** come from the per-sample Cutadapt logs
   (``<sample>_trim_pass1.txt`` / ``_trim_pass2.txt``); when a sample has no
   pass-1 log, **raw** is counted directly from its raw R1 FASTQ (``raw_dir``);
+- **after ligation demultiplexing** (``demux_logs_dir``), **raw** is the read
+  pairs assigned to the sample by its tag (``<sample>_primer_round1.txt``) and a
+  **primer_found** step follows it: the pairs carrying the primers in either
+  orientation, i.e. what the trim step received. Library-level tag assignment
+  (``<library>_demultiplex.txt``) feeds :meth:`ReadTrackingBuilder.demux_summary`;
 - **DADA2 path** (``filtered -> denoised -> merged -> nonchim``) comes from the
   ``track_reads.csv`` emitted by ``seednap/scripts/dada2_process.R``;
 - **SWARM path** (``clustered``) comes from per-sample column sums of
@@ -27,16 +32,19 @@ from typing import Dict, List, Optional, Tuple, Union, cast
 
 import pandas as pd
 
+from seednap.steps.trimming.cutadapt_runner import RE_PAIRS_PROCESSED, RE_PAIRS_WRITTEN
 from seednap.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 DADA2_STEPS = ["raw", "trimmed", "filtered", "denoised", "merged", "nonchim"]
 SWARM_STEPS = ["raw", "trimmed", "clustered"]
+# Step inserted after "raw" when the reads were ligation-demultiplexed.
+DEMUX_STEP = "primer_found"
 
 # Cutadapt summary lines (numbers carry thousands separators, e.g. 705,447).
-_RE_PROCESSED = re.compile(r"Total read pairs processed:\s*([\d,]+)")
-_RE_WRITTEN = re.compile(r"Pairs written \(passing filters\):\s*([\d,]+)")
+_RE_PROCESSED = RE_PAIRS_PROCESSED
+_RE_WRITTEN = RE_PAIRS_WRITTEN
 
 
 def _parse_int(text: str) -> int:
@@ -142,6 +150,7 @@ class ReadTrackingBuilder:
         raw_dir: Optional[Union[str, Path]] = None,
         warn_below_retention_pct: float = 30.0,
         warn_step_loss_pct: float = 70.0,
+        demux_logs_dir: Optional[Union[str, Path]] = None,
     ) -> None:
         """Configure the builder and select the per-step chain to report.
 
@@ -169,6 +178,12 @@ class ReadTrackingBuilder:
             warn_step_loss_pct: Per-step loss threshold, in percent of reads lost
                 between two consecutive steps; a larger drop raises a ``[WARN]``.
                 Defaults to 70.0.
+            demux_logs_dir: Directory holding the ligation demultiplex Cutadapt
+                reports (``<library>_demultiplex.txt``,
+                ``<sample>_primer_round1.txt`` / ``_primer_round2.txt``). When it
+                exists, ``raw`` is the reads assigned to each sample by its tag and
+                a ``primer_found`` step is reported between ``raw`` and
+                ``trimmed``.
         """
         self.marker = marker
         self.logs_dir = Path(logs_dir)
@@ -177,12 +192,20 @@ class ReadTrackingBuilder:
         self.raw_dir = Path(raw_dir) if raw_dir else None
         self.warn_below_retention_pct = warn_below_retention_pct
         self.warn_step_loss_pct = warn_step_loss_pct
+        self.demux_logs_dir = (
+            Path(demux_logs_dir)
+            if demux_logs_dir and Path(demux_logs_dir).is_dir()
+            else None
+        )
         if self.dada2_dir is not None:
-            self.steps = DADA2_STEPS
+            steps = DADA2_STEPS
         elif self.swarm_otu_table is not None:
-            self.steps = SWARM_STEPS
+            steps = SWARM_STEPS
         else:
-            self.steps = ["raw", "trimmed"]
+            steps = ["raw", "trimmed"]
+        if self.demux_logs_dir is not None:
+            steps = [steps[0], DEMUX_STEP, *steps[1:]]
+        self.steps = list(steps)
 
     # ------------------------------------------------------------------
     # Count sources
@@ -252,6 +275,82 @@ class ReadTrackingBuilder:
             return None
         loss_pct = (1 - trimmed_total / raw_total) * 100
         return raw_total, trimmed_total, loss_pct
+
+    def _demux_counts(self) -> Dict[str, Dict[str, Optional[int]]]:
+        """Per-sample demultiplexed and primer-found counts from the demux reports.
+
+        Primer detection runs twice on each sample's demultiplexed reads (expected
+        and reverse orientation), so round 1's input is the pairs assigned to the
+        sample by its tag, and the pairs written by both rounds together are the
+        pairs carrying the primers, which the trim step then receives.
+
+        Returns:
+            Mapping of sample name to ``{"raw": int|None, "primer_found": int|None}``;
+            empty when there are no demux reports.
+        """
+        counts: Dict[str, Dict[str, Optional[int]]] = {}
+        if self.demux_logs_dir is None:
+            return counts
+        for round1 in sorted(self.demux_logs_dir.glob("*_primer_round1.txt")):
+            sample = round1.name[: -len("_primer_round1.txt")]
+            round2 = self.demux_logs_dir / f"{sample}_primer_round2.txt"
+            kept = [_first_match(round1, _RE_WRITTEN)]
+            kept.append(_first_match(round2, _RE_WRITTEN) if round2.exists() else None)
+            found = None if None in kept else sum(cast(List[int], kept))
+            if found is None:
+                logger.warning(
+                    f"[WARN] read_tracking {sample}: expected='Pairs written' in both "
+                    f"primer-detection reports, got=missing, fallback=primer_found NA",
+                )
+            counts[sample] = {"raw": _first_match(round1, _RE_PROCESSED), "primer_found": found}
+        return counts
+
+    def demux_summary(self) -> pd.DataFrame:
+        """Library-level tag assignment from the ``<library>_demultiplex.txt`` reports.
+
+        Returns:
+            DataFrame with columns ``library``, ``read_pairs`` (pairs in the
+            multiplexed library), ``assigned`` (pairs matching a sample tag) and
+            ``pct_assigned``; empty when there are no demux reports.
+        """
+        cols = ["library", "read_pairs", "assigned", "pct_assigned"]
+        if self.demux_logs_dir is None:
+            return pd.DataFrame(columns=cols)
+        rows: List[Dict[str, object]] = []
+        for log in sorted(self.demux_logs_dir.glob("*_demultiplex.txt")):
+            total = _first_match(log, _RE_PROCESSED)
+            assigned = _first_match(log, _RE_WRITTEN)
+            pct = round(assigned / total * 100, 2) if total and assigned is not None else pd.NA
+            rows.append({
+                "library": log.name[: -len("_demultiplex.txt")],
+                "read_pairs": total if total is not None else pd.NA,
+                "assigned": assigned if assigned is not None else pd.NA,
+                "pct_assigned": pct,
+            })
+        return pd.DataFrame(rows, columns=cols)
+
+    def write_demux_summary(
+        self, output_dir: Union[str, Path], summary_df: Optional[pd.DataFrame] = None
+    ) -> Optional[Path]:
+        """Write ``demux_summary.csv`` (per-library tag assignment) when demux ran.
+
+        Args:
+            output_dir: Directory to write into; created if missing.
+            summary_df: Optional pre-built table from :meth:`demux_summary`.
+
+        Returns:
+            The written path, or ``None`` when there is nothing to write.
+        """
+        if summary_df is None:
+            summary_df = self.demux_summary()
+        if summary_df.empty:
+            return None
+        out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        csv_path = out_dir / "demux_summary.csv"
+        summary_df.to_csv(csv_path, index=False)
+        logger.info(f"Wrote demultiplex summary: {csv_path}")
+        return csv_path
 
     def _raw_fastq_count(self, sample: str) -> Optional[int]:
         """Count a sample's raw read pairs from its R1 FASTQ under ``raw_dir``.
@@ -395,10 +494,11 @@ class ReadTrackingBuilder:
             and a ``[WARN]`` is emitted.
         """
         trim = self._trim_counts()
+        demux = self._demux_counts()
         dada = self._dada2_counts() if self.dada2_dir is not None else pd.DataFrame()
         swarm = self._swarm_counts() if self.swarm_otu_table is not None else {}
 
-        samples = sorted(set(trim) | set(dada.index.astype(str)) | set(swarm))
+        samples = sorted(set(trim) | set(demux) | set(dada.index.astype(str)) | set(swarm))
         if not samples:
             logger.warning(
                 "[WARN] read_tracking: expected=samples from logs/track, "
@@ -412,7 +512,18 @@ class ReadTrackingBuilder:
             t = trim.get(sample, {})
             row["raw"] = t.get("raw")
             row["trimmed"] = t.get("trimmed")
-            if row["raw"] is None:
+            if self.demux_logs_dir is not None:
+                # The trim step's input is the primer-found reads; raw is the
+                # sample's demultiplexed reads.
+                dm = demux.get(sample, {})
+                row[DEMUX_STEP] = row["raw"] if row["raw"] is not None else dm.get(DEMUX_STEP)
+                row["raw"] = dm.get("raw")
+                if row["raw"] is None:
+                    logger.warning(
+                        f"[WARN] read_tracking {sample}: expected=primer-detection "
+                        f"report in {self.demux_logs_dir}, got=missing, fallback=raw NA",
+                    )
+            elif row["raw"] is None:
                 row["raw"] = self._raw_fastq_count(sample)
             if self.dada2_dir is not None:
                 if sample in dada.index:
@@ -508,6 +619,9 @@ class ReadTrackingBuilder:
             A short ``"; "``-joined list of the files each step is read from.
         """
         src = []
+        if self.demux_logs_dir is not None and {"raw", DEMUX_STEP} & set(steps):
+            src.append(f"<sample>_primer_round1/2.txt in {self.demux_logs_dir}")
+            steps = [s for s in steps if s not in ("raw", DEMUX_STEP)]
         if {"raw", "trimmed"} & set(steps):
             s = f"<sample>_trim_pass1/2.txt in {self.logs_dir}"
             if "raw" in steps and self.raw_dir is not None:

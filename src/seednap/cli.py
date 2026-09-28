@@ -1064,7 +1064,8 @@ def trim(
 @click.option(
     "--no-gunzip",
     is_flag=True,
-    help="Keep output files gzipped (default: gunzip)",
+    hidden=True,
+    help="Deprecated no-op: outputs are always gzipped.",
 )
 def demultiplex(
     raw_reads_dir: Path,
@@ -1089,6 +1090,10 @@ def demultiplex(
     3. Detect primers (both orientations)
     4. Merge and realign reads
 
+    Writes gzipped per-sample FASTQs to OUTPUT_DIR/samples/, the tag file to
+    OUTPUT_DIR/cutadapt_tags/ and the cutadapt reports to OUTPUT_DIR/logs/.
+    Intermediate files are deleted as soon as they are consumed.
+
     In a ligation-based library, many samples are pooled into one sequencing run, each
     sample marked by a short tag (barcode) ligated to its reads. Demultiplexing splits the
     pooled FASTQs back into per-sample reads by those tags before primer trimming, so each
@@ -1104,8 +1109,7 @@ def demultiplex(
         reverse_primer: Reverse primer sequence.
         output_dir: Base output directory for the demultiplexed/realigned reads.
         cores: Number of CPU cores to use.
-        no_gunzip: If True (``--no-gunzip``), leave the output files gzipped; otherwise the
-            outputs are gunzipped.
+        no_gunzip: Deprecated and ignored; outputs are always gzipped.
 
     Returns:
         None. Writes the realigned per-sample reads and prints their directory on success.
@@ -1128,18 +1132,25 @@ def demultiplex(
     try:
         trimmer = LigationTrimmer(cores=cores)
 
-        realigned_dir = trimmer.process_library(
+        tag_files = trimmer.generate_tag_files(
+            metadata_csv=metadata_csv,
+            output_dir=output_dir / "cutadapt_tags",
+            libraries=[library_name],
+        )
+        samples_dir = output_dir / "samples"
+        trimmer.process_library(
             raw_reads_dir=raw_reads_dir,
             library_name=library_name,
-            metadata_csv=metadata_csv,
-            output_base_dir=output_dir,
+            tag_file=trimmer.library_tag_file(tag_files, library_name, metadata_csv),
+            output_dir=samples_dir,
+            work_dir=output_dir / "work",
+            log_dir=output_dir / "logs",
             forward_primer=forward_primer,
             reverse_primer=reverse_primer,
-            gunzip_output=not no_gunzip,
         )
 
         print_success("\nCompleted ligation library processing!")
-        console.print(f"Realigned reads saved to: {realigned_dir}\n")
+        console.print(f"Realigned reads saved to: {samples_dir}\n")
 
     except Exception as e:
         print_error(f"Demultiplexing failed: {str(e)}")
@@ -2060,6 +2071,9 @@ def report(
         # the trim step); read them there so raw/trimmed counts (and % retained) populate.
         "marker": marker, "logs_dir": out / "01_trim" / marker / "logs",
         "warn_below_retention_pct": warn_retention, "warn_step_loss_pct": warn_step_loss,
+        # Ligation demux reports, used when the run demultiplexed (the builder ignores
+        # a missing directory).
+        "demux_logs_dir": out / "01_trim" / marker / "demux" / "logs",
     }
     method = None
     if (dada2_dir / "track_reads.csv").exists():
@@ -2099,6 +2113,8 @@ def report(
         paths = builder.write(report_dir, df=df)
         step_summary_df = builder.step_summary(df)
         builder.write_step_summary(report_dir, summary_df=step_summary_df)
+        demux_summary_df = builder.demux_summary()
+        builder.write_demux_summary(report_dir, summary_df=demux_summary_df)
         warns = builder.warnings(df, log=False)  # keep the console clean; shown below + in HTML
 
         table = Table(show_header=True, header_style="bold cyan")
@@ -2196,6 +2212,7 @@ def report(
                 field_metadata_csv=field_metadata, project_metadata_csv=project_metadata,
                 log_file=log_file,
                 step_summary_df=step_summary_df,
+                demux_summary_df=demux_summary_df,
                 summary={
                     "warn_below_retention_pct": warn_retention,
                     "subtitle": f"{len(df)} samples · marker {marker}",

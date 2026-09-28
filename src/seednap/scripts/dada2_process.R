@@ -129,7 +129,7 @@ filter_args <- list(
   fwd=file.path(pathFR, fastqFs), filt=file.path(filtpathFR, fastqFs),
   rev=file.path(pathFR, fastqRs), filt.rev=file.path(filtpathFR, fastqRs),
   maxEE=max_ee, truncQ=trunc_q, maxN=max_n, rm.phix=rm_phix,
-  compress=FALSE, verbose=TRUE, multithread=multithread
+  compress=TRUE, verbose=TRUE, multithread=multithread  # gzip the filtered reads
 )
 if (min_len > 0) filter_args$minLen <- min_len
 if (max_len > 0) filter_args$maxLen <- max_len

@@ -415,8 +415,9 @@ class PipelineOrchestrator:
 
         Returns:
             Dictionary of output paths. For the ligation protocol: ``demux_dir`` (the
-            per-sample output directory) and ``trimmed_dir`` (the trimmer's per-sample
-            result). On skip (already completed), the previously recorded outputs.
+            step's output root), ``samples_dir`` (the per-sample FASTQs trim reads),
+            ``logs_dir`` (the kept Cutadapt reports) and ``libraries``. On skip
+            (already completed), the previously recorded outputs.
 
         Raises:
             ValueError: If the configured ``demultiplex.protocol`` is unknown, or (for
@@ -457,23 +458,29 @@ class PipelineOrchestrator:
         matches this marker's forward primer when that column is present. The marker
         name is NOT a library name and is not used to find raw files.
 
-        Each library is processed in its own subdirectory, then its per-sample FASTQs
-        are gathered into one flat ``samples`` directory, which the ``trim`` step reads
-        instead of ``paths.raw_data``. A sample failing to meet the configured
-        failure-rate threshold aborts the step (enforced inside the trimmer).
+        Layout under ``01_trim/<marker>/demux``::
+
+            cutadapt_tags/<library>.fasta   tag files, written once for all libraries
+            logs/                           cutadapt reports, kept for read tracking
+            work/<library>/                 temporary; deleted as each sample is done
+            samples/<sample>.R[12].fastq.gz per-sample reads, read by trim, then
+                                            deleted once trim completes
+
+        The whole ``demux`` directory is cleared first, so a re-run cannot mix in
+        stale samples or append to old cutadapt reports.
 
         Args:
             None.
 
         Returns:
             Dictionary with ``demux_dir`` (``01_trim/<marker>/demux``), ``samples_dir``
-            (the flat per-sample directory consumed by trim) and ``libraries`` (the
-            library names processed).
+            (the flat per-sample directory consumed by trim), ``logs_dir`` (the kept
+            cutadapt reports) and ``libraries`` (the library names processed).
 
         Raises:
             ValueError: If ``demultiplex.metadata`` (the sample-tag CSV) is not set, if
-                no library in it matches this marker, or if two libraries produce the
-                same sample name.
+                no library in it matches this marker, or if two libraries share a
+                sample name.
         """
         if self.config.demultiplex.metadata is None:
             raise ValueError(
@@ -492,55 +499,94 @@ class PipelineOrchestrator:
             error_rate=self.config.trimming.max_error_rate,
             min_length=self.config.trimming.min_length,
         )
-        output_dir = (
-            self.config.paths.output / "01_trim" / self.config.marker.name / "demux"
-        )
-        samples_dir = output_dir / "samples"
+        demux_dir = self._demux_dir()
+        samples_dir = demux_dir / "samples"
+        logs_dir = demux_dir / "logs"
 
         libraries = self._ligation_libraries(trimmer)
         logger.info(
             f"Ligation demultiplex: {len(libraries)} library(ies) from "
             f"{self.config.demultiplex.metadata}: {libraries}"
         )
+        # Every library writes straight into samples_dir, so a sample name shared by
+        # two libraries must be rejected before any compute, not after an overwrite.
+        self._check_unique_demux_samples(
+            trimmer, Path(self.config.demultiplex.metadata), libraries
+        )
 
-        # Clear per-sample FASTQs from a previous run so trim cannot pick up stale
-        # samples (same reasoning as the trim step's own cleanup).
-        if samples_dir.exists():
-            shutil.rmtree(samples_dir)
-        samples_dir.mkdir(parents=True, exist_ok=True)
+        if demux_dir.exists():
+            shutil.rmtree(demux_dir)
 
-        sample_origin: Dict[str, str] = {}
+        tag_files = trimmer.generate_tag_files(
+            metadata_csv=self.config.demultiplex.metadata,
+            output_dir=demux_dir / "cutadapt_tags",
+            libraries=libraries,
+        )
+
+        n_samples = 0
         for library in libraries:
-            realigned_dir = trimmer.process_library(
+            written = trimmer.process_library(
                 raw_reads_dir=self.config.paths.raw_data,
                 library_name=library,
-                metadata_csv=self.config.demultiplex.metadata,
-                output_base_dir=output_dir / library,
+                tag_file=trimmer.library_tag_file(
+                    tag_files, library, self.config.demultiplex.metadata
+                ),
+                output_dir=samples_dir,
+                work_dir=demux_dir / "work" / library,
+                log_dir=logs_dir,
                 forward_primer=self.config.marker.primers.forward,
                 reverse_primer=self.config.marker.primers.reverse,
                 max_sample_failure_rate=self.config.demultiplex.max_sample_failure_rate,
             )
-            for fq in sorted(realigned_dir.glob("*.R[12].fastq*")):
-                sample = fq.name.split(".R")[0]
-                previous = sample_origin.setdefault(sample, library)
-                if previous != library:
-                    raise ValueError(
-                        f"Sample '{sample}' was demultiplexed from both library "
-                        f"'{previous}' and library '{library}'. eventID values must be "
-                        f"unique across libraries in {self.config.demultiplex.metadata} "
-                        f"(add a PCR-replicate/library suffix to disambiguate)."
-                    )
-                shutil.move(str(fq), str(samples_dir / fq.name))
+            n_samples += len(written)
+        shutil.rmtree(demux_dir / "work", ignore_errors=True)
 
         logger.info(
-            f"Ligation demultiplex: gathered {len(sample_origin)} sample(s) into "
-            f"{samples_dir}"
+            f"Ligation demultiplex: gathered {n_samples} sample(s) into {samples_dir}"
         )
         return {
-            "demux_dir": output_dir,
+            "demux_dir": demux_dir,
             "samples_dir": samples_dir,
+            "logs_dir": logs_dir,
             "libraries": libraries,
         }
+
+    def _demux_dir(self) -> Path:
+        """Root of the demultiplex step's outputs, ``<output>/01_trim/<marker>/demux``.
+
+        Returns:
+            The directory path (not created here).
+        """
+        return self.config.paths.output / "01_trim" / self.config.marker.name / "demux"
+
+    @staticmethod
+    def _check_unique_demux_samples(
+        trimmer: LigationTrimmer, metadata_csv: Path, libraries: List[str]
+    ) -> None:
+        """Reject a sample name (eventID) that appears in more than one library.
+
+        Args:
+            trimmer: The LigationTrimmer whose tag generator reads the metadata.
+            metadata_csv: The sample-tag metadata CSV (``demultiplex.metadata``).
+            libraries: The libraries being demultiplexed.
+
+        Raises:
+            ValueError: If an eventID is listed under two of ``libraries``.
+        """
+        df = trimmer.tag_generator._read_metadata(metadata_csv)
+        if "eventID" not in df.columns:
+            return  # the tag generator reports the missing column with full context
+        df = df[df["library"].astype(str).isin(libraries)]
+        per_sample = df.groupby(df["eventID"].astype(str))["library"].apply(
+            lambda libs: sorted(set(libs.astype(str)))
+        )
+        for sample, libs in per_sample.items():
+            if len(libs) > 1:
+                raise ValueError(
+                    f"Sample '{sample}' is listed under libraries {libs} in "
+                    f"{metadata_csv}. eventID values must be unique across libraries "
+                    f"(add a PCR-replicate/library suffix to disambiguate)."
+                )
 
     def _ligation_libraries(self, trimmer: LigationTrimmer) -> List[str]:
         """Return the library names to demultiplex for this marker.
@@ -699,7 +745,34 @@ class PipelineOrchestrator:
                 "samples": trimmed_outputs,
             }
 
-        return self._execute_step("trim", body)
+        outputs = self._execute_step("trim", body)
+        self._drop_demux_samples()
+        return outputs
+
+    def _drop_demux_samples(self) -> None:
+        """Delete the demultiplexed per-sample FASTQs once trim has completed.
+
+        They are trim's input only; everything downstream reads the trimmed reads,
+        and read tracking takes the demux counts from the kept cutadapt reports. Done
+        only after the completed trim step is saved in the state, so a failed or
+        interrupted trim can still resume from them.
+
+        Returns:
+            None.
+        """
+        if not (
+            self.state.is_step_completed("demultiplex")
+            and self.state.is_step_completed("trim")
+        ):
+            return
+        samples_dir = self._trim_input_dir()
+        # Only ever delete inside the demux output tree (never raw_data, whatever an
+        # old state file recorded).
+        if self._demux_dir().resolve() not in samples_dir.resolve().parents:
+            return
+        if samples_dir.is_dir():
+            shutil.rmtree(samples_dir)
+            logger.info(f"Removed demultiplexed reads (trim completed): {samples_dir}")
 
     def _warn_on_heavy_trim_loss(self, logs_dir: Path) -> None:
         """Emit an early diagnostic ``[WARN]`` when primer trimming discards most reads.
@@ -1062,6 +1135,7 @@ class PipelineOrchestrator:
             builder.write(report_dir, df=df)
             # Run-level step summary: total reads + ASV/OTU count after each step.
             builder.write_step_summary(report_dir, summary_df=builder.step_summary(df))
+            builder.write_demux_summary(report_dir)
             warns = builder.warnings(df)
 
             # Persist a compact summary into the step state (resume-safe).
@@ -1134,6 +1208,10 @@ class PipelineOrchestrator:
                 f"[WARN] read_tracking: expected=raw FASTQ dir, got=error ({exc}), "
                 f"fallback=raw counts from Cutadapt logs only",
             )
+        # Ligation demux reports: raw = reads assigned to each sample by its tag, then
+        # reads with primers found, before trimming.
+        if "demultiplex" in self.config.pipeline.steps:
+            kwargs["demux_logs_dir"] = self._demux_dir() / "logs"
         if method == "dada2":
             kwargs["dada2_dir"] = out / "02_dada2" / marker
         elif method == "swarm":
@@ -1250,6 +1328,7 @@ class PipelineOrchestrator:
                 project_metadata_csv=self.config.report.project_metadata,
                 log_file=getattr(self, "_log_file", None),
                 step_summary_df=step_summary_df,
+                demux_summary_df=builder.demux_summary(),
                 summary={
                     "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
                     "subtitle": f"{len(df)} samples · marker {marker}",

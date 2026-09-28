@@ -35,18 +35,17 @@ def _orch(tmp_path, metadata_rows):
 
 
 def _fake_process_library(calls):
-    def fake(self, raw_reads_dir, library_name, metadata_csv, output_base_dir, **kw):
+    def fake(self, raw_reads_dir, library_name, tag_file, output_dir, work_dir, log_dir, **kw):
         calls.append(library_name)
-        realigned = Path(output_base_dir) / "00_demultiplex_ligation" / "realigned"
-        realigned.mkdir(parents=True)
-        import csv
-
-        with open(metadata_csv) as fh:
-            for row in csv.DictReader(fh):
-                if row["library"] == library_name:
-                    for r in ("R1", "R2"):
-                        (realigned / f"{row['eventID']}.{r}.fastq").write_text("")
-        return realigned
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        samples = [
+            line[1:].strip() for line in Path(tag_file).read_text().splitlines()
+            if line.startswith(">")
+        ]
+        for sample in samples:
+            for r in ("R1", "R2"):
+                (Path(output_dir) / f"{sample}.{r}.fastq.gz").write_text("")
+        return samples
 
     return fake
 
@@ -73,13 +72,41 @@ def test_demux_uses_metadata_libraries_and_trim_reads_demux_output(tmp_path, mon
     assert calls == ["RUN_A_L001", "RUN_B_L002"]  # library names, not marker.name
     samples_dir = Path(outputs["samples_dir"])
     assert sorted(p.name for p in samples_dir.iterdir()) == [
-        "S1.R1.fastq", "S1.R2.fastq", "S2.R1.fastq", "S2.R2.fastq",
-        "S3.R1.fastq", "S3.R2.fastq",
+        "S1.R1.fastq.gz", "S1.R2.fastq.gz", "S2.R1.fastq.gz", "S2.R2.fastq.gz",
+        "S3.R1.fastq.gz", "S3.R2.fastq.gz",
     ]
+    # tag files are written once, beside (not inside) the per-library work dirs,
+    # and only for this marker's libraries
+    demux_dir = Path(outputs["demux_dir"])
+    assert sorted(p.name for p in (demux_dir / "cutadapt_tags").iterdir()) == [
+        "RUN_A_L001.fasta", "RUN_B_L002.fasta",
+    ]
+    assert not (demux_dir / "work").exists()
     # trim now discovers samples in the demux output, not in raw_data
     assert orch._trim_input_dir() == samples_dir
     assert orch._get_sample_list() == ["S1", "S2", "S3"]
-    assert orch._find_read_file("S3", "R2") == samples_dir / "S3.R2.fastq"
+    assert orch._find_read_file("S3", "R2") == samples_dir / "S3.R2.fastq.gz"
+
+
+def test_demux_samples_removed_only_after_trim_completes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    fwd = load_config(
+        str(_REPO / "config" / "markers" / "teleo_rhone.yaml")
+    ).marker.primers.forward
+    orch, cfg = _orch(tmp_path, [("S1", "LIB_A", fwd)])
+    monkeypatch.setattr(LigationTrimmer, "process_library", _fake_process_library([]))
+    orch.state.add_step("demultiplex")
+    orch.state.add_step("trim")
+    samples_dir = Path(orch.run_demultiplex()["samples_dir"])
+
+    orch._drop_demux_samples()  # trim not completed: resume still needs them
+    assert samples_dir.is_dir()
+
+    orch.state.start_step("trim")
+    orch.state.complete_step("trim", {"trimmed_dir": str(tmp_path)})
+    orch._drop_demux_samples()
+    assert not samples_dir.exists()
+    assert cfg.paths.raw_data.is_dir()  # raw data is never touched
 
 
 def test_demux_rejects_sample_name_shared_by_two_libraries(tmp_path, monkeypatch):
