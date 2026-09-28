@@ -503,24 +503,30 @@ class PipelineOrchestrator:
         samples_dir = demux_dir / "samples"
         logs_dir = demux_dir / "logs"
 
-        libraries = self._ligation_libraries(trimmer)
+        metadata_csv = Path(self.config.demultiplex.metadata)
+        rows = self._marker_demux_rows(trimmer, metadata_csv)
+        libraries = sorted(rows["library"].dropna().astype(str).unique())
+        if not libraries:
+            raise ValueError(f"The 'library' column of {metadata_csv} is empty.")
         logger.info(
             f"Ligation demultiplex: {len(libraries)} library(ies) from "
-            f"{self.config.demultiplex.metadata}: {libraries}"
+            f"{metadata_csv}: {libraries}"
         )
-        # Every library writes straight into samples_dir, so a sample name shared by
-        # two libraries must be rejected before any compute, not after an overwrite.
-        self._check_unique_demux_samples(
-            trimmer, Path(self.config.demultiplex.metadata), libraries
-        )
+        # Every library writes straight into samples_dir, so a sample name listed
+        # twice for this marker must be rejected before any compute, not after an
+        # overwrite.
+        self._check_unique_demux_samples(rows, metadata_csv)
 
         if demux_dir.exists():
             shutil.rmtree(demux_dir)
 
+        # Only this marker's rows go into the tag files: another marker's samples in
+        # a shared library are left untagged (and discarded) instead of demultiplexed.
         tag_files = trimmer.generate_tag_files(
-            metadata_csv=self.config.demultiplex.metadata,
+            metadata_csv=metadata_csv,
             output_dir=demux_dir / "cutadapt_tags",
             libraries=libraries,
+            primer_forward=self.config.marker.primers.forward,
         )
 
         n_samples = 0
@@ -560,53 +566,51 @@ class PipelineOrchestrator:
         return self.config.paths.output / "01_trim" / self.config.marker.name / "demux"
 
     @staticmethod
-    def _check_unique_demux_samples(
-        trimmer: LigationTrimmer, metadata_csv: Path, libraries: List[str]
-    ) -> None:
-        """Reject a sample name (eventID) that appears in more than one library.
+    def _check_unique_demux_samples(rows: Any, metadata_csv: Path) -> None:
+        """Reject a sample name (eventID) listed more than once for this marker.
+
+        Runs on this marker's rows only, so the same eventID may appear once per
+        marker (e.g. teleo in one library, mifish in the same or another library).
 
         Args:
-            trimmer: The LigationTrimmer whose tag generator reads the metadata.
-            metadata_csv: The sample-tag metadata CSV (``demultiplex.metadata``).
-            libraries: The libraries being demultiplexed.
+            rows: This marker's metadata rows (from :meth:`_marker_demux_rows`).
+            metadata_csv: The sample-tag metadata CSV (for the error message).
 
         Raises:
-            ValueError: If an eventID is listed under two of ``libraries``.
+            ValueError: If an eventID has more than one row for this marker.
         """
-        df = trimmer.tag_generator._read_metadata(metadata_csv)
-        if "eventID" not in df.columns:
+        if "eventID" not in rows.columns:
             return  # the tag generator reports the missing column with full context
-        df = df[df["library"].astype(str).isin(libraries)]
-        per_sample = df.groupby(df["eventID"].astype(str))["library"].apply(
-            lambda libs: sorted(set(libs.astype(str)))
+        per_sample = rows.groupby(rows["eventID"].astype(str))["library"].apply(
+            lambda libs: sorted(libs.astype(str))
         )
         for sample, libs in per_sample.items():
             if len(libs) > 1:
                 raise ValueError(
-                    f"Sample '{sample}' is listed under libraries {libs} in "
-                    f"{metadata_csv}. eventID values must be unique across libraries "
-                    f"(add a PCR-replicate/library suffix to disambiguate)."
+                    f"Sample '{sample}' has {len(libs)} rows for this marker in "
+                    f"{metadata_csv} (libraries {libs}). Each eventID must appear once "
+                    f"per marker (add a PCR-replicate/library suffix to disambiguate)."
                 )
 
-    def _ligation_libraries(self, trimmer: LigationTrimmer) -> List[str]:
-        """Return the library names to demultiplex for this marker.
+    def _marker_demux_rows(self, trimmer: LigationTrimmer, metadata_csv: Path) -> Any:
+        """Return the rows of the demultiplex metadata that belong to this marker.
 
-        Reads the distinct ``library`` values from ``demultiplex.metadata``. When the
-        CSV has a ``pcr_primer_forward`` column, only libraries with rows matching this
+        When the CSV has a ``pcr_primer_forward`` column, only rows matching this
         marker's forward primer are kept, so a metadata file shared by several markers
-        only demultiplexes this marker's libraries.
+        (even within one library) only demultiplexes this marker's samples. Without
+        that column every row is used.
 
         Args:
             trimmer: The LigationTrimmer whose tag generator reads the metadata (reused
                 so the delimiter sniffing matches the tag-file generation).
+            metadata_csv: The sample-tag metadata CSV (``demultiplex.metadata``).
 
         Returns:
-            Sorted list of library names.
+            The matching rows, as a pandas DataFrame.
 
         Raises:
-            ValueError: If the CSV has no ``library`` column or no library matches.
+            ValueError: If the CSV has no ``library`` column or no row matches.
         """
-        metadata_csv = Path(self.config.demultiplex.metadata)
         df = trimmer.tag_generator._read_metadata(metadata_csv)
         if "library" not in df.columns:
             raise ValueError(
@@ -625,10 +629,7 @@ class PipelineOrchestrator:
                     f"{sorted(df['pcr_primer_forward'].astype(str).unique())[:10]}."
                 )
             df = matching
-        libraries = sorted(df["library"].dropna().astype(str).unique())
-        if not libraries:
-            raise ValueError(f"The 'library' column of {metadata_csv} is empty.")
-        return libraries
+        return df
 
     def _run_standard_demux(self) -> Dict[str, Path]:
         """Run standard (tag-based) demultiplexing.

@@ -301,6 +301,7 @@ class LigationTrimmer:
         metadata_csv: Union[str, Path],
         output_dir: Union[str, Path],
         libraries: Optional[List[str]] = None,
+        primer_forward: Optional[str] = None,
     ) -> Dict[str, Path]:
         """Write one cutadapt tag FASTA per library, once for the whole run.
 
@@ -308,12 +309,17 @@ class LigationTrimmer:
             metadata_csv: Metadata CSV with eventID, tag_demultiplex and library columns.
             output_dir: Directory for the tag files (``<library>.fasta``).
             libraries: Restrict to these libraries (default: every library in the CSV).
+            primer_forward: Restrict to rows of this marker (``pcr_primer_forward``),
+                when the CSV has that column.
 
         Returns:
             Mapping of library name to its tag FASTA.
         """
         return self.tag_generator.generate_ligation_tag_files(
-            metadata_csv=metadata_csv, output_dir=output_dir, libraries=libraries
+            metadata_csv=metadata_csv,
+            output_dir=output_dir,
+            libraries=libraries,
+            primer_forward=primer_forward,
         )
 
     @staticmethod

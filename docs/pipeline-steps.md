@@ -50,7 +50,8 @@ Every FASTQ is gzipped, and each intermediate file is deleted as soon as the nex
 - Both orientations are merged by concatenating the gzip streams, with no decompression.
 - `samples/` is deleted once `trim` has completed and been recorded in the run state, so an interrupted `trim` can still `--resume` from it.
 - The whole `demux/` directory is cleared when the step starts, so a re-run cannot pick up stale samples or append to old Cutadapt reports.
-- An `eventID` listed under two libraries is rejected before any compute.
+- When the metadata has a `pcr_primer_forward` column, only this marker's rows are used: libraries, tag files and the sample list all come from rows matching the marker's forward primer. The same `eventID` can therefore appear once per marker, in different libraries or in one library pooling several markers. Reads carrying another marker's tag are left unassigned and discarded.
+- An `eventID` with more than one row for this marker is rejected before any compute.
 
 > [!WARNING]
 > Listing `demultiplex` in `pipeline.steps` with any protocol other than `ligation` (including the default `none` and the unimplemented `standard`) is rejected at config load, before any step runs. If your reads already arrive as one FASTQ pair per sample (common for external collaborators), omit `demultiplex` from `pipeline.steps` so the pipeline starts at `trim`.

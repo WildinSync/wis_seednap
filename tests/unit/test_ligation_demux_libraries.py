@@ -116,8 +116,51 @@ def test_demux_rejects_sample_name_shared_by_two_libraries(tmp_path, monkeypatch
     ).marker.primers.forward
     orch, _ = _orch(tmp_path, [("S1", "LIB_A", fwd), ("S1", "LIB_B", fwd)])
     monkeypatch.setattr(LigationTrimmer, "process_library", _fake_process_library([]))
-    with pytest.raises(ValueError, match="unique across libraries"):
+    with pytest.raises(ValueError, match="once per marker"):
         orch.run_demultiplex()
+
+
+def test_demux_rejects_sample_listed_twice_in_one_library(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    fwd = load_config(
+        str(_REPO / "config" / "markers" / "teleo_rhone.yaml")
+    ).marker.primers.forward
+    orch, _ = _orch(tmp_path, [("S1", "LIB_A", fwd), ("S1", "LIB_A", fwd)])
+    monkeypatch.setattr(LigationTrimmer, "process_library", _fake_process_library([]))
+    with pytest.raises(ValueError, match="once per marker"):
+        orch.run_demultiplex()
+
+
+def test_demux_keeps_only_this_markers_rows(tmp_path, monkeypatch):
+    """The same eventID may carry one row per marker, across or within libraries."""
+    monkeypatch.chdir(tmp_path)
+    fwd = load_config(
+        str(_REPO / "config" / "markers" / "teleo_rhone.yaml")
+    ).marker.primers.forward
+    other = "GTCGGTAAAACTCGTGCCAGC"  # mifish
+    orch, _ = _orch(
+        tmp_path,
+        [
+            ("S1", "LIB_A", fwd),
+            ("S1", "LIB_B", other),  # S1 again, other marker, other library
+            ("S2", "LIB_B", fwd),
+            ("S2", "LIB_B", other),  # S2 twice in one library, one row per marker
+            ("S3", "LIB_B", other),  # other marker only
+        ],
+    )
+    calls = []
+    monkeypatch.setattr(LigationTrimmer, "process_library", _fake_process_library(calls))
+
+    outputs = orch.run_demultiplex()
+
+    assert calls == ["LIB_A", "LIB_B"]
+    tags = Path(outputs["demux_dir"]) / "cutadapt_tags"
+    assert (tags / "LIB_A.fasta").read_text().count(">") == 1
+    assert (tags / "LIB_B.fasta").read_text().splitlines()[0] == ">S2"
+    assert (tags / "LIB_B.fasta").read_text().count(">") == 1
+    assert sorted(p.name for p in Path(outputs["samples_dir"]).iterdir()) == [
+        "S1.R1.fastq.gz", "S1.R2.fastq.gz", "S2.R1.fastq.gz", "S2.R2.fastq.gz",
+    ]
 
 
 def test_trim_input_is_raw_data_without_demux(tmp_path, monkeypatch):

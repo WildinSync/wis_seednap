@@ -233,6 +233,7 @@ class TagFileGenerator:
         tag_col: str = "tag_demultiplex",
         library_col: str = "library",
         libraries: Optional[Iterable[str]] = None,
+        primer_forward: Optional[str] = None,
     ) -> Dict[str, Path]:
         """
         Generate tag files for ligation-based demultiplexing.
@@ -253,6 +254,10 @@ class TagFileGenerator:
             libraries: Only write tag files for these libraries (default: every
                 library in the metadata). Lets a metadata file shared by several
                 markers produce tag files for this marker's libraries only.
+            primer_forward: Only keep rows whose ``pcr_primer_forward`` equals this
+                primer (case-insensitive), when the CSV has that column. A library
+                pooling several markers then gets a tag file holding only this
+                marker's samples, so the same eventID can carry one row per marker.
 
         Returns:
             Dictionary mapping library names to output file paths
@@ -305,11 +310,18 @@ class TagFileGenerator:
             }
         )
 
+        if primer_forward is not None and "pcr_primer_forward" in df.columns:
+            df = df[
+                df["pcr_primer_forward"].astype(str).str.upper() == primer_forward.upper()
+            ]
         if libraries is not None:
             df = df[df["library"].astype(str).isin(set(libraries))]
-            if df.empty:
-                logger.warning(f"None of the libraries {list(libraries)} is in {metadata_csv}")
-                return {}
+        if df.empty:
+            logger.warning(
+                f"No row of {metadata_csv} matches libraries={libraries} "
+                f"and primer_forward={primer_forward}; no tag file written"
+            )
+            return {}
 
         # Format tags
         df["tag_formatted"] = df.apply(

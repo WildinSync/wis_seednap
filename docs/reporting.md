@@ -188,7 +188,7 @@ The standalone `report` command loads no YAML config, so it always writes to `<-
 
 ## 🏷️ Demultiplexing summary (`demux_summary.csv`)
 
-Written only when the run demultiplexed ligation libraries, from `01_trim/<marker>/demux/logs/<library>_demultiplex.txt`. One row per library: `read_pairs` (pairs in the multiplexed library), `assigned` (pairs matching a sample tag) and `pct_assigned`. The HTML report shows it as a table in the Read-tracking section.
+Written only when the run demultiplexed ligation libraries, from `01_trim/<marker>/demux/logs/<library>_demultiplex.txt`. One row per library: `read_pairs` (pairs in the multiplexed library), `assigned` (pairs matching one of this marker's sample tags) and `pct_assigned`. In a library pooling several markers, `pct_assigned` is this marker's share of the library. The HTML report shows it as a table in the Read-tracking section.
 
 During `run-pipeline`, the `report` step writes the read-tracking table, step summary, and (unless disabled with `html_report: false`) the HTML report together, after the rest of the pipeline has run, so the taxonomy and provenance sections are populated.
 

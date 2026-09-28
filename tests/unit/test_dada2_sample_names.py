@@ -1,6 +1,6 @@
 """Unit test for sample-name extraction in scripts/dada2_process.R.
 
-The trim step writes "<sample>.R1.fastq" / "<sample>.R2.fastq". DADA2 derives
+The trim step writes "<sample>.R1.fastq.gz" / "<sample>.R2.fastq.gz". DADA2 derives
 the per-sample name from those filenames and uses it as the abundance-table
 column header (seqtab_clean_t.csv) and the track_reads.csv label.
 
@@ -31,8 +31,8 @@ R_SCRIPT = r_script_path("dada2_process.R")
 
 # The bug cases: distinct sample names that the old dot-split collapsed/collided.
 SAMPLES_TO_FILES = {
-    "Site.A": "Site.A.R1.fastq",
-    "Site.B": "Site.B.R1.fastq",
+    "Site.A": "Site.A.R1.fastq.gz",
+    "Site.B": "Site.B.R1.fastq.gz",
     "Sample01": "Sample01.R1.fastq",
     "Blank-ext": "Blank-ext.R1.fastq.gz",
     "BB_Unknown_Svalbard": "BB_Unknown_Svalbard.R1.fastq",
@@ -48,16 +48,21 @@ def _extraction_regex_from_script() -> str:
 
 
 @pytest.mark.skipif(shutil.which("Rscript") is None, reason="Rscript not installed")
-def test_sample_names_strip_read_suffix_not_first_dot():
+def test_sample_names_strip_read_suffix_not_first_dot(tmp_path):
     pattern = _extraction_regex_from_script()
     files = list(SAMPLES_TO_FILES.values())
     expected = list(SAMPLES_TO_FILES.keys())
 
-    # Run the same extraction R uses, on the bug-case filenames.
+    # Run the same extraction R uses, on the bug-case filenames. The code goes
+    # through a file, not `Rscript -e`: -e strips one level of backslashes, so the
+    # script's "\\." would reach R as the invalid escape "\.".
     r_files = "c(" + ", ".join(f'"{f}"' for f in files) + ")"
-    r_expr = f'cat(sub("{pattern}", "", basename({r_files})), sep="\\n")'
+    r_script = tmp_path / "extract.R"
+    r_script.write_text(
+        f'cat(sub("{pattern}", "", basename({r_files})), sep="\\n")\n', encoding="utf-8"
+    )
     proc = subprocess.run(
-        ["Rscript", "-e", r_expr],
+        ["Rscript", str(r_script)],
         capture_output=True,
         text=True,
         check=True,
