@@ -349,20 +349,23 @@ seednap manifest metadata/metadata_field_my_dataset.csv \
 
 ## 🆕 `init`
 
-Generate an example configuration file.
+Create a starter configuration file.
 
 ```
-seednap init [OPTIONS]
+seednap init [small|complete] [OPTIONS]
 ```
 
-| Option | Default | Description |
+| Argument / option | Default | Description |
 |---|---|---|
-| `-m, --marker TEXT` | `teleo` | Marker name |
-| `-o, --output PATH` | `config/markers/example.yaml` | Output path |
-| `--minimal / --full` | `--minimal` | Required-fields-only config (default) or the fully-annotated reference template |
+| `small` / `complete` | `small` | `small`: the fields you normally edit, everything else on built-in defaults. `complete`: every parameter with its default value and a short comment |
+| `-m, --marker TEXT` | `teleo` | Marker name. Its primers are filled in from the bundled primer list when listed there |
+| `-o, --output PATH` | `<marker>.yaml` | Output path |
 | `-f, --force` | off | Overwrite existing file |
 
-`--minimal` (the default) emits ONLY the required fields, leaving everything else on built-in defaults. Pass `--full` for the fully-annotated template that shows every knob.
+```bash
+seednap init                      # small teleo.yaml
+seednap init complete -m mifish   # complete mifish.yaml
+```
 
 ## ✅ `validate`
 

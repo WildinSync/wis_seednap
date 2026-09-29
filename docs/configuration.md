@@ -15,13 +15,13 @@ A config at a glance, every top-level section in one view (the per-key reference
 `init` writes a config; `validate` checks it before you commit to a run.
 
 ```bash
-seednap init --marker teleo --output config/markers/my_marker.yaml          # minimal: required fields only
-seednap init --marker teleo --output config/markers/my_marker.yaml --full   # fully-annotated template
+seednap init                        # small teleo.yaml: the fields you normally edit
+seednap init complete -m mifish     # complete mifish.yaml: every parameter with its default
 
 seednap validate config/markers/teleo.yaml
 ```
 
-`init` writes a minimal config (just the required fields) by default; pass `--full` for the fully-annotated reference template. A standalone minimal example also lives at `config/markers/minimal.example.yaml`.
+`init small` (the default) writes the fields you normally edit and leaves the rest on built-in defaults; `init complete` lists every parameter with its default value. The marker's primers are filled in from the bundled primer list when the marker is listed there. The file is written to `<marker>.yaml` in the current directory unless you pass `-o`. A standalone minimal example also lives at `config/markers/minimal.example.yaml`.
 
 `validate` checks YAML syntax, field types, and required values, reports which `taxonomy.databases.<method>` block is used, and runs a preflight that fails with a non-zero exit if any referenced database or `raw_data` path is missing on disk. A config that loads but points at missing inputs is caught here, not mid-run.
 
@@ -484,16 +484,14 @@ pipeline:
 
 ## 📦 Example configs
 
-Complete working examples in [config/markers/](../config/markers/):
+Example configs in [config/markers/](../config/markers/), generated with `seednap init` (placeholder paths; set `paths.raw_data` and the database path before running):
 
-| File | Marker | Method | Notes |
+| File | Marker | Generated with | Notes |
 | --- | --- | --- | --- |
-| `teleo.yaml` | Teleo 12S fish (Namibia) | BLAST | SWARM path; ligation `demultiplex` block is configured but not listed in `pipeline.steps`, so demux does not run as shipped |
-| `mifish.yaml` | MiFish-U 12S fish | BLAST | SWARM path |
-| `mam07.yaml` | MamP007 16S mammal (Greina) | BLAST | SWARM path |
-| `mam07_dada2.yaml` | MamP007 16S mammal | DADA2 | DADA2 ASV path |
-| `teleo_rhone.yaml` | Teleo 12S fish (Rhone) | BLAST | SWARM path |
-| `minimal.example.yaml` | minimal template | -- | required fields only |
+| `teleo.yaml` | Teleo 12S fish | `seednap init complete -m teleo` | every parameter with its default; BLAST, DADA2 path |
+| `mifish.yaml` | MiFish-U 12S fish | `seednap init complete -m mifish` | same, MiFish primers |
+| `mam07.yaml` | MamP007 16S mammal | `seednap init complete -m mam07` | same, MamP007 primers |
+| `minimal.example.yaml` | Teleo 12S fish | `seednap init -m teleo` | small: the fields you normally edit |
 
 ## 📖 See also
 

@@ -97,7 +97,7 @@ conda activate seednap
 pip install -e .
 
 # create a config, then point it at your data + a reference database
-seednap init --marker teleo --output config/markers/my_marker.yaml
+seednap init -m teleo                # small teleo.yaml; `seednap init complete` lists every parameter
 #   paths.raw_data              → a directory of paired-end FASTQ files
 #   taxonomy.databases.<method> → a reference database for the chosen method
 # a fresh config references neither, so the run fails preflight until both exist

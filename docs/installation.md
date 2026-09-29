@@ -43,7 +43,7 @@ seednap --version
 As a post-install sanity check, scaffold and validate a config:
 
 ```bash
-seednap init --marker teleo -o my_config.yaml   # write a starter config
+seednap init -m teleo -o my_config.yaml         # write a starter config (add `complete` for every parameter)
 seednap validate my_config.yaml                 # schema + preflight checks
 ```
 

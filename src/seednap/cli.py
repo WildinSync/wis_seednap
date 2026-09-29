@@ -25,6 +25,7 @@ from rich.table import Table
 
 from seednap.__version__ import __version__
 from seednap.config import ConfigError, create_example_config, load_config, validate_config_file
+from seednap.config.loader import INIT_TEMPLATES
 from seednap.utils.logging import get_logger, setup_logging
 
 console = Console()
@@ -387,23 +388,18 @@ def validate(ctx: click.Context, config_file: Path) -> None:
 
 
 @main.command()
-@click.option(
-    "--output",
-    "-o",
-    type=click.Path(path_type=Path),
-    default=Path("config/markers/example.yaml"),
-    help="Output path for example config",
-)
+@click.argument("template", type=click.Choice(INIT_TEMPLATES), default="small")
 @click.option(
     "--marker",
     "-m",
     default="teleo",
-    help="Marker name for the example config",
+    help="Marker name; its primers are filled in when the marker is in the bundled primer list",
 )
 @click.option(
-    "--minimal/--full",
-    default=True,
-    help="Emit only the required fields (default) or the fully-annotated reference template",
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output path (default: <marker>.yaml in the current directory)",
 )
 @click.option(
     "--force",
@@ -411,24 +407,25 @@ def validate(ctx: click.Context, config_file: Path) -> None:
     is_flag=True,
     help="Overwrite existing file",
 )
-def init(output: Path, marker: str, minimal: bool, force: bool) -> None:
+def init(template: str, marker: str, output: Optional[Path], force: bool) -> None:
     """
-    Create an example configuration file.
+    Create a starter configuration file.
 
-    By default this writes a minimal config containing only the required fields (everything
-    else uses built-in defaults); pass --full for the fully-annotated reference template.
+    TEMPLATE is "small" (default: the fields you normally edit, everything else on built-in
+    defaults) or "complete" (every parameter with its default value and a short comment).
 
-    A marker config is the per-marker YAML that drives a whole run (primers, paths,
-    trimming/DADA2/SWARM parameters, the taxonomy method and its reference databases). This
-    command scaffolds one to edit rather than writing it by hand.
+    \b
+    Examples:
+      seednap init                      # small teleo.yaml
+      seednap init complete -m mifish   # complete mifish.yaml
 
+    \f
     Args:
-        output: Path to write the example config to. Defaults to
-            ``config/markers/example.yaml``.
-        marker: Marker name to seed the example with (e.g. ``teleo``). Sets the marker
-            block in the generated config.
-        minimal: If True (``--minimal``, the default), emit only required fields; if False
-            (``--full``), emit the fully-annotated reference template.
+        template: ``"small"`` or ``"complete"``.
+        marker: Marker name to seed the config with (e.g. ``teleo``). Its primers come from
+            the bundled primers_list.csv when listed there.
+        output: Path to write the config to. Defaults to ``<marker>.yaml`` in the current
+            directory.
         force: If True (``--force``), overwrite an existing file at ``output``.
 
     Returns:
@@ -436,17 +433,20 @@ def init(output: Path, marker: str, minimal: bool, force: bool) -> None:
 
     Raises:
         SystemExit: Code 1 if ``output`` already exists and ``force`` is not set, or if
-            creating the example config raises ``ConfigError``.
+            creating the config raises ``ConfigError``.
     """
+    if output is None:
+        output = Path(f"{marker}.yaml")
+
     if output.exists() and not force:
         print_error(f"File already exists: {output}")
         console.print("Use --force to overwrite.")
         sys.exit(1)
 
     try:
-        create_example_config(output, marker=marker, minimal=minimal)
-        print_success(f"Created example configuration: {output}")
-        console.print("\nEdit this file to customize for your analysis.")
+        create_example_config(output, marker=marker, template=template)
+        print_success(f"Created {template} configuration: {output}")
+        console.print("\nSet paths.raw_data and the reference database path, then edit as needed.")
         console.print(f"Validate it with: [bold]seednap validate {output}[/bold]")
     except ConfigError as e:
         print_error(f"Failed to create config: {e}")

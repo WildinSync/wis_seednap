@@ -19,7 +19,7 @@ _REPO = Path(__file__).resolve().parents[2]
 
 def test_trim_clears_previous_run_outputs(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    cfg = load_config(str(_REPO / "config" / "markers" / "teleo_rhone.yaml"))
+    cfg = load_config(str(_REPO / "config" / "markers" / "teleo.yaml"))
 
     # New raw data: a single sample NEW (presence of the pair is enough for discovery).
     raw = tmp_path / "raw"

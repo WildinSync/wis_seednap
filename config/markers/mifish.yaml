@@ -1,58 +1,83 @@
+# SeeDNAP config for mifish (complete). Every parameter is listed with its default value.
+# Only marker, primers, paths.raw_data, taxonomy.method and that method's database block are
+# required: any other line can be deleted and its default is used.
+# Check with `seednap validate <this file>`.
+
+# Steps to run: a step runs only if it is listed, in this order. dada2 and swarm are
+# mutually exclusive. Available: demultiplex (before trim), trim, dada2 | swarm, taxonomy,
+# clean (after dada2/swarm), export (after taxonomy), report
+pipeline:
+  steps:
+    - "trim"
+    - "dada2"
+    - "taxonomy"
+    - "clean"
+    - "export"
+    - "report"
 
 marker:
-  name: "mifish"
-  description: "Fish eDNA metabarcoding using MiFish-U 12S rRNA"
-  primers:
+  name: mifish
+  description: "mifish eDNA metabarcoding"
+  primers:                                   # 5'->3', IUPAC codes allowed (I is read as N)
     forward: "GTCGGTAAAACTCGTGCCAGC"
     reverse: "CATAGTGGGGTATCTAATCCCAGTTTG"
 
 paths:
-  raw_data: "/home/shared/edna/raw/fw_ar_rewild_2025/mifish/"
-  output: "outputs_test/mifish"
+  raw_data: "/path/to/raw_fastq"             # paired-end FASTQ (<sample>_R1/_R2.fastq.gz) or libraries to demultiplex
+  output: "outputs"
   logs: "logs"
 
+# Only used if "demultiplex" is added to pipeline.steps (before "trim")
 demultiplex:
-  protocol: "none"
+  protocol: "ligation"                       # ligation | standard | none
+  metadata: "/path/to/metadata_lab.csv"      # tag/sample sheet
+  max_sample_failure_rate: 0.5               # abort if more than this fraction of samples fail
 
+# Primer trimming (cutadapt)
 trimming:
-  min_length: 20
-  max_error_rate: 0.1
-  cores: 12
-  discard_untrimmed: true
-  overlap: 3
+  min_length: 20                             # min read length after trimming
+  max_error_rate: 0.1                        # max error rate in the primer match
+  cores: 4
+  discard_untrimmed: true                    # drop reads without primers
+  overlap: 3                                 # min primer overlap
 
-swarm:
-  merge:
-    fastq_maxdiffs: 10
-    fastq_minovlen: 10
-    allow_stagger: false
-  clustering:
-    d: 1
-    fastidious: true
-    boundary: 3
-    threads: 4
-  chimera:
-    method: "denovo"
-  min_sequence_length: 50
-
+# ASV path: used if "dada2" is in pipeline.steps
 dada2:
   filter:
-    max_ee: 2.0
-    trunc_q: 11
+    max_ee: 2.0                              # max expected errors
+    trunc_q: 11                              # truncate at first base with quality <= trunc_q
     max_n: 0
     rm_phix: true
+    # min_len: 100                           # optional
+    # max_len: 200                           # optional
   merge:
     min_overlap: 20
     max_mismatch: 0
   chimera:
-    method: "consensus"
-  pool: false
+    method: "consensus"                      # consensus | pooled | none
+  pool: false                                # pool samples for denoising
   multithread: true
-  per_library: false      # learn DADA2 errors per library/run then merge (only matters when >=2 libraries are pooled)
-  collect_metrics: false  # ASV summary stats to metrics.json/csv + console (DADA2 path only)
+  per_library: false                         # learn error models per library, then merge
+  collect_metrics: true                      # ASV summary stats to metrics.json/csv
+
+# OTU path: used if "swarm" is in pipeline.steps
+swarm:
+  merge:
+    fastq_maxdiffs: 10                       # max differences in the overlap
+    fastq_minovlen: 10                       # min overlap length
+    allow_stagger: false
+  clustering:
+    d: 1                                     # distance threshold
+    fastidious: true                         # refine singletons
+    boundary: 3                              # min mass of large OTUs (fastidious)
+    threads: 4
+  chimera:
+    method: "denovo"                         # denovo | none
+  min_sequence_length: 20                    # min length after merging
 
 taxonomy:
-  method: "blast"
+  method: "blast"                            # blast | dada2 | ecotag
+  # Flagged in the is_contaminant_candidate column, never removed. CRABS format (Genus_species).
   contaminants:
     - "Homo_sapiens"
     - "Bos_taurus"
@@ -63,58 +88,55 @@ taxonomy:
     - "Mus_musculus"
     - "Gallus_gallus"
     - "Ovis_aries"
+  # Every block present here is validated: keep only the one for your method.
   databases:
     blast:
-      fasta: "/home/shared/edna/reference_database/2025/mifish/CRABS_MITOFISH_MIDORI2_GB265_mifish_blast.fasta"
-      task: "megablast"
+      fasta: "/path/to/mifish_reference.fasta"
+      task: "megablast"                      # megablast | blastn | dc-megablast | blastn-short
       perc_identity: 80.0
       qcov_hsp_perc: 80.0
-      evalue: 1.0e-10
-      max_target_seqs: 10
+      evalue: 1.0e-25
+      max_target_seqs: 5
+      # Per-rank identity floors: below the floor for a rank, that rank and finer ones are empty
       threshold_species: 99.0
       threshold_genus: 96.0
       threshold_family: 90.0
       threshold_order: 80.0
       threshold_class: 70.0
-      top_bitscore_pct: 10.0
-      lca_pident_delta: 1.0      # in-band hits must be within this %id of the best (eDNAFlow "diff 1"); stops a near-identity off-target collapsing the LCA
-      lca_algorithm: cascade   # cascade (per-rank thresholds, current default) | collapsed_taxonomy (eDNAFlow/OceanOmics %id-window LCA on the FASTA-header lineage; header-based, no taxids/taxdump, runs offline)
-      lca_pid: 90.0            # collapsed_taxonomy only: hard %identity floor; hits below this are dropped before the LCA (query coverage is enforced upstream at the blastn step via qcov_hsp_perc)
-      lca_diff: 1.0            # collapsed_taxonomy only: identity window; hits within this %id of the best survivor are collapsed to their lowest common ancestor
+      lca_algorithm: "cascade"               # cascade | collapsed_taxonomy
+      top_bitscore_pct: 10.0                 # cascade: hits within this % of the best bitscore enter the LCA
+      lca_pident_delta: 1.0                  # cascade: and within this %id of the best hit
+      lca_pid: 90.0                          # collapsed_taxonomy: %id floor
+      lca_diff: 1.0                          # collapsed_taxonomy: %id window collapsed to the LCA
+    # dada2:
+    #   all: "/path/to/dada2_all_ranks.fasta"
+    #   species: "/path/to/dada2_species.fasta"
+    #   bootstrap_threshold: 80
+    # ecotag:
+    #   tree: "/path/to/taxonomy_tree/"
+    #   fasta: "/path/to/ecotag_db.fasta"
 
+# Control decontamination: used if "clean" is in pipeline.steps (controls come from the manifest)
+cleaning:
+  mode: "flag"                               # flag (annotate only) | subtract (remove control reads)
+
+# GBIF table: used if "export" is in pipeline.steps
 export:
   gbif:
     add_rank: true
     add_taxon: true
 
+# Read tracking + HTML report: used if "report" is in pipeline.steps
 report:
-  html_report: true          # self-contained HTML run report with charts (default: on; set false to disable)
-  warn_below_retention_pct: 30.0   # warn for samples retaining < this % of raw reads (raw -> final)
-  warn_step_loss_pct: 70.0         # warn when a single step drops more than this % of a sample's reads
-  # Where report artifacts are written. Defaults to "<output>/04_report/<marker>";
-  # uncomment to store them elsewhere (a per-marker subdirectory is created inside):
-  # output_dir: "/path/to/reports"
-  # Optional dataset metadata for the report's "Dataset & provenance" section
-  # (sampling location, dates, sites, institution, sequencing, reference DB):
-  # sample_metadata: "/path/to/metadata_field_<dataset>.csv"
-  # project_metadata: "/path/to/metadata_proj_<dataset>.csv"
-
-cleaning:
-  mode: "flag"               # "flag" annotates OTUs/ASVs found in negative controls without
-                             # changing counts; "subtract" removes those control reads (extraction
-                             # blanks clean their extraction batch, PCR blanks the whole dataset).
-                             # Control identity comes from the FAIRe manifest. See docs/configuration.md.
+  html_report: true
+  warn_below_retention_pct: 30.0             # warn for samples keeping < this % of raw reads
+  warn_step_loss_pct: 70.0                   # warn when one step drops > this % of a sample's reads
+  # output_dir: "/path/to/reports"           # default: <output>/04_report/<marker>
+  # sample_metadata: "/path/to/metadata_field.csv"
+  # project_metadata: "/path/to/metadata_proj.csv"
 
 logging:
-  level: "INFO"
-  format: "detailed"
+  level: "INFO"                              # DEBUG | INFO | WARNING | ERROR
+  format: "detailed"                         # simple | detailed | json
   file: true
   console: true
-
-pipeline:
-  steps:
-    - "trim"
-    - "swarm"
-    - "taxonomy"
-    - "export"
-    - "report"

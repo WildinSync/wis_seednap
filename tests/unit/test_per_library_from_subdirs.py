@@ -18,7 +18,7 @@ _REPO = Path(__file__).resolve().parents[2]
 
 
 def _orch(tmp_path, raw, per_library=True):
-    cfg = load_config(str(_REPO / "config" / "markers" / "teleo_rhone.yaml"))
+    cfg = load_config(str(_REPO / "config" / "markers" / "teleo.yaml"))
     cfg.dada2.per_library = per_library
     cfg.report.sample_metadata = None
     cfg.demultiplex.metadata = None

@@ -18,7 +18,7 @@ _REPO = Path(__file__).resolve().parents[2]
 
 
 def _orch(tmp_path, metadata_rows):
-    cfg = load_config(str(_REPO / "config" / "markers" / "teleo_rhone.yaml"))
+    cfg = load_config(str(_REPO / "config" / "markers" / "teleo.yaml"))
     raw = tmp_path / "raw"
     raw.mkdir()
     meta = tmp_path / "meta.csv"
@@ -53,7 +53,7 @@ def _fake_process_library(calls):
 def test_demux_uses_metadata_libraries_and_trim_reads_demux_output(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     fwd = load_config(
-        str(_REPO / "config" / "markers" / "teleo_rhone.yaml")
+        str(_REPO / "config" / "markers" / "teleo.yaml")
     ).marker.primers.forward
     orch, cfg = _orch(
         tmp_path,
@@ -91,7 +91,7 @@ def test_demux_uses_metadata_libraries_and_trim_reads_demux_output(tmp_path, mon
 def test_demux_samples_removed_only_after_trim_completes(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     fwd = load_config(
-        str(_REPO / "config" / "markers" / "teleo_rhone.yaml")
+        str(_REPO / "config" / "markers" / "teleo.yaml")
     ).marker.primers.forward
     orch, cfg = _orch(tmp_path, [("S1", "LIB_A", fwd)])
     monkeypatch.setattr(LigationTrimmer, "process_library", _fake_process_library([]))
@@ -112,7 +112,7 @@ def test_demux_samples_removed_only_after_trim_completes(tmp_path, monkeypatch):
 def test_demux_rejects_sample_name_shared_by_two_libraries(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     fwd = load_config(
-        str(_REPO / "config" / "markers" / "teleo_rhone.yaml")
+        str(_REPO / "config" / "markers" / "teleo.yaml")
     ).marker.primers.forward
     orch, _ = _orch(tmp_path, [("S1", "LIB_A", fwd), ("S1", "LIB_B", fwd)])
     monkeypatch.setattr(LigationTrimmer, "process_library", _fake_process_library([]))
@@ -123,7 +123,7 @@ def test_demux_rejects_sample_name_shared_by_two_libraries(tmp_path, monkeypatch
 def test_demux_rejects_sample_listed_twice_in_one_library(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     fwd = load_config(
-        str(_REPO / "config" / "markers" / "teleo_rhone.yaml")
+        str(_REPO / "config" / "markers" / "teleo.yaml")
     ).marker.primers.forward
     orch, _ = _orch(tmp_path, [("S1", "LIB_A", fwd), ("S1", "LIB_A", fwd)])
     monkeypatch.setattr(LigationTrimmer, "process_library", _fake_process_library([]))
@@ -135,7 +135,7 @@ def test_demux_keeps_only_this_markers_rows(tmp_path, monkeypatch):
     """The same eventID may carry one row per marker, across or within libraries."""
     monkeypatch.chdir(tmp_path)
     fwd = load_config(
-        str(_REPO / "config" / "markers" / "teleo_rhone.yaml")
+        str(_REPO / "config" / "markers" / "teleo.yaml")
     ).marker.primers.forward
     other = "GTCGGTAAAACTCGTGCCAGC"  # mifish
     orch, _ = _orch(

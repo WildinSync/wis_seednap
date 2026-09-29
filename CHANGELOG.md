@@ -30,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `seednap init` now takes `small` (default) or `complete` instead of
+  `--minimal/--full`. Both templates match the current parameters, primers are
+  filled in from the bundled primer list for known markers, and the default
+  output is `<marker>.yaml` in the current directory. `pipeline.steps` now comes
+  first, and `demultiplex` is not in the default steps.
+- `config/markers/` examples are regenerated with `seednap init` (placeholder paths);
+  the dataset-specific `teleo_rhone.yaml` and `mam07_dada2.yaml` are removed.
+
 - Pipeline stage enable/disable now flows through a single `pipeline.steps`
   config model with dependency validation, replacing the previous scattered
   per-stage toggles.
