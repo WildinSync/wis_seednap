@@ -50,7 +50,7 @@ def load_yaml(file_path: Path) -> Dict[str, Any]:
                 f"define marker.name, marker.primers.forward/reverse, taxonomy.method, "
                 f"and the selected method's databases.<method> block (you will also "
                 f"normally set paths.raw_data to your FASTQ directory). Generate a "
-                f"minimal starting template with: seednap init -o {file_path} --force"
+                f"small starting template with: seednap init -o {file_path} --force"
             )
 
         if not isinstance(config_dict, dict):
@@ -217,151 +217,239 @@ def validate_config_file(config_path: Path) -> tuple[bool, Optional[str]]:
         return False, f"Unexpected error: {e}"
 
 
+INIT_TEMPLATES = ("small", "complete")
+
+# Used when the marker is not in the bundled primers_list.csv.
+_PLACEHOLDER_PRIMERS = ("ACACCGCCCGTCACTCT", "CTTCCGGTACACTTACCATG")
+
+
+def _lookup_primers(marker: str) -> tuple[str, str, bool]:
+    """Return the marker's primers from the bundled primers_list.csv.
+
+    Args:
+        marker: Marker name, matched case-insensitively against the ``name`` column.
+
+    Returns:
+        ``(forward, reverse, found)``. When the marker is not listed, the teleo primers are
+        returned as placeholders with ``found=False``.
+    """
+    import csv
+    from importlib import resources
+
+    ref = resources.files("seednap.data.templates").joinpath("primers_list.csv")
+    with ref.open(encoding="utf-8") as f:
+        for row in csv.DictReader(f, skipinitialspace=True):
+            if row["name"].strip().lower() == marker.lower():
+                return row["pcr_primer_forward"].strip(), row["pcr_primer_reverse"].strip(), True
+    return _PLACEHOLDER_PRIMERS[0], _PLACEHOLDER_PRIMERS[1], False
+
+
 def create_example_config(
-    output_path: Path, marker: str = "teleo", minimal: bool = False
+    output_path: Path, marker: str = "teleo", template: str = "small"
 ) -> None:
     """
     Create an example configuration file.
 
     Args:
         output_path: Where to write the example config
-        marker: Marker name for the example (default: 'teleo')
-        minimal: If True, write only the required fields (everything else uses defaults);
-            if False (default), write the fully-annotated reference template.
+        marker: Marker name for the example (default: 'teleo'). Its primers are filled in
+            from the bundled primers_list.csv when the marker is listed there.
+        template: ``"small"`` (default) writes the fields you normally edit and leaves the
+            rest on built-in defaults; ``"complete"`` writes every parameter with its
+            default value and a short comment.
 
     Raises:
-        ConfigError: If file cannot be written
+        ConfigError: If ``template`` is unknown or the file cannot be written
     """
-    if minimal:
-        example_config = f"""# Minimal SeeDNAP config for {marker}: only the REQUIRED fields.
-# Everything else uses built-in defaults (config is merged over defaults). See
-# docs/configuration.md for the full reference.
+    if template not in INIT_TEMPLATES:
+        raise ConfigError(
+            f"Unknown init template '{template}'. Choose one of: {', '.join(INIT_TEMPLATES)}."
+        )
+
+    forward, reverse, found = _lookup_primers(marker)
+    primer_note = "" if found else "   # placeholder: replace with your primer"
+
+    if template == "small":
+        example_config = f"""# SeeDNAP config for {marker} (small). Anything not listed uses its built-in default;
+# run `seednap init complete` to see every parameter. Check with `seednap validate <this file>`.
+
+# Steps to run, in order. Use "swarm" instead of "dada2" for OTUs.
+# Available: demultiplex (before trim), trim, dada2 | swarm, taxonomy, clean, export, report
+pipeline:
+  steps:
+    - "trim"
+    - "dada2"
+    - "taxonomy"
+    - "export"
+    - "report"
+
 marker:
   name: {marker}
-  primers:
-    forward: "ACACCGCCCGTCACTCT"      # 5'->3'  (replace with your primers)
-    reverse: "CTTCCGGTACACTTACCATG"    # 5'->3'
-paths:
-  raw_data: "data/raw"                 # directory of paired-end FASTQ
-taxonomy:
-  method: "blast"                      # blast | dada2 | ecotag | decipher (fill only this method's block)
-  databases:
-    blast:
-      fasta: "references/{marker}/blast_db.fasta"
-# Clustering path (defaults to the DADA2 ASV path); uncomment for the SWARM OTU path:
-# pipeline:
-#   steps: ["trim", "swarm", "taxonomy"]
-"""
-    else:
-        example_config = f"""# Seednap Pipeline Configuration for {marker}
-marker:
-  name: {marker}
-  description: "Example {marker} marker configuration"
-  primers:
-    forward: "ACACCGCCCGTCACTCT"
-    reverse: "CTTCCGGTACACTTACCATG"
+  primers:                                   # 5'->3', IUPAC codes allowed
+    forward: "{forward}"{primer_note}
+    reverse: "{reverse}"{primer_note}
 
 paths:
-  raw_data: "data/raw"
+  raw_data: "/path/to/raw_fastq"             # paired-end FASTQ (<sample>_R1/_R2.fastq.gz) or libraries to demultiplex
   output: "outputs"
   logs: "logs"
 
-demultiplex:                 # runs only if "demultiplex" is added to pipeline.steps (before trim)
-  protocol: "none"
+# demultiplex:                               # only if "demultiplex" is in pipeline.steps
+#   protocol: "ligation"                     # ligation | standard | none
+#   metadata: "/path/to/metadata_lab.csv"
 
 trimming:
-  min_length: 20
-  max_error_rate: 0.1
   cores: 4
-  discard_untrimmed: true
-  overlap: 3
 
+taxonomy:
+  method: "blast"                            # blast | dada2 | ecotag
+  databases:
+    blast:
+      fasta: "/path/to/{marker}_reference.fasta"
+"""
+    else:
+        example_config = f"""# SeeDNAP config for {marker} (complete). Every parameter is listed with its default value.
+# Only marker, primers, paths.raw_data, taxonomy.method and that method's database block are
+# required: any other line can be deleted and its default is used.
+# Check with `seednap validate <this file>`.
+
+# Steps to run: a step runs only if it is listed, in this order. dada2 and swarm are
+# mutually exclusive. Available: demultiplex (before trim), trim, dada2 | swarm, taxonomy,
+# clean (after dada2/swarm), export (after taxonomy), report
+pipeline:
+  steps:
+    - "trim"
+    - "dada2"
+    - "taxonomy"
+    - "clean"
+    - "export"
+    - "report"
+
+marker:
+  name: {marker}
+  description: "{marker} eDNA metabarcoding"
+  primers:                                   # 5'->3', IUPAC codes allowed (I is read as N)
+    forward: "{forward}"{primer_note}
+    reverse: "{reverse}"{primer_note}
+
+paths:
+  raw_data: "/path/to/raw_fastq"             # paired-end FASTQ (<sample>_R1/_R2.fastq.gz) or libraries to demultiplex
+  output: "outputs"
+  logs: "logs"
+
+# Only used if "demultiplex" is added to pipeline.steps (before "trim")
+demultiplex:
+  protocol: "ligation"                       # ligation | standard | none
+  metadata: "/path/to/metadata_lab.csv"      # tag/sample sheet
+  max_sample_failure_rate: 0.5               # abort if more than this fraction of samples fail
+
+# Primer trimming (cutadapt)
+trimming:
+  min_length: 20                             # min read length after trimming
+  max_error_rate: 0.1                        # max error rate in the primer match
+  cores: 4
+  discard_untrimmed: true                    # drop reads without primers
+  overlap: 3                                 # min primer overlap
+
+# ASV path: used if "dada2" is in pipeline.steps
 dada2:
   filter:
-    max_ee: 2.0
-    trunc_q: 11
+    max_ee: 2.0                              # max expected errors
+    trunc_q: 11                              # truncate at first base with quality <= trunc_q
     max_n: 0
     rm_phix: true
+    # min_len: 100                           # optional
+    # max_len: 200                           # optional
   merge:
     min_overlap: 20
     max_mismatch: 0
   chimera:
-    method: "consensus"
-  pool: false
+    method: "consensus"                      # consensus | pooled | none
+  pool: false                                # pool samples for denoising
   multithread: true
-  collect_metrics: true      # ASV summary stats to metrics.json/csv + console (DADA2 path only)
+  per_library: false                         # learn error models per library, then merge
+  collect_metrics: true                      # ASV summary stats to metrics.json/csv
 
-# SWARM OTU clustering configuration (alternative to DADA2)
+# OTU path: used if "swarm" is in pipeline.steps
 swarm:
   merge:
-    fastq_maxdiffs: 10
-    fastq_minovlen: 10
+    fastq_maxdiffs: 10                       # max differences in the overlap
+    fastq_minovlen: 10                       # min overlap length
     allow_stagger: false
   clustering:
-    d: 1
-    fastidious: true
-    boundary: 3
+    d: 1                                     # distance threshold
+    fastidious: true                         # refine singletons
+    boundary: 3                              # min mass of large OTUs (fastidious)
     threads: 4
   chimera:
-    method: "denovo"  # Options: "denovo", "none"
-  min_sequence_length: 20
+    method: "denovo"                         # denovo | none
+  min_sequence_length: 20                    # min length after merging
 
 taxonomy:
-  method: "blast"   # recommended; for another method, set it here and fill that block below
+  method: "blast"                            # blast | dada2 | ecotag
+  # Flagged in the is_contaminant_candidate column, never removed. CRABS format (Genus_species).
+  contaminants:
+    - "Homo_sapiens"
+    - "Bos_taurus"
+    - "Sus_scrofa"
+    - "Canis_lupus_familiaris"
+    - "Canis_familiaris"
+    - "Felis_catus"
+    - "Mus_musculus"
+    - "Gallus_gallus"
+    - "Ovis_aries"
+  # Every block present here is validated: keep only the one for your method.
   databases:
-    dada2:
-      all: "references/{marker}/dada2_all.fasta"
-      species: "references/{marker}/dada2_species.fasta"
     blast:
-      fasta: "references/{marker}/blast_db.fasta"
+      fasta: "/path/to/{marker}_reference.fasta"
+      task: "megablast"                      # megablast | blastn | dc-megablast | blastn-short
       perc_identity: 80.0
       qcov_hsp_perc: 80.0
       evalue: 1.0e-25
       max_target_seqs: 5
+      # Per-rank identity floors: below the floor for a rank, that rank and finer ones are empty
       threshold_species: 99.0
       threshold_genus: 96.0
       threshold_family: 90.0
-    ecotag:
-      tree: "references/{marker}/taxonomy/"
-      fasta: "references/{marker}/ecotag_db.fasta"
-    decipher:
-      trained: "references/{marker}/decipher_trained.rds"
+      threshold_order: 80.0
+      threshold_class: 70.0
+      lca_algorithm: "cascade"               # cascade | collapsed_taxonomy
+      top_bitscore_pct: 10.0                 # cascade: hits within this % of the best bitscore enter the LCA
+      lca_pident_delta: 1.0                  # cascade: and within this %id of the best hit
+      lca_pid: 90.0                          # collapsed_taxonomy: %id floor
+      lca_diff: 1.0                          # collapsed_taxonomy: %id window collapsed to the LCA
+    # dada2:
+    #   all: "/path/to/dada2_all_ranks.fasta"
+    #   species: "/path/to/dada2_species.fasta"
+    #   bootstrap_threshold: 80
+    # ecotag:
+    #   tree: "/path/to/taxonomy_tree/"
+    #   fasta: "/path/to/ecotag_db.fasta"
 
-export:                      # runs only if "export" is in pipeline.steps (after taxonomy)
+# Control decontamination: used if "clean" is in pipeline.steps (controls come from the manifest)
+cleaning:
+  mode: "flag"                               # flag (annotate only) | subtract (remove control reads)
+
+# GBIF table: used if "export" is in pipeline.steps
+export:
   gbif:
     add_rank: true
     add_taxon: true
 
-report:                      # runs only if "report" is in pipeline.steps; always writes the
-                             # read-tracking table + step summary, html_report adds the HTML doc
-  html_report: true          # self-contained HTML run report with charts (default: on; set false to disable)
-  warn_below_retention_pct: 30.0   # warn for samples retaining < this % of raw reads (raw -> final)
-  warn_step_loss_pct: 70.0         # warn when a single step drops more than this % of a sample's reads
-  # output_dir: "/path/to/reports"            # default: "<output>/04_report/<marker>"
-  # sample_metadata: "/path/to/metadata_field_<dataset>.csv"   # dataset/provenance section (optional)
-  # project_metadata: "/path/to/metadata_proj_<dataset>.csv"   # sequencing/reference-DB provenance (optional)
-
-cleaning:                    # runs only if "clean" is in pipeline.steps (after a feature step)
-  mode: "flag"               # "flag" annotates control OTUs without changing counts; "subtract"
-                             # removes control reads. Control identity comes from the FAIRe manifest.
+# Read tracking + HTML report: used if "report" is in pipeline.steps
+report:
+  html_report: true
+  warn_below_retention_pct: 30.0             # warn for samples keeping < this % of raw reads
+  warn_step_loss_pct: 70.0                   # warn when one step drops > this % of a sample's reads
+  # output_dir: "/path/to/reports"           # default: <output>/04_report/<marker>
+  # sample_metadata: "/path/to/metadata_field.csv"
+  # project_metadata: "/path/to/metadata_proj.csv"
 
 logging:
-  level: "INFO"
-  format: "detailed"
+  level: "INFO"                              # DEBUG | INFO | WARNING | ERROR
+  format: "detailed"                         # simple | detailed | json
   file: true
   console: true
-
-# Stages to run, in order. A stage runs iff listed; the order is validated against stage
-# dependencies at load. dada2 and swarm are mutually exclusive. Available stages:
-# demultiplex (before trim), trim, dada2|swarm, taxonomy, clean (after a feature step),
-# export (after taxonomy), report.
-pipeline:
-  steps:
-    - "trim"
-    - "swarm"            # OTU path; use "dada2" instead for the ASV path
-    - "taxonomy"
-    - "export"
-    - "report"
 """
 
     try:

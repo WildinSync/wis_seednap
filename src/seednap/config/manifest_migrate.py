@@ -495,7 +495,61 @@ def _resolve_lab_columns(columns: List[str]) -> Dict[str, Optional[str]]:
     }
 
 
-def _load_lab_metadata(lab_csv: Path) -> Dict[str, Dict[str, Optional[str]]]:
+def _filter_by_primer(df: pd.DataFrame, primer_forward: Optional[str], source: Path) -> pd.DataFrame:
+    """Keep only the rows of ``df`` whose ``pcr_primer_forward`` matches this marker.
+
+    A lab CSV shared by several markers lists the same eventID once per marker, possibly in
+    different libraries. Without this filter the per-eventID index keeps whichever marker's
+    row comes last, so a sample can be assigned another marker's library. Mirrors the
+    demultiplex step's own row selection (case-insensitive forward-primer match).
+
+    Args:
+        df: The CSV rows (all columns as str).
+        primer_forward: This marker's forward primer, or None to skip filtering.
+        source: The CSV path (for messages).
+
+    Returns:
+        The matching rows, or ``df`` unchanged when no primer is given or the CSV has no
+        ``pcr_primer_forward`` column.
+
+    Raises:
+        ValueError: if the CSV has a ``pcr_primer_forward`` column but no row matches.
+    """
+    if not primer_forward:
+        return df
+    col = next((c for c in df.columns if _canon_header(c) == "pcr_primer_forward"), None)
+    if col is None:
+        return df
+    matching = df[df[col].astype(str).str.strip().str.upper() == primer_forward.strip().upper()]
+    if matching.empty:
+        raise ValueError(
+            f"No row of {source} has pcr_primer_forward equal to this marker's forward primer "
+            f"({primer_forward.upper()}). Primers found: "
+            f"{sorted(df[col].astype(str).unique())[:10]}."
+        )
+    return matching
+
+
+def has_run_grouping_column(csv_path: Path) -> bool:
+    """Return True if a CSV has a library/run grouping column (``library``/``seq_run_id``).
+
+    Reads the header only. Used to tell a field CSV that carries a real sequencing-run
+    grouping apart from one that does not (for which the migrator would synthesise a single
+    dataset-wide run id).
+
+    Args:
+        csv_path: Path to a field or lab metadata CSV.
+
+    Returns:
+        True if any header maps to the canonical ``seq_run_id`` field.
+    """
+    cols = pd.read_csv(csv_path, dtype=str, nrows=0, encoding="utf-8-sig").columns
+    return any(_FIELD_ALIASES.get(_canon_header(c)) == "seq_run_id" for c in cols)
+
+
+def _load_lab_metadata(
+    lab_csv: Path, primer_forward: Optional[str] = None
+) -> Dict[str, Dict[str, Optional[str]]]:
     """Read a demux lab CSV into a per-sample run-id + barcode index.
 
     Used to recover the sequencing-run grouping (``seq_run_id``) and the per-sample
@@ -503,6 +557,8 @@ def _load_lab_metadata(lab_csv: Path) -> Dict[str, Dict[str, Optional[str]]]:
 
     Args:
         lab_csv: Path to a legacy demultiplexing lab CSV (``metadata_lab_*.csv``).
+        primer_forward: This marker's forward primer. When given and the CSV has a
+            ``pcr_primer_forward`` column, only this marker's rows are indexed.
 
     Returns:
         A dict keyed by eventID, each value a dict with keys ``"seq_run_id"``,
@@ -514,6 +570,7 @@ def _load_lab_metadata(lab_csv: Path) -> Dict[str, Dict[str, Optional[str]]]:
             the field metadata instead).
     """
     df = pd.read_csv(lab_csv, dtype=str, keep_default_na=False, encoding="utf-8-sig")
+    df = _filter_by_primer(df, primer_forward, lab_csv)
     cols = _resolve_lab_columns(list(df.columns))
     if cols["eventID"] is None:
         raise ValueError(f"Demux lab metadata {lab_csv} has no eventID column")
@@ -528,6 +585,13 @@ def _load_lab_metadata(lab_csv: Path) -> Dict[str, Dict[str, Optional[str]]]:
         ev = _cell(rec[cols["eventID"]])
         if not ev:
             continue
+        lib = _cell(rec[cols["library"]])
+        if ev in out and out[ev]["seq_run_id"] != lib:
+            logger.warning(
+                f"[WARN] manifest_migrate: expected=one library per eventID in {lab_csv.name}, "
+                f"got={ev!r} in {out[ev]['seq_run_id']!r} and {lib!r}, fallback=using {lib!r} "
+                f"(add a pcr_primer_forward column, or a replicate suffix to the eventID)"
+            )
         out[ev] = {
             "seq_run_id": _cell(rec[cols["library"]]),
             "mid_forward": _cell(rec[cols["mid_forward"]]) if cols["mid_forward"] else None,
@@ -596,6 +660,7 @@ def migrate_to_manifest(
     target_gene: Optional[str] = None,
     dataset: Optional[str] = None,
     date_order: Optional[str] = None,
+    primer_forward: Optional[str] = None,
 ) -> SampleManifest:
     """Derive a canonical :class:`SampleManifest` from today's field/project/lab CSVs.
 
@@ -612,6 +677,10 @@ def migrate_to_manifest(
         date_order: optional explicit eventDate field order ``YMD``/``DMY``/``MDY``, passed
             through to :func:`normalise_event_dates` to resolve genuinely ambiguous dates;
             None auto-detects and raises on ambiguity.
+        primer_forward: this marker's forward primer. When given, rows of the field and
+            lab CSVs are restricted to those whose ``pcr_primer_forward`` matches it (CSVs
+            without that column are used whole), so a CSV shared by several markers does
+            not mix another marker's library into this one.
 
     Returns:
         A validated :class:`SampleManifest` (one row per sample-library), after running its
@@ -619,7 +688,8 @@ def migrate_to_manifest(
 
     Raises:
         FileNotFoundError: if ``field_csv`` does not exist.
-        ValueError: if the field metadata is empty, has no eventID/samp_name column, has an
+        ValueError: if the field metadata is empty, has no eventID/samp_name column, has a
+            ``pcr_primer_forward`` column with no row for ``primer_forward``, has an
             unresolvable eventDate order, or produces any row that fails the canonical
             :class:`SampleManifestRow` model (all row errors are aggregated into one message).
     """
@@ -631,6 +701,7 @@ def migrate_to_manifest(
     df = pd.read_csv(field_csv, dtype=str, keep_default_na=False, encoding="utf-8-sig")
     if df.empty:
         raise ValueError(f"Field metadata is empty: {field_csv}")
+    df = _filter_by_primer(df, primer_forward, field_csv)
 
     field_to_raw, dropped_known, dropped_unexpected, collisions = _build_header_map(list(df.columns))
     if "eventID" not in field_to_raw:
@@ -664,7 +735,7 @@ def migrate_to_manifest(
     # seq_run_id / tag source
     lab_index: Dict[str, Dict[str, Optional[str]]] = {}
     if lab_csv is not None:
-        lab_index = _load_lab_metadata(Path(lab_csv))
+        lab_index = _load_lab_metadata(Path(lab_csv), primer_forward)
 
     default_run_id = seq_run_id or (f"{dataset}_{marker}" if marker else dataset)
     used_default_run = False

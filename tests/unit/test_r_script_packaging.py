@@ -31,7 +31,6 @@ from seednap.utils.r_runner import (
 EXPECTED_SCRIPTS = (
     "dada2_process.R",
     "taxo_dada2_marker.R",
-    "taxo_decipher_marker.R",
 )
 
 

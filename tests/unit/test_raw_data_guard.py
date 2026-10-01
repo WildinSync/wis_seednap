@@ -32,7 +32,7 @@ def test_teleo_reference_config_ships_placeholder_raw_data():
 def test_get_sample_list_raises_when_no_flat_fastqs(tmp_path, monkeypatch):
     # Contain any relative dir-creation side effects inside tmp_path.
     monkeypatch.chdir(tmp_path)
-    cfg = load_config(str(_REPO / "config" / "markers" / "teleo_rhone.yaml"))
+    cfg = load_config(str(_REPO / "config" / "markers" / "teleo.yaml"))
 
     raw = tmp_path / "raw"
     (raw / "VL492___MB0725C1__").mkdir(parents=True)  # a per-library subdir, no flat FASTQs

@@ -316,7 +316,6 @@ https://conda.anaconda.org/conda-forge/linux-64/r-reshape2-1.4.4-r42ha503ecb_3.c
 https://conda.anaconda.org/conda-forge/linux-64/r-rsqlite-2.3.4-r42ha503ecb_0.conda
 https://conda.anaconda.org/conda-forge/noarch/r-selectr-0.4_2-r42hc72bb7e_3.conda
 https://conda.anaconda.org/conda-forge/linux-64/r-tibble-3.2.1-r42h57805ef_2.conda
-https://conda.anaconda.org/bioconda/linux-64/bioconductor-decipher-2.26.0-r42ha9d7317_1.tar.bz2
 https://conda.anaconda.org/bioconda/linux-64/bioconductor-rsamtools-2.14.0-r42hf17093f_1.tar.bz2
 https://conda.anaconda.org/bioconda/noarch/bioconductor-summarizedexperiment-1.28.0-r42hdfd78af_0.tar.bz2
 https://conda.anaconda.org/conda-forge/noarch/r-cellranger-1.1.0-r42hc72bb7e_1006.conda

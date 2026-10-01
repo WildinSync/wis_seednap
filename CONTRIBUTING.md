@@ -9,7 +9,7 @@ surgical and well-tested.
 ## Environment setup
 
 SeeDNAP targets Python 3.9 and wraps external bioinformatics tools (cutadapt,
-vsearch, swarm, blastn) and R packages (DADA2, DECIPHER). Those tools are
+vsearch, swarm, blastn) and R packages (DADA2). Those tools are
 pinned in `environment.yml`, so a conda environment is the supported way to get
 a working install.
 

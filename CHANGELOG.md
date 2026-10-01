@@ -9,17 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- WIS database bridge (`seednap wis-metadata`): generate the GBIF export's
-  per-sample and project metadata CSVs straight from the WIS PostgreSQL/PostGIS
-  database (the schema built by `wis_database_creator`) instead of hand-writing
-  them. Reads each sample's `eventID`, date, coordinates (from the PostGIS
-  point), environmental medium (mapped from the controlled `sample_type` code to
-  the builder's ENVO vocabulary; an unmapped medium passes through with a `[WARN]`
-  rather than being mislabelled) and size, and writes the two CSVs the DarwinCore
-  export already consumes. The DarwinCore builder is unchanged. SQLAlchemy and a
-  PostgreSQL driver are an optional dependency (`pip install 'seednap[wis]'`);
-  the core pipeline stays dependency-light and the bridge fails with a clear
-  install hint if they are absent.
 - Error-explainability module with a `seednap explain` command: errors carry
   stable codes and actionable what / why / how-to-fix detail, and the codes can
   be looked up from the CLI.
@@ -38,17 +27,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   FASTQs into the default `trimming.discard_untrimmed: true` path (set it to
   `false`); a genuine low yield (off-target amplification, primer mismatch) is
   flagged too so the warning is not misread.
-- New `darwincore` pipeline step: builds the GBIF-ready DarwinCore occurrence
-  file in-pipeline (joining the long-format export to `report.sample_metadata` +
-  `report.project_metadata`, with `export.darwincore` flags), rather than only
-  via the standalone `create-gbif` command. Opt-in via `pipeline.steps`; required
-  metadata is checked at config preflight. The reference-database (`otu_db`) and
-  chimera-removal (`chimera_check`) provenance are filled automatically from the
-  run config (a differing project-metadata value is warned and overridden). It also
-  writes a deleted-entries report (`<output>_dropped.csv`) of the occurrences removed
-  by the control and non-target filters, for QA.
 
 ### Changed
+
+- `seednap init` now takes `small` (default) or `complete` instead of
+  `--minimal/--full`. Both templates match the current parameters, primers are
+  filled in from the bundled primer list for known markers, and the default
+  output is `<marker>.yaml` in the current directory. `pipeline.steps` now comes
+  first, and `demultiplex` is not in the default steps.
+- `config/markers/` examples are regenerated with `seednap init` (placeholder paths);
+  the dataset-specific `teleo_rhone.yaml` and `mam07_dada2.yaml` are removed.
 
 - Pipeline stage enable/disable now flows through a single `pipeline.steps`
   config model with dependency validation, replacing the previous scattered
@@ -59,8 +47,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   paths, so an unedited run fails the config preflight instead of silently
   processing a bundled example dataset.
 
+### Removed
+
+- The DECIPHER (IdTaxa) taxonomy method. `taxonomy.method: decipher`, the
+  `decipher` choice of `assign-taxonomy` and `format-gbif -f`, the
+  `--trained-classifier` / `--confidence-threshold` / `--processors` options of
+  `assign-taxonomy`, and the `bioconductor-decipher` conda pin are gone. A
+  leftover `taxonomy.databases.decipher` block in an old config is ignored.
+
 ### Fixed
 
+- DADA2-by-library: a lab CSV shared by several markers is now filtered on
+  `pcr_primer_forward`, so a sample listed for two markers in different
+  libraries no longer gets the other marker's library.
+- DADA2-by-library: the `raw_data` subfolder grouping is now used whenever the
+  metadata has no library column, including when `report.sample_metadata` is
+  set only for the report (it was previously ignored, giving a single batch).
+- DADA2-by-library now honors `dada2.pool` (pooling within each library);
+  it was silently ignored.
 - Correctness sweep across the pipeline focused on data integrity, removing
   silent fallbacks (fallbacks now warn or fail loudly), and catching
   wrong-environment misconfiguration earlier.

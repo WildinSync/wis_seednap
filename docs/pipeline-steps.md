@@ -20,7 +20,7 @@ See [configuration.md](configuration.md) for the full config reference and [cli-
 
 ## 🏷️ 0. Demultiplex (optional)
 
-Tool: Cutadapt (tag generation + tag matching). Input: one multiplexed library FASTQ pair plus a sample-tag metadata CSV. Output: per-sample FASTQ pairs under `outputs/01_trim/{marker}/demux/`.
+Tool: Cutadapt (tag generation + tag matching). Input: one multiplexed library FASTQ pair per library plus a sample-tag metadata CSV. Output: gzipped per-sample FASTQ pairs under `outputs/01_trim/{marker}/demux/samples/`, read by the trim step.
 
 Multiplexing pools many samples into one sequencing run, each sample distinguished by a short tag (barcode) added during library prep. Demultiplexing reverses this: it reads the tag on each sequence and routes it to its sample. The ligation protocol generates per-sample tag files from the metadata, splits the library by tag, detects primers in both orientations, and realigns reads.
 
@@ -31,6 +31,27 @@ Multiplexing pools many samples into one sequencing run, each sample distinguish
 | `demultiplex.max_sample_failure_rate` | float | `0.5` | Abort the step if more than this fraction of samples fail. |
 
 Each sample is processed in its own `try`/`except`: one bad sample is logged and skipped, not fatal. If more than `demultiplex.max_sample_failure_rate` of samples fail, the step aborts so a broken library does not emit a mostly-empty output.
+
+### Intermediate files and disk usage
+
+Every FASTQ is gzipped, and each intermediate file is deleted as soon as the next stage has consumed it:
+
+```text
+01_trim/{marker}/demux/
+  cutadapt_tags/{library}.fasta   tag files, written once for this marker's libraries   kept
+  logs/                           Cutadapt reports, used by read tracking               kept
+    {library}_demultiplex.txt       tag assignment of the whole library
+    {sample}_primer_round{1,2}.txt  primer detection in each orientation
+  work/{library}/                 demultiplexed + primer-detection FASTQs               temporary
+  samples/{sample}.R{1,2}.fastq.gz  per-sample reads, trim's input                      temporary
+```
+
+- A sample's demultiplexed and primer-detection FASTQs are deleted as soon as its realigned output is written; `work/` is removed when the step ends, including after a failure.
+- Both orientations are merged by concatenating the gzip streams, with no decompression.
+- `samples/` is deleted once `trim` has completed and been recorded in the run state, so an interrupted `trim` can still `--resume` from it.
+- The whole `demux/` directory is cleared when the step starts, so a re-run cannot pick up stale samples or append to old Cutadapt reports.
+- When the metadata has a `pcr_primer_forward` column, only this marker's rows are used: libraries, tag files and the sample list all come from rows matching the marker's forward primer. The same `eventID` can therefore appear once per marker, in different libraries or in one library pooling several markers. Reads carrying another marker's tag are left unassigned and discarded.
+- An `eventID` with more than one row for this marker is rejected before any compute.
 
 > [!WARNING]
 > Listing `demultiplex` in `pipeline.steps` with any protocol other than `ligation` (including the default `none` and the unimplemented `standard`) is rejected at config load, before any step runs. If your reads already arrive as one FASTQ pair per sample (common for external collaborators), omit `demultiplex` from `pipeline.steps` so the pipeline starts at `trim`.
@@ -92,7 +113,7 @@ The per-sample read-tracking report (see step 4) still records retention for eve
 
 ### File naming
 
-The trimmer detects inputs in both `.R1.fastq` and `_R1.fastq` conventions (plus `_R1_001.fastq` and `.gz` variants). Trimmed outputs are always written as `{sample}.R1.fastq` / `{sample}.R2.fastq`.
+The trimmer detects inputs in both `.R1.fastq` and `_R1.fastq` conventions (plus `_R1_001.fastq` and `.gz` variants). Trimmed outputs are always written gzipped, as `{sample}.R1.fastq.gz` / `{sample}.R2.fastq.gz`; the pass-1 temporary files are gzipped too.
 
 ## 🧬 2. Cluster: pick a feature path
 
@@ -198,10 +219,10 @@ This is the ASV path: instead of clustering, DADA2 models per-run sequencing err
 | `dada2.merge.min_overlap` | int | `20` | Min overlap for merging pairs. |
 | `dada2.merge.max_mismatch` | int | `0` | Max mismatches in the overlap region. |
 | `dada2.chimera.method` | `consensus` \| `pooled` \| `none` | `consensus` | De novo chimera detection mode (or skip). |
-| `dada2.pool` | bool | `False` | Pool samples for denoising. |
+| `dada2.pool` | bool | `False` | Denoise all samples together instead of one by one (more sensitive to rare variants, slower; see below). |
 | `dada2.multithread` | bool | `True` | Use multithreading. |
 | `dada2.collect_metrics` | bool | `True` | Write ASV summary stats (DADA2 path only). |
-| `dada2.per_library` | bool | `False` | Learn error models per sequencing library, then merge. |
+| `dada2.per_library` | bool | `False` | Learn error models per sequencing library, then merge (see below). |
 
 The algorithm runs in six stages:
 
@@ -217,14 +238,48 @@ When `dada2.collect_metrics: true` (default), ASV summary statistics are written
 <details>
 <summary><b>DADA2 per-library error models</b></summary>
 
-The `dada2.per_library` key (default `false`) controls how the error model is learned:
+DADA2 learns an error model (how often each base is misread, by quality score) and uses it to tell real sequences from sequencing errors. Error profiles differ between sequencing runs, so for a dataset spanning several libraries/runs one model averaged over all of them fits none of them well.
 
-- **Default (`false`):** DADA2 learns one pooled error model across all input samples (the legacy behavior).
-- **When `true`:** DADA2 groups samples by sequencing library, learns and denoises each library separately, then merges the per-library tables and collapses identical ASVs (`mergeSequenceTables` + `collapseNoMismatch`).
+The `dada2.per_library` key (default `false`) controls this:
 
-Where the grouping comes from: the manifest's `seq_run_id` (from `report.sample_metadata` or `demultiplex.metadata`). If no metadata is configured but `raw_data` is organized one folder per library/run (no FASTQs at the top level, per-sample reads in subfolders), the grouping is derived automatically from those subfolders, so already-demultiplexed multi-library data works with no metadata. With neither a metadata grouping nor a subfolder layout, it logs a `[WARN]` and falls back to the single pooled model.
+- **`false` (default):** one error model is learned from all samples together.
+- **`true`:** samples are grouped by library. Each library gets its own error model and is denoised and merged on its own. The per-library tables are then merged and identical ASVs collapsed (`mergeSequenceTables` + `collapseNoMismatch`), so the output is a single ASV table with every sample. With a single library this is a no-op.
 
-When to use: runs spanning multiple sequencing runs, where run-specific error profiles would otherwise be averaged together. It is a no-op for single-library datasets.
+To turn it on, set it in the marker config:
+
+```yaml
+dada2:
+  per_library: true
+```
+
+**Where the sample-to-library grouping comes from**, first match wins:
+
+1. A `library` (or `seq_run_id`) column in `report.sample_metadata` (field CSV).
+2. The `library` column of `demultiplex.metadata` (lab CSV), for samples the field CSV does not group. If the lab CSV is the only metadata configured, it is used on its own.
+3. The subfolders of `paths.raw_data`, when neither CSV has a library column (no metadata at all, or a field CSV set only for the report). This needs no FASTQs at the top level and one folder per library holding already-demultiplexed per-sample reads, for example `raw_data/LIB_A/S1_R1.fastq.gz`. The folder name is the library. A sample name found in two folders cancels the folder grouping (single-batch with a `[WARN]`).
+
+A library column in the metadata always wins over the folders.
+
+**Lab CSVs shared by several markers:** when a CSV has a `pcr_primer_forward` column, only the rows whose primer matches this marker's forward primer are used, as in the demultiplex step. The same `eventID` can therefore be in library A for one marker and library B for another. Without that column every row is used, and an `eventID` listed in two libraries gets a `[WARN]` (the last row wins).
+
+If no grouping source is found, or the grouping has only one library, DADA2 logs a `[WARN]` and runs the standard single-batch path. The map actually used is written to `outputs/02_dada2/{marker}/library_map.csv`.
+
+The `eventID`s in the metadata must match the sample file names, otherwise DADA2 stops and lists the samples missing from the map.
+
+**SWARM** has no per-library mode. All samples of the marker are dereplicated and clustered together, whatever library they came from, so every library of the same primer ends up in one OTU table.
+
+</details>
+
+<details>
+<summary><b>What <code>dada2.pool</code> does</b></summary>
+
+By default (`pool: false`) DADA2 denoises each sample on its own. A sequence is kept as a real variant only if the reads **of that sample** support it, so a variant present at a few reads in many samples can be dropped as noise in each of them.
+
+With `pool: true`, the reads of all samples are denoised together. A rare variant spread over several samples is then detected, which matters for rare taxa. The cost is a much longer run and more memory, and on large datasets it can become impractical.
+
+With `per_library: true`, pooling happens inside each library only: samples of one library are pooled together, never across libraries (each library keeps its own error model).
+
+This is unrelated to `chimera.method: pooled`, which only changes how chimeras are detected.
 
 </details>
 
@@ -232,9 +287,9 @@ When to use: runs spanning multiple sequencing runs, where run-specific error pr
 
 Input: representative sequences (`query.fasta`) and an abundance table (`otu_table.csv` from SWARM, or `seqtab_clean_t.csv` from DADA2). Output: a taxonomy CSV in `outputs/03_taxo/{marker}/` and a final table `outputs/{marker}_{token}.csv`.
 
-The final-table token depends on the method: `blast`, `ecotag`, `decipher`, or `dada2RDP` for the DADA2 RDP classifier (for example `teleo_dada2RDP.csv`). The taxonomy table uses the token `dada2RDP` for the DADA2 method, but the cleaned and GBIF tables (sections 3b and 4) use the raw `taxonomy.method` enum value `dada2`. So the DADA2 cleaned table is `{marker}_dada2_cleaned.csv`, not `{marker}_dada2RDP_cleaned.csv`.
+The final-table token depends on the method: `blast`, `ecotag`, or `dada2RDP` for the DADA2 RDP classifier (for example `teleo_dada2RDP.csv`). The taxonomy table uses the token `dada2RDP` for the DADA2 method, but the cleaned and GBIF tables (sections 3b and 4) use the raw `taxonomy.method` enum value `dada2`. So the DADA2 cleaned table is `{marker}_dada2_cleaned.csv`, not `{marker}_dada2RDP_cleaned.csv`.
 
-All four methods (BLAST, DADA2 RDP, DECIPHER, ecotag) share a post-processor (`seednap.utils.taxonomy.link_taxonomy_with_abundance`), so the output schema is identical regardless of method: same columns, same cascade-null semantics for missing ranks, and the same `is_contaminant_candidate` column when `taxonomy.contaminants` is set. The DADA2 RDP and DECIPHER paths take the query FASTA explicitly and work on either DADA2 ASVs or SWARM OTUs; they do not require a `seqtab_clean.rds`.
+All three methods (BLAST, DADA2 RDP, ecotag) share a post-processor (`seednap.utils.taxonomy.link_taxonomy_with_abundance`), so the output schema is identical regardless of method: same columns, same cascade-null semantics for missing ranks, and the same `is_contaminant_candidate` column when `taxonomy.contaminants` is set. The DADA2 RDP path takes the query FASTA explicitly and works on either DADA2 ASVs or SWARM OTUs; they do not require a `seqtab_clean.rds`.
 
 ### BLAST tuning keys
 
@@ -298,18 +353,16 @@ Tool: built-in formatter. Input: the taxonomy CSV from step 3 (cleaned table pre
 | --- | --- | --- | --- |
 | `export.gbif.add_rank` | bool | `True` | Add a `rank` column (species/genus/family/higher). |
 | `export.gbif.add_taxon` | bool | `True` | Add a `taxon` column (lowest available name). |
-| `export.darwincore.summarise_pcr_replicates` | bool | `False` | (darwincore step) Collapse PCR-replicate suffixes, summing reads per sample. |
-| `export.darwincore.skip_enrichment` | bool | `False` | (darwincore step) Skip the NCBI/WoRMS higher-rank enrichment. |
 
 The `export` step transforms the wide-format taxonomy table (one row per OTU/ASV, one column per sample) into GBIF long format (one row per sample-feature observation), keyed by `eventID` (the per-sample identifier). Zero-count observations are dropped. The marker contaminant flag `is_contaminant_candidate` is carried through so the downstream DarwinCore output can surface it as `contamination_flag`.
 
-The DarwinCore occurrence CSV (the GBIF-ready file) is produced by the **`darwincore` pipeline step**: list `darwincore` after `export` in `pipeline.steps` and set `report.sample_metadata` + `report.project_metadata` (both required, checked at preflight; `export.darwincore` tunes it), so one `run-pipeline` yields the occurrence file as `outputs/{marker}_{taxonomy.method}_darwincore.csv`. Equivalently, it can be produced afterwards by the standalone `seednap create-gbif` command. Either way it joins the long table to a per-sample metadata CSV (locations, dates, environment) on `eventID`. Because R's `make.names()` rewrites the dashed canonical eventID (`A-1-2`) into a dotted form (`A.1.2`) in some legacy tables, the join matches on a separator-normalized key so dot/dash differences still line up. If after normalization no occurrence eventID matches any metadata eventID, `create-gbif` raises (rather than silently writing rows with blank location, date, and `env_medium`); if only some fail to match, it emits a `[WARN]` naming the unmatched eventIDs.
+The DarwinCore occurrence CSV (the GBIF-ready file) is produced afterwards by the standalone `seednap create-gbif` command. It joins the long table to a per-sample metadata CSV (locations, dates, environment) on `eventID`. Because R's `make.names()` rewrites the dashed canonical eventID (`A-1-2`) into a dotted form (`A.1.2`) in some legacy tables, the join matches on a separator-normalized key so dot/dash differences still line up. If after normalization no occurrence eventID matches any metadata eventID, `create-gbif` raises (rather than silently writing rows with blank location, date, and `env_medium`); if only some fail to match, it emits a `[WARN]` naming the unmatched eventIDs.
 
 See [gbif-export.md](gbif-export.md) for the full DarwinCore publishing workflow.
 
 ## 📊 5. Run report
 
-Tool: built-in. Input: Cutadapt logs, the cluster output (SWARM `otu_table` or DADA2 `track_reads.csv`), and, for the HTML report, the taxonomy table, the SWARM `otu_table_full.csv`, the run state JSON, and optional dataset metadata. Output: `read_tracking.{csv,txt}`, `step_summary.csv`, and `report.html` under the report directory (default `outputs/04_report/{marker}/`, configurable via `report.output_dir`).
+Tool: built-in. Input: Cutadapt logs, the cluster output (SWARM `otu_table` or DADA2 `track_reads.csv`), and, for the HTML report, the taxonomy table, the SWARM `otu_table_full.csv`, the run state JSON, and optional dataset metadata. Output: `read_tracking.{csv,txt}`, `step_summary.csv`, `demux_summary.csv` (only after ligation demultiplexing), and `report.html` under the report directory (default `outputs/04_report/{marker}/`, configurable via `report.output_dir`).
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
@@ -322,7 +375,7 @@ Tool: built-in. Input: Cutadapt logs, the cluster output (SWARM `otu_table` or D
 
 This step runs when `report` is in `pipeline.steps` (it is in the default steps). It always writes the read-tracking table and step summary; `report.html_report: false` skips just the HTML document.
 
-The read-tracking table records per-sample read/sequence counts at each step (`raw -> trimmed -> clustered` for SWARM; `raw -> trimmed -> filtered -> denoised -> merged -> nonchim` for DADA2) with a `% retained` column, and emits data-loss warnings against `report.warn_below_retention_pct` and `report.warn_step_loss_pct`. Counts that cannot be measured are recorded as `NA`, never a silent `0`: this is a deliberate correctness guarantee, since a silent zero would look like real data loss.
+The read-tracking table records per-sample read/sequence counts at each step (`raw -> trimmed -> clustered` for SWARM; `raw -> trimmed -> filtered -> denoised -> merged -> nonchim` for DADA2) with a `% retained` column. After ligation demultiplexing, `raw` is the read pairs assigned to the sample by its tag and a `primer_found` step (pairs carrying the primers in either orientation) sits between `raw` and `trimmed`. The table also emits data-loss warnings against `report.warn_below_retention_pct` and `report.warn_step_loss_pct`. Counts that cannot be measured are recorded as `NA`, never a silent `0`: this is a deliberate correctness guarantee, since a silent zero would look like real data loss.
 
 The HTML report is a single self-contained file with dataset provenance, the read-tracking funnel and per-sample retention, a taxonomy headline (assignment rate per rank, top taxa), feature QC (chimeras, length), a control/contamination check, the run timeline, and the full console run log colorized by level.
 
@@ -357,7 +410,7 @@ Each run is reconstructable from its outputs:
 
 - The state JSON records the `seednap_version` that wrote it. On `--resume`, if the running version differs from (or predates) the stored one, a `[WARN]` is logged because the already-completed steps were produced by a different version.
 - The effective merged config (your marker YAML layered over the built-in defaults) is snapshotted to `.{marker}_config.snapshot.yaml` in the output directory at the start of every run, and its path is recorded in the state JSON. The snapshot, not the original YAML, is the authoritative record of what the run actually used.
-- The R scripts for DADA2 and DECIPHER ship inside the installed package (`seednap/scripts/`), so a run uses the scripts bundled with that `seednap` version rather than whatever happens to sit in the working directory.
+- The R scripts for DADA2 ship inside the installed package (`seednap/scripts/`), so a run uses the scripts bundled with that `seednap` version rather than whatever happens to sit in the working directory.
 
 </details>
 

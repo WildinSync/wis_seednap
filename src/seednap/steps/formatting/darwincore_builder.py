@@ -19,7 +19,7 @@ import logging
 import re
 from importlib import resources
 from pathlib import Path
-from typing import Dict, Optional, Union
+from typing import Union
 
 import pandas as pd
 
@@ -90,8 +90,6 @@ class DarwinCoreBuilder:
         output_path: Union[str, Path],
         summarise_pcr_replicates: bool = False,
         skip_enrichment: bool = False,
-        otu_db: Optional[str] = None,
-        chimera_check: Optional[str] = None,
     ) -> None:
         """Store input/output paths and build options.
 
@@ -103,12 +101,6 @@ class DarwinCoreBuilder:
             summarise_pcr_replicates: If True, collapse PCR replicate suffixes
                 and sum their reads before building the output.
             skip_enrichment: If True, skip NCBI/WORMS kingdom/phylum enrichment.
-            otu_db: Reference-database name for the ``otu_db`` field. When given (e.g.
-                derived from the run config by the 'darwincore' pipeline step) it overrides
-                the project-metadata value; a differing project value is reported with a
-                ``[WARN]``. None keeps the project-metadata value.
-            chimera_check: Chimera-removal description for the ``chimera_check`` field, with
-                the same config-overrides-project precedence as ``otu_db``.
         """
         self.taxonomy_results_path = Path(taxonomy_results_path)
         self.sample_metadata_path = Path(sample_metadata_path)
@@ -116,68 +108,6 @@ class DarwinCoreBuilder:
         self.output_path = Path(output_path)
         self.summarise_pcr_replicates = summarise_pcr_replicates
         self.skip_enrichment = skip_enrichment
-        self.otu_db = otu_db
-        self.chimera_check = chimera_check
-
-    @staticmethod
-    def _prefer_config(field: str, config_value: Optional[str], csv_value: object) -> object:
-        """Return ``config_value`` when set, else the project-CSV value; warn on disagreement.
-
-        Lets the 'darwincore' pipeline step fill GBIF provenance fields from the run config
-        (the single source of truth) while still accepting the project metadata CSV when run
-        standalone. When the config supplies a value AND the CSV carries a different non-empty
-        one, the mismatch is surfaced with a ``[WARN]`` (the no-silent-fallbacks policy) and
-        the config value wins.
-
-        Args:
-            field: The DarwinCore field name, for the warning message.
-            config_value: The config-derived value, or None when not supplied.
-            csv_value: The value read from the project metadata CSV.
-
-        Returns:
-            ``config_value`` if it is not None, otherwise ``csv_value``.
-        """
-        if config_value is None:
-            return csv_value
-        csv_str = "" if csv_value is None else str(csv_value).strip()
-        if csv_str and csv_str != str(config_value):
-            logger.warning(
-                f"[WARN] darwincore: {field} from the run config ({config_value!r}) differs "
-                f"from the project metadata ({csv_str!r}); using the config value.",
-            )
-        return config_value
-
-    def _write_dropped_report(self, snapshot: pd.DataFrame, dropped_reason: Dict[int, str]) -> None:
-        """Write a CSV listing the occurrences the control + non-target filters removed.
-
-        For early-stage QA (so it is easy to check what the GBIF step deletes): records every
-        (sample, taxon) row dropped by control removal or the non-target filter, with the
-        reason, alongside the main output as ``<output>_dropped.csv``. Written even when
-        nothing was dropped (header only), so an empty file confirms the filters ran.
-
-        Args:
-            snapshot: The occurrence rows as they were before the control/non-target filters,
-                carrying the ``_dwc_row_id`` helper column.
-            dropped_reason: Maps a dropped row's ``_dwc_row_id`` to its removal reason.
-
-        Returns:
-            None. Writes the report and sets ``self.dropped_report_path``.
-        """
-        report_path = self.output_path.with_name(f"{self.output_path.stem}_dropped.csv")
-        cols = [
-            c for c in ("eventID", "kingdom", "phylum", "class", "order", "family",
-                        "genus", "species", "taxon", "nb_reads")
-            if c in snapshot.columns
-        ]
-        dropped = snapshot[snapshot["_dwc_row_id"].isin(dropped_reason.keys())]
-        out = dropped[cols].copy()
-        out["drop_reason"] = dropped["_dwc_row_id"].map(dropped_reason).to_numpy()
-        out.to_csv(report_path, index=False)
-        logger.info(
-            f"DarwinCore: wrote deleted-entries report ({len(out)} occurrence(s) removed by "
-            f"control/non-target filters) to {report_path}"
-        )
-        self.dropped_report_path = report_path
 
     # ------------------------------------------------------------------
     # Public entry point
@@ -236,19 +166,8 @@ class DarwinCoreBuilder:
             results = self._summarise_pcr_replicates(results)
             logger.info("PCR replicates summarised per sample")
 
-        # Tag input rows so the control + non-target filters below can report exactly which
-        # occurrences they remove (the deleted-entries report); the helper column is dropped
-        # before reads are summed per eventID.
-        results = results.reset_index(drop=True)
-        results["_dwc_row_id"] = range(len(results))
-        rows_snapshot = results.copy()
-        dropped_reason: Dict[int, str] = {}
-
-        # Remove controls (capturing which occurrences were dropped)
-        before_ids = set(results["_dwc_row_id"])
+        # Remove controls
         results = self._remove_controls(results)
-        for rid in before_ids - set(results["_dwc_row_id"]):
-            dropped_reason[rid] = "negative/positive control"
 
         # Validate dates
         self._validate_dates(sample_meta["eventDate"])
@@ -279,16 +198,8 @@ class DarwinCoreBuilder:
                     f"(propagated to GBIF output as `contamination_flag`)"
                 )
 
-        # Filter non-target taxa (capturing which occurrences were dropped)
-        before_ids = set(results["_dwc_row_id"])
+        # Filter non-target taxa
         results = NonTargetFilter().filter(results, marker)
-        for rid in before_ids - set(results["_dwc_row_id"]):
-            dropped_reason[rid] = f"non-target taxon ({marker})"
-
-        # Write the deleted-entries report (which occurrences the filters removed, and why),
-        # then drop the helper column before reads are summed per eventID.
-        self._write_dropped_report(rows_snapshot, dropped_reason)
-        results = results.drop(columns="_dwc_row_id")
 
         # Sum reads per eventID
         results = self._sum_reads(results)
@@ -401,13 +312,10 @@ class DarwinCoreBuilder:
         out["otu_seq_comp_appr"] = project_meta.get(
             "otu_seq_comp_appr", pd.Series([""])
         ).iloc[0]
-        out["otu_db"] = self._prefer_config(
-            "otu_db", self.otu_db, project_meta.get("otu_db", pd.Series([""])).iloc[0]
-        )
-        out["chimera_check"] = self._prefer_config(
-            "chimera_check", self.chimera_check,
-            project_meta.get("chimera_check", pd.Series([""])).iloc[0],
-        )
+        out["otu_db"] = project_meta.get("otu_db", pd.Series([""])).iloc[0]
+        out["chimera_check"] = project_meta.get(
+            "chimera_check", pd.Series([""])
+        ).iloc[0]
 
         # G2: propagate contamination flag from upstream taxonomy to GBIF output.
         if "is_contaminant_candidate" in merged.columns:

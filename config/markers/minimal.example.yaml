@@ -1,25 +1,36 @@
-# Minimal SeeDNAP config: only the REQUIRED fields. Everything not listed here uses a built-in
-# default (config is merged over defaults, so any defaulted key may be omitted). See
-# docs/configuration.md for the full reference and config/markers/teleo.yaml for a populated example.
-#
-# REQUIRED: marker.name, marker.primers.forward/reverse, taxonomy.method, and the matching
-# taxonomy.databases.<method> block with that method's required path(s).
+# SeeDNAP config for teleo (small). Anything not listed uses its built-in default;
+# run `seednap init complete` to see every parameter. Check with `seednap validate <this file>`.
+
+# Steps to run, in order. Use "swarm" instead of "dada2" for OTUs.
+# Available: demultiplex (before trim), trim, dada2 | swarm, taxonomy, clean, export, report
+pipeline:
+  steps:
+    - "trim"
+    - "dada2"
+    - "taxonomy"
+    - "export"
+    - "report"
 
 marker:
-  name: mymarker
-  primers:
-    forward: ACACCGCCCGTCACTCT      # 5'->3'
-    reverse: CTTCCGGTACACTTACCATG    # 5'->3'
+  name: teleo
+  primers:                                   # 5'->3', IUPAC codes allowed
+    forward: "ACACCGCCCGTCACTCT"
+    reverse: "CTTCCGGTACACTTACCATG"
 
 paths:
-  raw_data: /path/to/raw/fastq       # directory of paired-end FASTQ (the only path you must set)
+  raw_data: "/path/to/raw_fastq"             # paired-end FASTQ (<sample>_R1/_R2.fastq.gz) or libraries to demultiplex
+  output: "outputs"
+  logs: "logs"
+
+# demultiplex:                               # only if "demultiplex" is in pipeline.steps
+#   protocol: "ligation"                     # ligation | standard | none
+#   metadata: "/path/to/metadata_lab.csv"
+
+trimming:
+  cores: 4
 
 taxonomy:
-  method: blast                      # blast | dada2 | ecotag | decipher (fill only this method's block below)
+  method: "blast"                            # blast | dada2 | ecotag
   databases:
     blast:
-      fasta: /path/to/blast_db.fasta
-
-# Pick the clustering path with `pipeline.steps` (defaults to the DADA2 ASV path):
-#   pipeline:
-#     steps: ["trim", "swarm", "taxonomy", "export"]   # OTU path  (or "dada2" for the ASV path)
+      fasta: "/path/to/teleo_reference.fasta"

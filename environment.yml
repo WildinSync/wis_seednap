@@ -14,7 +14,7 @@ dependencies:
   - vsearch=2.30.5
   - swarm=3.1.6
 
-  # R and R packages (pinned to validated versions; the DADA2/DECIPHER
+  # R and R packages (pinned to validated versions; the DADA2
   # versions produce the biology results, so leaving them unpinned risks
   # silent output drift across environment rebuilds)
   - r-base=4.2
@@ -22,7 +22,6 @@ dependencies:
   - r-patchwork=1.2.0
   - bioconductor-biostrings=2.66.0
   - bioconductor-dada2=1.26.0
-  - bioconductor-decipher=2.26.0
 
   # Python scientific stack (conda packages)
   - pandas>=2.2  # BLAST LCA uses DataFrameGroupBy.apply(include_groups=...)

@@ -8,7 +8,7 @@ config helpers (``init``, ``validate``, ``explain``), and post-processing comman
 
 In pipeline terms this module is the thin user-facing shell. Each command parses
 options, sets up logging, then delegates the actual biology (primer trimming, ASV
-denoising with DADA2, OTU clustering with SWARM, BLAST/ecotag/DECIPHER taxonomy,
+denoising with DADA2, OTU clustering with SWARM, BLAST/ecotag/DADA2 RDP taxonomy,
 DarwinCore/GBIF export) to the processors and runners under ``seednap.steps`` and the
 orchestrator under ``seednap.pipeline``. No biological computation happens here; this
 file only wires arguments, reports progress to the console, persists [WARN] safety
@@ -25,6 +25,7 @@ from rich.table import Table
 
 from seednap.__version__ import __version__
 from seednap.config import ConfigError, create_example_config, load_config, validate_config_file
+from seednap.config.loader import INIT_TEMPLATES
 from seednap.utils.logging import get_logger, setup_logging
 
 console = Console()
@@ -167,7 +168,7 @@ def _assign_kwargs_from_config(config: Any, method: str) -> Dict[str, Any]:
         config: A loaded ``PipelineConfig`` for the marker. Only its ``taxonomy`` block is
             read (the selected database config and the marker-level ``contaminants`` list).
         method: Which taxonomy method's parameter block to extract: one of ``"blast"``,
-            ``"dada2"``, ``"ecotag"``, or ``"decipher"``.
+            ``"dada2"``, or ``"ecotag"``.
 
     Returns:
         A dict of keyword arguments for ``TaxonomicAssigner.assign_taxonomy`` matching the
@@ -216,13 +217,6 @@ def _assign_kwargs_from_config(config: Any, method: str) -> Dict[str, Any]:
         return {
             "taxonomy_db": db.tree,
             "reference_db": db.fasta,
-            "contaminants": contaminants,
-        }
-    if method == "decipher":
-        return {
-            "trained_classifier_path": db.trained,
-            "threshold": db.threshold,
-            "processors": db.processors,
             "contaminants": contaminants,
         }
     return {}
@@ -394,23 +388,18 @@ def validate(ctx: click.Context, config_file: Path) -> None:
 
 
 @main.command()
-@click.option(
-    "--output",
-    "-o",
-    type=click.Path(path_type=Path),
-    default=Path("config/markers/example.yaml"),
-    help="Output path for example config",
-)
+@click.argument("template", type=click.Choice(INIT_TEMPLATES), default="small")
 @click.option(
     "--marker",
     "-m",
     default="teleo",
-    help="Marker name for the example config",
+    help="Marker name; its primers are filled in when the marker is in the bundled primer list",
 )
 @click.option(
-    "--minimal/--full",
-    default=True,
-    help="Emit only the required fields (default) or the fully-annotated reference template",
+    "--output",
+    "-o",
+    type=click.Path(path_type=Path),
+    help="Output path (default: <marker>.yaml in the current directory)",
 )
 @click.option(
     "--force",
@@ -418,24 +407,25 @@ def validate(ctx: click.Context, config_file: Path) -> None:
     is_flag=True,
     help="Overwrite existing file",
 )
-def init(output: Path, marker: str, minimal: bool, force: bool) -> None:
+def init(template: str, marker: str, output: Optional[Path], force: bool) -> None:
     """
-    Create an example configuration file.
+    Create a starter configuration file.
 
-    By default this writes a minimal config containing only the required fields (everything
-    else uses built-in defaults); pass --full for the fully-annotated reference template.
+    TEMPLATE is "small" (default: the fields you normally edit, everything else on built-in
+    defaults) or "complete" (every parameter with its default value and a short comment).
 
-    A marker config is the per-marker YAML that drives a whole run (primers, paths,
-    trimming/DADA2/SWARM parameters, the taxonomy method and its reference databases). This
-    command scaffolds one to edit rather than writing it by hand.
+    \b
+    Examples:
+      seednap init                      # small teleo.yaml
+      seednap init complete -m mifish   # complete mifish.yaml
 
+    \f
     Args:
-        output: Path to write the example config to. Defaults to
-            ``config/markers/example.yaml``.
-        marker: Marker name to seed the example with (e.g. ``teleo``). Sets the marker
-            block in the generated config.
-        minimal: If True (``--minimal``, the default), emit only required fields; if False
-            (``--full``), emit the fully-annotated reference template.
+        template: ``"small"`` or ``"complete"``.
+        marker: Marker name to seed the config with (e.g. ``teleo``). Its primers come from
+            the bundled primers_list.csv when listed there.
+        output: Path to write the config to. Defaults to ``<marker>.yaml`` in the current
+            directory.
         force: If True (``--force``), overwrite an existing file at ``output``.
 
     Returns:
@@ -443,17 +433,20 @@ def init(output: Path, marker: str, minimal: bool, force: bool) -> None:
 
     Raises:
         SystemExit: Code 1 if ``output`` already exists and ``force`` is not set, or if
-            creating the example config raises ``ConfigError``.
+            creating the config raises ``ConfigError``.
     """
+    if output is None:
+        output = Path(f"{marker}.yaml")
+
     if output.exists() and not force:
         print_error(f"File already exists: {output}")
         console.print("Use --force to overwrite.")
         sys.exit(1)
 
     try:
-        create_example_config(output, marker=marker, minimal=minimal)
-        print_success(f"Created example configuration: {output}")
-        console.print("\nEdit this file to customize for your analysis.")
+        create_example_config(output, marker=marker, template=template)
+        print_success(f"Created {template} configuration: {output}")
+        console.print("\nSet paths.raw_data and the reference database path, then edit as needed.")
         console.print(f"Validate it with: [bold]seednap validate {output}[/bold]")
     except ConfigError as e:
         print_error(f"Failed to create config: {e}")
@@ -466,7 +459,7 @@ def init(output: Path, marker: str, minimal: bool, force: bool) -> None:
     "--format",
     "-f",
     "format_type",
-    type=click.Choice(["dada2", "ecotag", "blast", "decipher"]),
+    type=click.Choice(["dada2", "ecotag", "blast"]),
     required=True,
     help="Input format type",
 )
@@ -497,7 +490,7 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
         input_file: Path to the taxonomic assignment CSV produced by an ``assign-taxonomy``
             run. Must already exist (enforced by Click).
         format_type: Which producing method wrote ``input_file``: one of ``"dada2"``,
-            ``"ecotag"``, ``"blast"``, or ``"decipher"``. Selects the matching reshape
+            ``"ecotag"``, or ``"blast"``. Selects the matching reshape
             logic and must match the method that generated the file.
         output: Path for the long-format GBIF CSV. If ``None``, defaults to the input
             file's directory with a ``_gbif_input`` suffix.
@@ -544,7 +537,7 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
     except ValueError as e:
         print_error(
             f"Invalid input for format '{format_type}': {e}. The CSV does not have the "
-            f"columns this format expects. -f dada2/blast/decipher all expect a wide "
+            f"columns this format expects. -f dada2/blast both expect a wide "
             f"taxonomy table with columns kingdom,phylum,class,order,family,genus,species,"
             f"sequence plus one numeric column per sample; -f ecotag expects an "
             f"ecotag-derived CSV with *_name columns. Re-check that the file came from the "
@@ -672,157 +665,6 @@ def create_gbif(
         sys.exit(1)
     except Exception as e:
         print_error(f"Failed to build DarwinCore CSV: {e}")
-        if ctx.obj.get("verbose"):
-            import traceback
-
-            console.print(traceback.format_exc())
-        sys.exit(1)
-
-
-@main.command("wis-metadata")
-@click.option(
-    "--database-url",
-    envvar="WIS_DATABASE_URL",
-    required=True,
-    help="SQLAlchemy URL for the WIS database, or set WIS_DATABASE_URL "
-    "(e.g. postgresql://user:pass@host:5432/wis).",
-)
-@click.option(
-    "--marker",
-    required=True,
-    help="Marker name (e.g. teleo); used for the project row and the output filenames.",
-)
-@click.option(
-    "--output-dir",
-    type=click.Path(path_type=Path),
-    required=True,
-    help="Directory for <marker>_sample_metadata.csv and <marker>_project_metadata.csv.",
-)
-@click.option(
-    "--monitoring",
-    default=None,
-    help="Restrict to one WIS monitoring_id (the site / long-term project).",
-)
-@click.option(
-    "--mission",
-    default=None,
-    help="Restrict to one WIS mission_id (the sampling campaign).",
-)
-@click.option(
-    "--event-id-field",
-    type=click.Choice(["sample_id", "material_sample_id"]),
-    default="sample_id",
-    show_default=True,
-    help="Which WIS identifier becomes eventID; match your FASTQ/sample naming.",
-)
-@click.option(
-    "--recorded-by",
-    required=True,
-    help="DwC recordedBy (data contributor) for the project row.",
-)
-@click.option(
-    "--identification-remarks",
-    required=True,
-    help="Identification-method note for the project row.",
-)
-@click.option(
-    "--identification-references",
-    required=True,
-    help="Reference-DB / method citation for the project row.",
-)
-@click.option(
-    "--seq-meth", default="", help="Optional sequencing-method description (DwC seq_meth)."
-)
-@click.option(
-    "--otu-seq-comp-appr", default="", help="Optional OTU/ASV sequence-comparison approach."
-)
-@click.pass_context
-def wis_metadata(
-    ctx: click.Context,
-    database_url: str,
-    marker: str,
-    output_dir: Path,
-    monitoring: Optional[str],
-    mission: Optional[str],
-    event_id_field: str,
-    recorded_by: str,
-    identification_remarks: str,
-    identification_references: str,
-    seq_meth: str,
-    otu_seq_comp_appr: str,
-) -> None:
-    """Generate the GBIF export's metadata CSVs from the WIS database.
-
-    Reads per-sample field metadata (eventID, eventDate, coordinates, env_medium, depth, size)
-    from the WIS PostgreSQL/PostGIS database and writes the two CSVs the DarwinCore export
-    consumes: ``<marker>_sample_metadata.csv`` (one row per sample) and
-    ``<marker>_project_metadata.csv`` (one project row). Point ``report.sample_metadata`` /
-    ``report.project_metadata`` (or the ``create-gbif`` arguments) at the generated files.
-
-    \b
-    Requires the optional database extra:  pip install 'seednap[wis]'
-    (adds SQLAlchemy + psycopg2). The reference-database and chimera-removal provenance are
-    filled by the 'darwincore' pipeline step from the run config, so they are not written here.
-
-    Args:
-        ctx: Click context (carries the global verbose flag).
-        database_url: SQLAlchemy URL for the WIS database (or the WIS_DATABASE_URL env var).
-        marker: Marker name for the project row and the output filenames.
-        output_dir: Directory for the two output CSVs.
-        monitoring: Optional ``monitoring_id`` (site/project) filter.
-        mission: Optional ``mission_id`` (campaign) filter.
-        event_id_field: WIS identifier used as eventID (``sample_id`` or ``material_sample_id``).
-        recorded_by: DwC ``recordedBy`` for the project row.
-        identification_remarks: Identification-method note for the project row.
-        identification_references: Reference-DB / method citation for the project row.
-        seq_meth: Optional sequencing-method description.
-        otu_seq_comp_appr: Optional OTU/ASV sequence-comparison approach.
-
-    Returns:
-        None. Writes the two CSVs and prints their paths.
-
-    Raises:
-        SystemExit: Code 1 if the optional dependency is missing, no samples match the
-            selector, or any other failure occurs.
-    """
-    from seednap.steps.formatting.wis_metadata import WisMetadataExporter
-
-    _add_command_log_file(output_dir, "wis_metadata")
-
-    console.print("\n[bold]Generating GBIF metadata from the WIS database[/bold]")
-    console.print(f"  Marker:        {marker}")
-    console.print(f"  Output dir:    {output_dir}")
-    console.print(f"  Filter:        monitoring={monitoring or '—'}, mission={mission or '—'}")
-    console.print(f"  eventID field: {event_id_field}")
-    console.print()
-
-    try:
-        sample_csv, project_csv = WisMetadataExporter(database_url).export(
-            output_dir=output_dir,
-            marker=marker,
-            recorded_by=recorded_by,
-            identification_remarks=identification_remarks,
-            identification_references=identification_references,
-            monitoring=monitoring,
-            mission=mission,
-            event_id_field=event_id_field,
-            seq_meth=seq_meth,
-            otu_seq_comp_appr=otu_seq_comp_appr,
-        )
-        print_success(f"Wrote sample metadata to {sample_csv}")
-        print_success(f"Wrote project metadata to {project_csv}")
-        console.print(
-            "\nNext: set report.sample_metadata / report.project_metadata to these files "
-            "(or pass them to create-gbif)."
-        )
-    except ValueError as e:
-        print_error(f"Validation error: {e}")
-        sys.exit(1)
-    except RuntimeError as e:
-        print_error(str(e))
-        sys.exit(1)
-    except Exception as e:
-        print_error(f"Failed to generate WIS metadata: {e}")
         if ctx.obj.get("verbose"):
             import traceback
 
@@ -1222,7 +1064,8 @@ def trim(
 @click.option(
     "--no-gunzip",
     is_flag=True,
-    help="Keep output files gzipped (default: gunzip)",
+    hidden=True,
+    help="Deprecated no-op: outputs are always gzipped.",
 )
 def demultiplex(
     raw_reads_dir: Path,
@@ -1247,6 +1090,10 @@ def demultiplex(
     3. Detect primers (both orientations)
     4. Merge and realign reads
 
+    Writes gzipped per-sample FASTQs to OUTPUT_DIR/samples/, the tag file to
+    OUTPUT_DIR/cutadapt_tags/ and the cutadapt reports to OUTPUT_DIR/logs/.
+    Intermediate files are deleted as soon as they are consumed.
+
     In a ligation-based library, many samples are pooled into one sequencing run, each
     sample marked by a short tag (barcode) ligated to its reads. Demultiplexing splits the
     pooled FASTQs back into per-sample reads by those tags before primer trimming, so each
@@ -1262,8 +1109,7 @@ def demultiplex(
         reverse_primer: Reverse primer sequence.
         output_dir: Base output directory for the demultiplexed/realigned reads.
         cores: Number of CPU cores to use.
-        no_gunzip: If True (``--no-gunzip``), leave the output files gzipped; otherwise the
-            outputs are gunzipped.
+        no_gunzip: Deprecated and ignored; outputs are always gzipped.
 
     Returns:
         None. Writes the realigned per-sample reads and prints their directory on success.
@@ -1286,18 +1132,25 @@ def demultiplex(
     try:
         trimmer = LigationTrimmer(cores=cores)
 
-        realigned_dir = trimmer.process_library(
+        tag_files = trimmer.generate_tag_files(
+            metadata_csv=metadata_csv,
+            output_dir=output_dir / "cutadapt_tags",
+            libraries=[library_name],
+        )
+        samples_dir = output_dir / "samples"
+        trimmer.process_library(
             raw_reads_dir=raw_reads_dir,
             library_name=library_name,
-            metadata_csv=metadata_csv,
-            output_base_dir=output_dir,
+            tag_file=trimmer.library_tag_file(tag_files, library_name, metadata_csv),
+            output_dir=samples_dir,
+            work_dir=output_dir / "work",
+            log_dir=output_dir / "logs",
             forward_primer=forward_primer,
             reverse_primer=reverse_primer,
-            gunzip_output=not no_gunzip,
         )
 
         print_success("\nCompleted ligation library processing!")
-        console.print(f"Realigned reads saved to: {realigned_dir}\n")
+        console.print(f"Realigned reads saved to: {samples_dir}\n")
 
     except Exception as e:
         print_error(f"Demultiplexing failed: {str(e)}")
@@ -1626,7 +1479,7 @@ def swarm(
 
 
 @main.command()
-@click.argument("method", type=click.Choice(["blast", "dada2", "ecotag", "decipher"]))
+@click.argument("method", type=click.Choice(["blast", "dada2", "ecotag"]))
 @click.argument("marker", type=str)
 @click.argument("query_fasta", type=click.Path(exists=True, path_type=Path))
 @click.argument("asv_count_csv", type=click.Path(exists=True, path_type=Path))
@@ -1668,11 +1521,6 @@ def swarm(
     "--reference-db",
     type=click.Path(exists=True, path_type=Path),
     help="Reference sequence database (for ecotag method)",
-)
-@click.option(
-    "--trained-classifier",
-    type=click.Path(exists=True, path_type=Path),
-    help="Trained DECIPHER classifier .rds file (for DECIPHER method)",
 )
 @click.option(
     "--threshold-species",
@@ -1734,19 +1582,6 @@ def swarm(
     default=1.0,
     help="collapsed_taxonomy: identity-window width collapsed to the LCA (BLAST; default: 1.0)",
 )
-@click.option(
-    "--confidence-threshold",
-    type=int,
-    default=60,
-    help="Confidence threshold for DECIPHER (0-100, default: 60)",
-)
-@click.option(
-    "--processors",
-    "-c",
-    type=int,
-    default=8,
-    help="Number of CPU cores (default: 8)",
-)
 @click.pass_context
 def assign_taxonomy(
     ctx: click.Context,
@@ -1761,7 +1596,6 @@ def assign_taxonomy(
     species_db: Optional[Path],
     taxonomy_db: Optional[Path],
     reference_db: Optional[Path],
-    trained_classifier: Optional[Path],
     threshold_species: float,
     threshold_genus: float,
     threshold_family: float,
@@ -1772,13 +1606,11 @@ def assign_taxonomy(
     lca_algorithm: str,
     lca_pid: float,
     lca_diff: float,
-    confidence_threshold: int,
-    processors: int,
 ) -> None:
     """
     Assign taxonomy to ASVs using various methods.
 
-    METHOD: Taxonomic assignment method (blast, dada2, ecotag, decipher).
+    METHOD: Taxonomic assignment method (blast, dada2, ecotag).
     MARKER: Marker name (e.g., teleo, amph).
     QUERY_FASTA: Query FASTA file with ASV sequences.
     ASV_COUNT_CSV: ASV count table (seqtab_clean.csv or _t.csv).
@@ -1789,7 +1621,6 @@ def assign_taxonomy(
     BLAST: --reference-fasta
     DADA2: --rdp-db and --species-db
     ecotag: --taxonomy-db and --reference-db
-    DECIPHER: --trained-classifier
 
     Pass --config <marker.yaml> to use that marker's taxonomy.databases.<method>
     block (database path plus method parameters, e.g. BLAST evalue/task/thresholds)
@@ -1797,17 +1628,16 @@ def assign_taxonomy(
     overrides the corresponding config value.
 
     Taxonomic assignment is the step that names each ASV/OTU sequence by comparing it to a
-    reference database. The four methods differ in approach: BLAST (alignment + LCA),
-    DADA2 (naive Bayesian classifier), ecotag (OBITools tree-based assignment), and
-    DECIPHER (IdTaxa classifier). This command is the standalone counterpart to the
+    reference database. The three methods differ in approach: BLAST (alignment + LCA),
+    DADA2 (naive Bayesian classifier), and ecotag (OBITools tree-based assignment).
+    This command is the standalone counterpart to the
     taxonomy step of ``run-pipeline``.
 
     Args:
         ctx: The Click context, used both for the global verbose flag and to detect which
             options the user actually typed (so config values are only overridden by
             explicit CLI flags, not by click defaults).
-        method: Assignment method: one of ``"blast"``, ``"dada2"``, ``"ecotag"``,
-            ``"decipher"``.
+        method: Assignment method: one of ``"blast"``, ``"dada2"``, ``"ecotag"``.
         marker: Marker name (e.g. ``teleo``, ``amph``). Names the output subtree.
         query_fasta: Query FASTA of ASV/OTU sequences to assign. Must exist.
         asv_count_csv: ASV/OTU count table (``seqtab_clean.csv`` or ``_t.csv``). Must
@@ -1821,8 +1651,6 @@ def assign_taxonomy(
         species_db: Species-level taxonomy database (DADA2 method). Must exist if given.
         taxonomy_db: NCBI taxonomy database (ecotag method). Must exist if given.
         reference_db: Reference sequence database (ecotag method). Must exist if given.
-        trained_classifier: Trained DECIPHER classifier ``.rds`` file (DECIPHER method).
-            Must exist if given.
         threshold_species: BLAST: minimum percent identity to assign at species rank.
         threshold_genus: BLAST: minimum percent identity to assign at genus rank.
         threshold_family: BLAST: minimum percent identity to assign at family rank.
@@ -1834,8 +1662,6 @@ def assign_taxonomy(
         lca_algorithm: BLAST LCA algorithm: ``cascade`` or ``collapsed_taxonomy``.
         lca_pid: BLAST collapsed_taxonomy: hard percent-identity floor.
         lca_diff: BLAST collapsed_taxonomy: identity-window width collapsed to the LCA.
-        confidence_threshold: DECIPHER confidence threshold (0-100) for accepting a rank.
-        processors: Number of CPU cores (used by DECIPHER).
 
     Returns:
         None. Writes the taxonomy outputs for the chosen method and prints their paths on
@@ -1961,20 +1787,6 @@ def assign_taxonomy(
                     sys.exit(1)
                 kwargs["reference_db"] = reference_db
 
-        elif method == "decipher":
-            if _given("trained_classifier") or "trained_classifier_path" not in kwargs:
-                if not trained_classifier:
-                    print_error(
-                        "--trained-classifier is required for DECIPHER method "
-                        "(or pass --config with a taxonomy.databases.decipher.trained path)"
-                    )
-                    sys.exit(1)
-                kwargs["trained_classifier_path"] = trained_classifier
-            if _given("confidence_threshold") or "threshold" not in kwargs:
-                kwargs["threshold"] = confidence_threshold
-            if _given("processors") or "processors" not in kwargs:
-                kwargs["processors"] = processors
-
         # Run taxonomic assignment
         console.print(f"[bold]Running {method.upper()} taxonomic assignment...[/bold]")
         outputs = assigner.assign_taxonomy(
@@ -2000,10 +1812,9 @@ def assign_taxonomy(
     except Exception as e:
         from seednap.steps.taxonomic_assignment.blast_runner import BlastError
         from seednap.steps.taxonomic_assignment.dada2_taxonomy_runner import Dada2TaxonomyError
-        from seednap.steps.taxonomic_assignment.decipher_runner import DecipherError
         from seednap.steps.taxonomic_assignment.ecotag_runner import EcotagError
 
-        if isinstance(e, (EcotagError, BlastError, DecipherError, Dada2TaxonomyError)):
+        if isinstance(e, (EcotagError, BlastError, Dada2TaxonomyError)):
             # These carry self-contained, actionable messages (e.g. the OBITools-missing
             # what/why/fix block); print verbatim rather than mislabeling them as a crash.
             print_error(str(e))
@@ -2043,7 +1854,7 @@ def run_pipeline(
     1. Demultiplexing (optional)
     2. Primer trimming with cutadapt
     3. DADA2 processing (filtering, denoising, merging, chimera removal)
-    4. Taxonomic assignment (DADA2/BLAST/ecotag/DECIPHER)
+    4. Taxonomic assignment (DADA2/BLAST/ecotag)
     5. Export to GBIF format
 
     CONFIG: Path to pipeline configuration YAML file
@@ -2260,6 +2071,9 @@ def report(
         # the trim step); read them there so raw/trimmed counts (and % retained) populate.
         "marker": marker, "logs_dir": out / "01_trim" / marker / "logs",
         "warn_below_retention_pct": warn_retention, "warn_step_loss_pct": warn_step_loss,
+        # Ligation demux reports, used when the run demultiplexed (the builder ignores
+        # a missing directory).
+        "demux_logs_dir": out / "01_trim" / marker / "demux" / "logs",
     }
     method = None
     if (dada2_dir / "track_reads.csv").exists():
@@ -2299,6 +2113,8 @@ def report(
         paths = builder.write(report_dir, df=df)
         step_summary_df = builder.step_summary(df)
         builder.write_step_summary(report_dir, summary_df=step_summary_df)
+        demux_summary_df = builder.demux_summary()
+        builder.write_demux_summary(report_dir, summary_df=demux_summary_df)
         warns = builder.warnings(df, log=False)  # keep the console clean; shown below + in HTML
 
         table = Table(show_header=True, header_style="bold cyan")
@@ -2347,7 +2163,7 @@ def report(
                     print_warning(f"Could not read state file {state_file}; timeline omitted.")
             # Locate the final taxonomy table (for the taxonomy/contamination panels).
             taxo = None
-            for suffix in ("blast", "dada2RDP", "dada2", "ecotag", "decipher"):
+            for suffix in ("blast", "dada2RDP", "dada2", "ecotag"):
                 cand = out / f"{marker}_{suffix}.csv"
                 if cand.exists():
                     taxo = cand
@@ -2396,6 +2212,7 @@ def report(
                 field_metadata_csv=field_metadata, project_metadata_csv=project_metadata,
                 log_file=log_file,
                 step_summary_df=step_summary_df,
+                demux_summary_df=demux_summary_df,
                 summary={
                     "warn_below_retention_pct": warn_retention,
                     "subtitle": f"{len(df)} samples · marker {marker}",

@@ -56,7 +56,7 @@ def test_aggregate_trim_loss_none_when_unmeasurable(tmp_path):
 def _orchestrator_with_one_sample(tmp_path, monkeypatch):
     """Load the teleo config, point it at a fresh raw/output tree with one sample."""
     monkeypatch.chdir(tmp_path)
-    cfg = load_config(str(_REPO / "config" / "markers" / "teleo_rhone.yaml"))
+    cfg = load_config(str(_REPO / "config" / "markers" / "teleo.yaml"))
     raw = tmp_path / "raw"
     raw.mkdir()
     (raw / "S1_R1.fastq.gz").write_bytes(b"")

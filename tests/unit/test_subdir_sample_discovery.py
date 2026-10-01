@@ -18,7 +18,7 @@ _REPO = Path(__file__).resolve().parents[2]
 
 
 def _orch(tmp_path, raw):
-    cfg = load_config(str(_REPO / "config" / "markers" / "teleo_rhone.yaml"))
+    cfg = load_config(str(_REPO / "config" / "markers" / "teleo.yaml"))
     cfg.paths.raw_data = raw
     cfg.paths.output = tmp_path / "out"
     cfg.paths.logs = tmp_path / "out" / "logs"

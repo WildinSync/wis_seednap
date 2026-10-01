@@ -12,7 +12,7 @@ SeeDNAP supports four taxonomic assignment methods, selected via the `taxonomy.m
 
 The taxonomy stage runs only if `taxonomy` appears in `pipeline.steps` (a stage runs iff listed). Setting `taxonomy.method` alone does not trigger it. When it runs, it writes the final merged taxonomy+abundance table to `<paths.output>/<marker>_<method>.csv` and, if `export` is also listed, the GBIF table to `<paths.output>/<marker>_<method>_gbif.csv`.
 
-All four methods produce the same output schema: identical column names, identical null/cascade semantics, and an `is_contaminant_candidate` column in the same position. Downstream tooling never branches on the method.
+All three methods produce the same output schema: identical column names, identical null/cascade semantics, and an `is_contaminant_candidate` column in the same position. Downstream tooling never branches on the method.
 
 ## 📊 Method comparison
 
@@ -20,10 +20,9 @@ All four methods produce the same output schema: identical column names, identic
 |---|---|---|---|
 | **BLAST + LCA** | Local alignment + Lowest Common Ancestor | Moderate | Custom databases, configurable thresholds |
 | **DADA2 RDP** | Naive Bayesian classifier | Fast | Standard workflows, DADA2 format databases |
-| **DECIPHER** | IdTaxa machine learning classifier | Fast | Pre-trained models, confidence scores |
 | **ecotag** | OBITools global alignment | Slow | Legacy OBITools workflows |
 
-The `<method>` token in output filenames is the `taxonomy.method` value, with one exception: the DADA2 path writes `<marker>_dada2RDP.csv`, not `<marker>_dada2.csv`. The other methods use `blast`, `decipher`, or `ecotag` directly.
+The `<method>` token in output filenames is the `taxonomy.method` value, with one exception: the DADA2 path writes `<marker>_dada2RDP.csv`, not `<marker>_dada2.csv`. The other methods use `blast` or `ecotag` directly.
 
 **Lowest Common Ancestor (LCA)** is the recurring idea behind every method here: when a sequence's references agree only down to a given rank, the call stops there and every finer rank is set to null. That is why a coarser rank can be filled while a finer one is blank.
 
@@ -203,28 +202,6 @@ taxonomy:
 
 DADA2 RDP works on both DADA2 ASVs and SWARM OTUs; the runner accepts the query FASTA explicitly and does not require a `seqtab_clean.rds` from the DADA2 step. The merged final table is written to `<paths.output>/<marker>_dada2RDP.csv`.
 
-## 🔧 DECIPHER IdTaxa
-
-Uses the DECIPHER IdTaxa classifier (Murali et al., 2018). Requires a pre-trained `.rds` classifier file and the R `DECIPHER` package.
-
-| Key | Type | Default | Meaning |
-|---|---|---|---|
-| `trained` | Path | REQUIRED | Path to the trained DECIPHER `.rds` classifier. |
-| `threshold` | int | 60 | Confidence (0-100) required for assignment. Lower values assign more sequences with less certainty. |
-| `processors` | int | 8 | Number of CPU cores IdTaxa uses. |
-
-```yaml
-taxonomy:
-  method: "decipher"
-  databases:
-    decipher:
-      trained: "/path/to/trained_classifier.rds"  # REQUIRED
-      threshold: 60                         # (default: 60)
-      processors: 8                         # (default: 8)
-```
-
-The merged final table is written to `<paths.output>/<marker>_decipher.csv`.
-
 ## 🧪 ecotag (OBITools)
 
 Uses the ecotag algorithm from OBITools (Boyer et al., 2016). Requires an NCBI-format taxonomy tree and a reference sequence database.
@@ -262,7 +239,6 @@ The merged final table is written to `<paths.output>/<marker>_ecotag.csv`.
 - Camacho, C. et al. (2009). BLAST+: architecture and applications. *BMC Bioinformatics*, 10, 421.
 - Huson, D.H. et al. (2018). MEGAN-LR: new algorithms allow accurate binning and easy interactive exploration of metagenomic long reads and contigs. *Biology Direct*, 13, 6.
 - Jeunen, G.J. et al. (2023). crabs - A software program to generate curated reference databases. *Molecular Ecology Resources*, 23, 725-738.
-- Murali, A., Bhargava, A. & Wright, E.S. (2018). IDTAXA: a novel approach for accurate taxonomic classification of microbiome sequences. *Microbiome*, 6, 140.
 - Pappalardo, P. et al. (2025). A field-standard set of identity thresholds for eDNA metabarcoding taxonomic assignment. *Methods in Ecology and Evolution*, 16, 2380-2394.
 - Wang, Q. et al. (2007). Naive Bayesian classifier for rapid assignment of rRNA sequences. *Applied and Environmental Microbiology*, 73, 5261-5267.
 - Whitmore, K. et al. (2023). Sources of contamination in environmental DNA studies. *Nature Ecology and Evolution*, 7, 1-3.

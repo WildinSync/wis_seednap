@@ -330,6 +330,7 @@ class HTMLReportBuilder:
         log_file: Optional[Union[str, Path]] = None,
         max_log_lines: int = 1500,
         step_summary_df: Optional[pd.DataFrame] = None,
+        demux_summary_df: Optional[pd.DataFrame] = None,
     ) -> None:
         """Collect the inputs for one run report.
 
@@ -342,6 +343,9 @@ class HTMLReportBuilder:
                 tracking table when omitted.
             step_summary_df: Optional run-level step summary (step, total_reads,
                 n_features); when given, a "Sequences and reads per step" table is shown.
+            demux_summary_df: Optional per-library tag assignment (library,
+                read_pairs, assigned, pct_assigned); when given and non-empty, a
+                demultiplexing table is shown.
             state: Pipeline state JSON (used for run date and step timing).
             taxonomy_csv: Optional taxonomy table CSV (enables taxonomy section).
             otu_table_full: Optional full OTU table CSV (enables feature-QC).
@@ -355,6 +359,7 @@ class HTMLReportBuilder:
         self.warnings = warnings or []
         self.summary = summary or {}
         self.step_summary_df = step_summary_df
+        self.demux_summary_df = demux_summary_df
         self.state = state or {}
         self.taxonomy_csv = Path(taxonomy_csv) if taxonomy_csv else None
         self.otu_table_full = Path(otu_table_full) if otu_table_full else None
@@ -605,6 +610,29 @@ class HTMLReportBuilder:
             bits.append(f"{len(tax):,} {'ASVs' if self.is_dada2 else 'OTUs'}")
         return ", ".join(bits)
 
+    def _funnel_totals(self) -> List[float]:
+        """Run-total reads at each step (Figure 1 bars), summed over measured samples.
+
+        Returns:
+            One total per step in ``self.steps`` order; ``0`` for an unmeasured step.
+        """
+        return [float(pd.to_numeric(self.df[s], errors="coerce").sum(skipna=True)) for s in self.steps]
+
+    def _funnel_base(self) -> Optional[str]:
+        """Step that Figure 1's percentages are relative to.
+
+        The earliest step measured for every sample with a positive total, normally
+        ``raw``. A step measured for only some samples would give a base that is too
+        small, and percentages far above 100% for the steps after it.
+
+        Returns:
+            The step name, or ``None`` when no step is measured for every sample.
+        """
+        for step, total in zip(self.steps, self._funnel_totals()):
+            if total > 0 and pd.to_numeric(self.df[step], errors="coerce").notna().all():
+                return step
+        return None
+
     def _abstract(self) -> str:
         """Compose the prose run abstract that leads the Summary tab.
 
@@ -774,13 +802,15 @@ class HTMLReportBuilder:
         with mpl.rc_context(PAPER_RC):
             # F: read funnel (totals per step), final bar accented + % labels.
             if not self.df.empty:
-                totals = [pd.to_numeric(self.df[s], errors="coerce").sum(skipna=True) for s in self.steps]
+                totals = self._funnel_totals()
                 if any(t > 0 for t in totals):
                     fig, ax = plt.subplots(figsize=(5.5, 2.7))
                     colors = [GREY] * len(self.steps); colors[-1] = ACCENT
                     bars = ax.bar(self.steps, totals, color=colors, width=.62)
-                    base = totals[0] if totals[0] else 1
-                    ax.bar_label(bars, labels=[f"{int(t):,}\n{t / base * 100:.0f}%" for t in totals],
+                    base_step = self._funnel_base()
+                    base = totals[self.steps.index(base_step)] if base_step else 0
+                    ax.bar_label(bars, labels=[f"{int(t):,}\n{t / base * 100:.0f}%" if base else f"{int(t):,}"
+                                               for t in totals],
                                  fontsize=7.5, color=INK, padding=2)
                     ax.margins(y=.22); ax.set_ylabel("read pairs"); ax.set_title("Reads surviving each step")
                     figs["funnel"] = emit(fig)
@@ -1034,9 +1064,33 @@ class HTMLReportBuilder:
                 f"counted from the stage where a feature table first exists; the earlier read-level "
                 f"steps carry no feature count.",
                 ["step", "total reads", feat], ss_rows))
+        if self.demux_summary_df is not None and not self.demux_summary_df.empty:
+            dm_rows = []
+            for _, r in self.demux_summary_df.iterrows():
+                cells = [_esc(str(r["library"]))]
+                for col in ("read_pairs", "assigned"):
+                    v = r.get(col)
+                    cells.append('<span class="na">NA</span>' if pd.isna(v) else f"{int(v):,}")
+                pa = r.get("pct_assigned")
+                cells.append('<span class="na">NA</span>' if pd.isna(pa) else f"{float(pa):.1f}%")
+                dm_rows.append(cells)
+            parts.append(self._table(
+                "Ligation demultiplexing: read pairs in each multiplexed library and those "
+                "assigned to a sample by its tag. Per sample, <i>raw</i> is the assigned "
+                "pairs and <i>primer_found</i> the pairs carrying the primers in either "
+                "orientation, which primer trimming then receives.",
+                ["library", "read pairs", "assigned", "% assigned"], dm_rows))
+        base_step = self._funnel_base()
+        if base_step == "raw":
+            pct_note = "the percentage of raw input"
+        elif base_step:
+            pct_note = (f"the percentage of the {base_step} step (raw counts were not measured "
+                        f"for every sample)")
+        else:
+            pct_note = "no percentage (no step was measured for every sample)"
         parts.append(self._fig(figs.get("funnel"),
                      f"Total read pairs retained after each step, summed across all {n} samples; "
-                     f"labels give absolute counts and the percentage of raw input."))
+                     f"labels give absolute counts and {pct_note}."))
         pr = pd.to_numeric(self.df.get("pct_retained", pd.Series(dtype=float)), errors="coerce").dropna()
         n_below = int((pr < self.warn_pct).sum()) if not pr.empty else 0
         if len(pr) > 50:
@@ -1124,7 +1178,19 @@ class HTMLReportBuilder:
             reads_c = '<span class="na">NA</span>' if pd.isna(reads) else f"{int(reads):,}"
             if rich is not None:
                 rv = rich.get(sample)
-                rich_c = '<span class="na">NA</span>' if rv is None else f"{int(rv):,}"
+                if rv is not None:
+                    rich_c = f"{int(rv):,}"
+                elif not pd.isna(reads) and int(reads) == 0:
+                    # Zero reads reached the final step, so the sample carries no
+                    # feature-table column: genuinely zero features, not a join miss.
+                    rich_c = "0"
+                else:
+                    logger.warning(
+                        f"[WARN] html_report: expected=per-sample richness for "
+                        f"{sample}, got=no matching feature-table column, "
+                        f"fallback=NA (read_tracking/richness sample-name join miss)"
+                    )
+                    rich_c = '<span class="na">NA</span>'
             else:
                 rich_c = '<span class="na">NA</span>'
             pr = r.get("pct_retained")

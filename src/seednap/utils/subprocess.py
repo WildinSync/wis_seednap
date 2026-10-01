@@ -3,7 +3,7 @@
 Single entry point (`run_subprocess`) that every external-tool wrapper in the
 pipeline routes through: the cutadapt primer-trimming step, the vsearch/swarm
 OTU-clustering step, the BLAST taxonomy step, and the Rscript wrapper that
-drives DADA2 and DECIPHER. Centralising it means each tool invocation is
+drives DADA2. Centralising it means each tool invocation is
 logged identically, optionally tee'd to a per-step log file, and turns a tool
 crash, timeout, or missing-binary error into a single readable message
 (carrying the tool's own stderr and a seednap error code) instead of a raw

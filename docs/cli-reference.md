@@ -218,10 +218,10 @@ See [configuration.md](configuration.md#taxonomy).
 
 ## 🔬 `assign-taxonomy`
 
-Generic taxonomic assignment supporting all four methods.
+Generic taxonomic assignment supporting all three methods.
 
 ```
-seednap assign-taxonomy {blast|dada2|ecotag|decipher} MARKER QUERY_FASTA ASV_COUNT_CSV [OPTIONS]
+seednap assign-taxonomy {blast|dada2|ecotag} MARKER QUERY_FASTA ASV_COUNT_CSV [OPTIONS]
 ```
 
 Each method requires specific database options:
@@ -231,10 +231,9 @@ Each method requires specific database options:
 | `blast` | `--reference-fasta PATH` |
 | `dada2` | `--rdp-db PATH`, `--species-db PATH` |
 | `ecotag` | `--taxonomy-db PATH`, `--reference-db PATH` |
-| `decipher` | `--trained-classifier PATH` |
 
 <details>
-<summary><b>Additional options (thresholds, LCA, processors)</b></summary>
+<summary><b>Additional options (thresholds, LCA)</b></summary>
 
 | Option | Default | Description |
 |---|---|---|
@@ -250,8 +249,6 @@ Each method requires specific database options:
 | `--lca-pident-delta FLOAT` | `1.0` | cascade LCA: in-band hits within this %id of the best in-band hit (BLAST) |
 | `--lca-pid FLOAT` | `90.0` | collapsed_taxonomy: hard %identity floor (BLAST) |
 | `--lca-diff FLOAT` | `1.0` | collapsed_taxonomy: identity-window width collapsed to the LCA (BLAST) |
-| `--confidence-threshold INTEGER` | `60` | Confidence threshold (DECIPHER) |
-| `-c, --processors INTEGER` | `8` | CPU cores |
 
 </details>
 
@@ -269,7 +266,7 @@ seednap format-gbif INPUT_FILE [OPTIONS]
 
 | Option | Required | Description |
 |---|---|---|
-| `-f, --format {dada2\|ecotag\|blast\|decipher}` | Yes | Input format type |
+| `-f, --format {dada2\|ecotag\|blast}` | Yes | Input format type |
 | `-o, --output PATH` | No | Output path (default: `<input>_gbif_input.csv`) |
 
 ```bash
@@ -300,40 +297,6 @@ Sample metadata is joined onto the occurrences by `eventID`, on a normalized key
 
 See [gbif-export.md](gbif-export.md) for the metadata column requirements.
 
-## 🗄️ `wis-metadata`
-
-Generate the GBIF export's sample and project metadata CSVs from the **WIS database** (the PostgreSQL/PostGIS schema built by `wis_database_creator`), instead of hand-writing them. Reads each sample's `eventID`, date, coordinates (from the PostGIS point), environmental medium and size, and writes `<marker>_sample_metadata.csv` + `<marker>_project_metadata.csv`.
-
-This is an optional feature: install the database extra first with `pip install 'seednap[wis]'` (adds SQLAlchemy + psycopg2; intentionally not in the core install).
-
-```
-seednap wis-metadata --database-url URL --marker MARKER --output-dir DIR \
-  --recorded-by NAME --identification-remarks TEXT --identification-references TEXT [OPTIONS]
-```
-
-| Option | Default | Description |
-|---|---|---|
-| `--database-url` | `$WIS_DATABASE_URL` | SQLAlchemy URL, e.g. `postgresql://user:pass@host:5432/wis` (required) |
-| `--marker` | (required) | Marker name; used for the project row and the output filenames |
-| `--output-dir` | (required) | Directory for the two CSVs |
-| `--monitoring` | none | Restrict to one WIS `monitoring_id` (site / long-term project) |
-| `--mission` | none | Restrict to one WIS `mission_id` (sampling campaign) |
-| `--event-id-field` | `sample_id` | WIS identifier used as `eventID` (`sample_id` or `material_sample_id`); match your FASTQ naming |
-| `--recorded-by` | (required) | DwC `recordedBy` for the project row |
-| `--identification-remarks` | (required) | Identification-method note for the project row |
-| `--identification-references` | (required) | Reference-DB / method citation for the project row |
-| `--seq-meth` | empty | Sequencing-method description |
-| `--otu-seq-comp-appr` | empty | OTU/ASV sequence-comparison approach |
-
-```bash
-seednap wis-metadata --database-url postgresql://user:pass@host:5432/wis \
-  --marker teleo --monitoring fw_ch_rechy --output-dir metadata/ \
-  --recorded-by "ELE Lab" --identification-remarks "BLAST + LCA" \
-  --identification-references "10.1038/nmeth.3869"
-```
-
-See [gbif-export.md](gbif-export.md#sourcing-metadata-from-the-wis-database) for the full WIS-to-DarwinCore field mapping and the `env_medium` / `eventID` notes.
-
 ## 🔀 `demultiplex`
 
 Demultiplex ligation-based libraries (Cutadapt under the hood).
@@ -344,13 +307,14 @@ seednap demultiplex RAW_READS_DIR LIBRARY_NAME METADATA_CSV [OPTIONS]
 
 `METADATA_CSV` must contain `eventID`, `tag_demultiplex`, and `library` columns.
 
+Writes gzipped per-sample FASTQs to `<output-dir>/samples/`, the library's tag file to `<output-dir>/cutadapt_tags/`, and the Cutadapt reports to `<output-dir>/logs/`. Intermediate files are deleted as soon as they are consumed. The former `--no-gunzip` flag is still accepted but does nothing, since outputs are always gzipped.
+
 | Option | Required | Description |
 |---|---|---|
 | `-f, --forward-primer TEXT` | Yes | Forward primer sequence |
 | `-r, --reverse-primer TEXT` | Yes | Reverse primer sequence |
 | `-o, --output-dir PATH` | Yes | Output base directory |
 | `-c, --cores INTEGER` | No | CPU cores (default: 1) |
-| `--no-gunzip` | No | Keep output files gzipped (default: outputs are gunzipped) |
 
 > [!WARNING]
 > In `run-pipeline`, listing `demultiplex` in `pipeline.steps` with any `demultiplex.protocol` other than `ligation` is REJECTED AT CONFIG LOAD. Only the `ligation` protocol is implemented.
@@ -385,20 +349,23 @@ seednap manifest metadata/metadata_field_my_dataset.csv \
 
 ## 🆕 `init`
 
-Generate an example configuration file.
+Create a starter configuration file.
 
 ```
-seednap init [OPTIONS]
+seednap init [small|complete] [OPTIONS]
 ```
 
-| Option | Default | Description |
+| Argument / option | Default | Description |
 |---|---|---|
-| `-m, --marker TEXT` | `teleo` | Marker name |
-| `-o, --output PATH` | `config/markers/example.yaml` | Output path |
-| `--minimal / --full` | `--minimal` | Required-fields-only config (default) or the fully-annotated reference template |
+| `small` / `complete` | `small` | `small`: the fields you normally edit, everything else on built-in defaults. `complete`: every parameter with its default value and a short comment |
+| `-m, --marker TEXT` | `teleo` | Marker name. Its primers are filled in from the bundled primer list when listed there |
+| `-o, --output PATH` | `<marker>.yaml` | Output path |
 | `-f, --force` | off | Overwrite existing file |
 
-`--minimal` (the default) emits ONLY the required fields, leaving everything else on built-in defaults. Pass `--full` for the fully-annotated template that shows every knob.
+```bash
+seednap init                      # small teleo.yaml
+seednap init complete -m mifish   # complete mifish.yaml
+```
 
 ## ✅ `validate`
 
@@ -482,7 +449,7 @@ seednap version
 |---|---|
 | [configuration.md](configuration.md) | Every config key with type, default, and meaning |
 | [pipeline-steps.md](pipeline-steps.md) | Per-stage behavior and algorithms |
-| [taxonomy-methods.md](taxonomy-methods.md) | BLAST/DADA2/DECIPHER/ecotag details |
+| [taxonomy-methods.md](taxonomy-methods.md) | BLAST/DADA2/ecotag details |
 | [gbif-export.md](gbif-export.md) | DarwinCore export and metadata columns |
 | [reporting.md](reporting.md) | Read tracking and the HTML run report |
 </content>

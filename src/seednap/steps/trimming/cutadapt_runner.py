@@ -5,11 +5,33 @@ handling primer trimming, demultiplexing, and adapter removal for eDNA metabarco
 """
 
 import logging
+import re
 import subprocess
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 logger = logging.getLogger(__name__)
+
+# Paired-end summary lines of a cutadapt report (counts carry thousands
+# separators, e.g. 705,447). Shared with the read-tracking report.
+RE_PAIRS_PROCESSED = re.compile(r"Total read pairs processed:\s*([\d,]+)")
+RE_PAIRS_WRITTEN = re.compile(r"Pairs written \(passing filters\):\s*([\d,]+)")
+
+
+def pair_counts(report: str) -> Tuple[Optional[int], Optional[int]]:
+    """Read pairs processed and written, parsed from a paired-end cutadapt report.
+
+    Args:
+        report: The cutadapt report text (its stdout, or the content of its log).
+
+    Returns:
+        ``(processed, written)``; either is ``None`` when its line is absent.
+    """
+    counts = []
+    for pattern in (RE_PAIRS_PROCESSED, RE_PAIRS_WRITTEN):
+        m = pattern.search(report)
+        counts.append(int(m.group(1).replace(",", "")) if m else None)
+    return counts[0], counts[1]
 
 
 class CutadaptError(Exception):

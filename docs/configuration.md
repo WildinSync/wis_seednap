@@ -15,13 +15,13 @@ A config at a glance, every top-level section in one view (the per-key reference
 `init` writes a config; `validate` checks it before you commit to a run.
 
 ```bash
-seednap init --marker teleo --output config/markers/my_marker.yaml          # minimal: required fields only
-seednap init --marker teleo --output config/markers/my_marker.yaml --full   # fully-annotated template
+seednap init                        # small teleo.yaml: the fields you normally edit
+seednap init complete -m mifish     # complete mifish.yaml: every parameter with its default
 
 seednap validate config/markers/teleo.yaml
 ```
 
-`init` writes a minimal config (just the required fields) by default; pass `--full` for the fully-annotated reference template. A standalone minimal example also lives at `config/markers/minimal.example.yaml`.
+`init small` (the default) writes the fields you normally edit and leaves the rest on built-in defaults; `init complete` lists every parameter with its default value. The marker's primers are filled in from the bundled primer list when the marker is listed there. The file is written to `<marker>.yaml` in the current directory unless you pass `-o`. A standalone minimal example also lives at `config/markers/minimal.example.yaml`.
 
 `validate` checks YAML syntax, field types, and required values, reports which `taxonomy.databases.<method>` block is used, and runs a preflight that fails with a non-zero exit if any referenced database or `raw_data` path is missing on disk. A config that loads but points at missing inputs is caught here, not mid-run.
 
@@ -34,7 +34,7 @@ A minimal config must set exactly these (everything else has a default):
 - `marker.name`
 - `marker.primers.forward` and `marker.primers.reverse`
 - `taxonomy.method`
-- the required path(s) in the selected database block: `blast.fasta`; `dada2.all`; `ecotag.tree` and `fasta`; or `decipher.trained`
+- the required path(s) in the selected database block: `blast.fasta`; `dada2.all`; or `ecotag.tree` and `fasta`
 
 `paths.raw_data` has a schema default of `data/raw`, but a run effectively requires it to point at your FASTQ directory. Set it per dataset; the default is rarely correct.
 
@@ -68,7 +68,7 @@ Your YAML is merged over the model defaults: any field with a default may be omi
 | `<output>/<marker>_<method>_cleaned.csv` | `clean` (the cleaned/annotated abundance table) |
 | `<output>/<marker>_<method>_gbif.csv` | `export` (GBIF/DarwinCore table) |
 
-For the merged table, `<method>` is the `taxonomy.method` value, except the DADA2 RDP classifier writes `<marker>_dada2RDP.csv` (the others are `<marker>_blast.csv`, `<marker>_ecotag.csv`, `<marker>_decipher.csv`).
+For the merged table, `<method>` is the `taxonomy.method` value, except the DADA2 RDP classifier writes `<marker>_dada2RDP.csv` (the others are `<marker>_blast.csv`, `<marker>_ecotag.csv`).
 
 <details>
 <summary><b>Hidden state files: how a run is reconstructed</b></summary>
@@ -100,7 +100,7 @@ marker:
 | `primers.forward` | str | required | Forward primer, 5' to 3' |
 | `primers.reverse` | str | required | Reverse primer, 5' to 3' |
 
-Primers are validated for IUPAC DNA bases (A C G T R Y M K S W H B V D N) and must be at least 10 bp.
+Primers are validated for IUPAC DNA bases (A C G T R Y M K S W H B V D N) and must be at least 10 bp. Inosine (`I`) is also accepted: it is converted to `N` (which matches any base) and a `[WARN]` in the log shows the converted primer.
 
 ## 📁 `paths`
 
@@ -232,7 +232,7 @@ dada2:
     max_mismatch: 0         # max mismatches in overlap
   chimera:
     method: "consensus"     # "consensus", "pooled", or "none"
-  pool: false               # pool samples for denoising
+  pool: false               # denoise all samples together (rare variants; slower)
   multithread: true         # use multithreading
   per_library: false        # learn a separate error model per library, then merge
   collect_metrics: true     # ASV summary stats -> metrics.json/csv + console
@@ -249,15 +249,21 @@ dada2:
 | `merge.min_overlap` | int | `20` | Minimum overlap for merging, bp |
 | `merge.max_mismatch` | int | `0` | Maximum mismatches in the overlap region |
 | `chimera.method` | "consensus" \| "pooled" \| "none" | `consensus` | Chimera detection method |
-| `pool` | bool | `false` | Pool samples for denoising |
+| `pool` | bool | `false` | Denoise all samples together instead of one by one: detects rare variants spread over several samples, but slower and heavier. With `per_library`, pools within each library only |
 | `multithread` | bool | `true` | Use multithreading |
-| `per_library` | bool | `false` | Learn a separate error model per sequencing library, then merge and collapse (see below). `false` uses one pooled model |
+| `per_library` | bool | `false` | Learn a separate error model per sequencing library, then merge and collapse (see below). `false` learns one model from all samples |
 | `collect_metrics` | bool | `true` | Write ASV summary stats to `metrics.json`/`csv` and console |
 
 <details>
 <summary><b><code>per_library</code>: where the library grouping comes from</b></summary>
 
-`per_library: true` learns a separate error model per sequencing library, then merges and collapses. The sample-to-library grouping comes from the manifest `seq_run_id` (`report.sample_metadata` / `demultiplex.metadata`); when no metadata is configured it is derived automatically from the per-library subfolders of `raw_data`. `false` uses one pooled model. Use for multi-run datasets.
+`per_library: true` learns a separate error model per sequencing library, then merges and collapses into one ASV table. The sample-to-library grouping comes from, first match wins:
+
+1. a `library`/`seq_run_id` column in `report.sample_metadata`;
+2. the `library` column of `demultiplex.metadata` (lab CSV);
+3. the per-library subfolders of `raw_data` (`raw_data/<library>/<sample>_R1.fastq.gz`), when neither CSV has a library column (including when the field CSV is set only for the report).
+
+If a CSV has a `pcr_primer_forward` column, only this marker's rows are used, so a lab CSV shared by several markers is safe. With no grouping or a single library, DADA2 runs single-batch with a `[WARN]`. SWARM ignores this key: it always clusters all libraries of the marker together. Details in [pipeline-steps.md](pipeline-steps.md) (DADA2 section).
 
 </details>
 
@@ -265,7 +271,7 @@ dada2:
 
 ```yaml
 taxonomy:
-  method: "blast"           # "blast", "dada2", "decipher", "ecotag"
+  method: "blast"           # "blast", "dada2", "ecotag"
   contaminants:             # default: [] (empty -> nothing flagged)
     - "Homo_sapiens"
     - "Bos_taurus"
@@ -277,7 +283,7 @@ taxonomy:
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `method` | "blast" \| "dada2" \| "decipher" \| "ecotag" | required | Taxonomic assignment method |
+| `method` | "blast" \| "dada2" \| "ecotag" | required | Taxonomic assignment method |
 | `contaminants` | list[str] | `[]` | Species to flag as candidate contaminants |
 | `databases` | map | `{}` | Per-method database blocks (see below) |
 
@@ -372,22 +378,6 @@ databases:
 | `tree` | path | required | NCBI taxonomy tree directory |
 | `fasta` | path | required | Reference FASTA database |
 
-### `databases.decipher`
-
-```yaml
-databases:
-  decipher:
-    trained: "/path/to/trained.rds"   # trained classifier (required)
-    threshold: 60
-    processors: 8
-```
-
-| Key | Type | Default | Meaning |
-| --- | --- | --- | --- |
-| `trained` | path | required | Trained DECIPHER RDS file |
-| `threshold` | int (0-100) | `60` | Confidence threshold for assignment |
-| `processors` | int (>= 1) | `8` | CPU cores |
-
 ## 📊 `export`
 
 Runs only if `export` is listed in `pipeline.steps` (after `taxonomy`). Writes `<output>/<marker>_<method>_gbif.csv`: a long-format occurrence table in the DarwinCore vocabulary (the standard column terms GBIF, the Global Biodiversity Information Facility, uses for biodiversity records), one row per detected taxon per sample.
@@ -397,30 +387,16 @@ export:
   gbif:                            # the `export` step (long-format table)
     add_rank: true                 # add taxonomic rank column
     add_taxon: true                # add lowest taxon column
-  darwincore:                      # the `darwincore` step (DarwinCore occurrence file)
-    summarise_pcr_replicates: false  # collapse PCR-replicate suffixes, summing reads per sample
-    skip_enrichment: false           # skip NCBI/WoRMS kingdom/phylum enrichment (offline/faster)
 ```
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `gbif.add_rank` | bool | `true` | Add a taxonomic rank column |
 | `gbif.add_taxon` | bool | `true` | Add a lowest-available-taxon column |
-| `darwincore.summarise_pcr_replicates` | bool | `false` | Collapse PCR-replicate suffixes, summing reads per sample |
-| `darwincore.skip_enrichment` | bool | `false` | Skip the NCBI/WoRMS higher-rank enrichment |
 
 ASV summary stats are collected by the DADA2 step via `dada2.collect_metrics`. There is no separate `metrics` section.
 
-<details>
-<summary><b>The <code>darwincore</code> step: occurrence file, provenance, dropped-rows QA</b></summary>
-
-The `darwincore` step builds the GBIF-ready DarwinCore occurrence file (one row per occurrence with `eventID`, coordinates, `scientificName`, a deterministic `occurrenceID`, `contamination_flag`). List `darwincore` after `export` in `pipeline.steps`; it joins the long-format table to `report.sample_metadata` + `report.project_metadata` (both required, checked at preflight) and, unless `skip_enrichment`, fills higher ranks from NCBI/WoRMS. Output: `<output>/<marker>_<method>_darwincore.csv`.
-
-When run in-pipeline, the reference-database (`otu_db`) and chimera-removal (`chimera_check`) provenance are filled automatically from the run config, so they need not be re-entered in the project metadata; a differing project-metadata value is used only as a fallback and the disagreement is logged with a `[WARN]`. It also writes `<output>_dropped.csv`, listing every occurrence the control and non-target filters removed and why (for QA). (The same builder is also available afterwards as the `create-gbif` command, which takes those values from the project CSV.)
-
-See [gbif-export.md](gbif-export.md) for the full export guide.
-
-</details>
+See [gbif-export.md](gbif-export.md) for the full export guide, including building the DarwinCore occurrence file with `create-gbif`.
 
 ## 📝 `report`
 
@@ -508,16 +484,14 @@ pipeline:
 
 ## 📦 Example configs
 
-Complete working examples in [config/markers/](../config/markers/):
+Example configs in [config/markers/](../config/markers/), generated with `seednap init` (placeholder paths; set `paths.raw_data` and the database path before running):
 
-| File | Marker | Method | Notes |
+| File | Marker | Generated with | Notes |
 | --- | --- | --- | --- |
-| `teleo.yaml` | Teleo 12S fish (Namibia) | BLAST | SWARM path; ligation `demultiplex` block is configured but not listed in `pipeline.steps`, so demux does not run as shipped |
-| `mifish.yaml` | MiFish-U 12S fish | BLAST | SWARM path |
-| `mam07.yaml` | MamP007 16S mammal (Greina) | BLAST | SWARM path |
-| `mam07_dada2.yaml` | MamP007 16S mammal | DADA2 | DADA2 ASV path |
-| `teleo_rhone.yaml` | Teleo 12S fish (Rhone) | BLAST | SWARM path |
-| `minimal.example.yaml` | minimal template | -- | required fields only |
+| `teleo.yaml` | Teleo 12S fish | `seednap init complete -m teleo` | every parameter with its default; BLAST, DADA2 path |
+| `mifish.yaml` | MiFish-U 12S fish | `seednap init complete -m mifish` | same, MiFish primers |
+| `mam07.yaml` | MamP007 16S mammal | `seednap init complete -m mam07` | same, MamP007 primers |
+| `minimal.example.yaml` | Teleo 12S fish | `seednap init -m teleo` | small: the fields you normally edit |
 
 ## 📖 See also
 

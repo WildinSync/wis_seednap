@@ -48,7 +48,6 @@ flowchart LR
         direction TB
         blast[BLAST + LCA<br/>default]:::reco
         rdp[DADA2 RDP]:::alt
-        decipher[DECIPHER]:::alt
         ecotag[ecotag]:::alt
     end
 
@@ -98,7 +97,7 @@ conda activate seednap
 pip install -e .
 
 # create a config, then point it at your data + a reference database
-seednap init --marker teleo --output config/markers/my_marker.yaml
+seednap init -m teleo                # small teleo.yaml; `seednap init complete` lists every parameter
 #   paths.raw_data              → a directory of paired-end FASTQ files
 #   taxonomy.databases.<method> → a reference database for the chosen method
 # a fresh config references neither, so the run fails preflight until both exist
@@ -128,7 +127,7 @@ Each stage runs **only if listed in `pipeline.steps`**, the single ordered sourc
 - **Ordering rules (validated at load):** `demultiplex` → `trim` → a feature step (`dada2` **or** `swarm`, mutually exclusive) → `taxonomy` → `clean` → `export`. `clean` runs before `export` so the export uses the decontaminated table.
 - **`clean` step (presence-based, feature-level):** any feature with ≥1 read in an applicable negative control is treated as contamination. An **extraction blank** cleans only samples sharing its `extraction_ID`; a **PCR blank** cleans the whole dataset. `cleaning.mode` is `flag` (default, annotate only) or `subtract` (zero those reads, irreversible and opt-in). Driven by the FAIRe manifest; runs only when `clean` is in `pipeline.steps`.
 - **`taxonomy.contaminants`:** a separate list of species names flagged in the export `contamination_flag` column. Empty by default. Distinct from the manifest-driven `clean` step.
-- **DADA2 per-library:** `dada2.per_library` learns the error model per sequencing library; the grouping comes from the metadata `seq_run_id`, or is derived from per-library subfolders of `raw_data` when no metadata is given.
+- **DADA2 per-library:** `dada2.per_library` learns the error model per sequencing library; the grouping comes from a `library` column in the metadata (filtered on `pcr_primer_forward` when present), or from per-library subfolders of `raw_data` when the metadata has no library column. SWARM always clusters all libraries of a marker together.
 
 </details>
 
@@ -166,7 +165,6 @@ Run `seednap <command> --help` for full options. Every command, with all of its 
 
 - **`validate` / `run-pipeline` preflight** fails fast if raw data or reference databases are missing on disk, or the taxonomy database block is unresolved, before any compute.
 - **`create-gbif`** joins taxonomy to your sample metadata on `eventID`, normalizing dot/dash/underscore separators (so `DAR-2023-0025` matches a `make.names()`-dotted `DAR.2023.0025`). A **zero-match** join raises rather than emitting blank dates/coordinates; a partial match warns with the unmatched IDs.
-- **`wis-metadata`** pulls each sample's `eventID`, date, coordinates (PostGIS point), environmental medium and size from the WIS database into the two CSVs the export consumes. See [docs/gbif-export.md](docs/gbif-export.md#sourcing-metadata-from-the-wis-database).
 
 </details>
 
@@ -248,13 +246,13 @@ seednap/
       trimming/             # Cutadapt integration
       dada2/                # DADA2 R wrapper
       swarm/                # VSEARCH + SWARM clustering
-      taxonomic_assignment/ # BLAST, DADA2, DECIPHER, ecotag
+      taxonomic_assignment/ # BLAST, DADA2, ecotag
       cleaning/             # Control decontamination ('clean' step)
       formatting/           # GBIF + DarwinCore export
       report/               # Read-tracking table + HTML run report
     errors/                 # Error codes + 'explain' / preflight machinery
     utils/                  # Subprocess, logging, sequence tools
-    scripts/                # Bundled R scripts (DADA2, DECIPHER)
+    scripts/                # Bundled R scripts (DADA2)
     data/templates/         # Bundled CSV templates (primers, GBIF)
   config/markers/           # Example YAML configs
 ```

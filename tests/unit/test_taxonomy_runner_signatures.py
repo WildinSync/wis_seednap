@@ -1,4 +1,4 @@
-"""Issue #2 fix: DADA2/DECIPHER runners now accept query_fasta and don't
+"""Issue #2 fix: the DADA2 taxonomy runner now accepts query_fasta and does not
 require seqtab_clean.rds.
 
 These tests don't actually run R -- they verify the Python wrapper
@@ -23,10 +23,6 @@ from seednap.steps.taxonomic_assignment.dada2_taxonomy_runner import (
     Dada2TaxonomyError,
     Dada2TaxonomyRunner,
 )
-from seednap.steps.taxonomic_assignment.decipher_runner import (
-    DecipherError,
-    DecipherRunner,
-)
 
 
 @pytest.fixture
@@ -37,9 +33,7 @@ def fake_inputs(tmp_path: Path):
     species.write_text(">REF1 k g s\nACGT\n")
     query = tmp_path / "query.fasta"
     query.write_text(">OTU_1\nACGTACGT\n")
-    trained = tmp_path / "trained.rds"
-    trained.write_text("dummy")
-    return {"rdp": rdp, "species": species, "query": query, "trained": trained, "out": tmp_path / "out"}
+    return {"rdp": rdp, "species": species, "query": query, "out": tmp_path / "out"}
 
 
 def test_dada2_runner_requires_query_fasta() -> None:
@@ -91,31 +85,3 @@ def test_dada2_runner_no_longer_checks_seqtab_rds(fake_inputs, tmp_path: Path) -
         f"Issue #2 not fixed: error still mentions seqtab_clean.rds: {msg}"
     )
 
-
-def test_decipher_runner_requires_query_fasta() -> None:
-    runner = DecipherRunner.__new__(DecipherRunner)
-    with pytest.raises(TypeError):
-        runner.run_decipher_assignment(
-            marker="teleo",
-            output_dir="/tmp",
-            trained_classifier_path="/tmp/trained.rds",
-        )
-
-
-def test_decipher_runner_no_longer_checks_seqtab_rds(fake_inputs, tmp_path: Path) -> None:
-    """Same as above for DECIPHER: no seqtab_clean.rds requirement."""
-    runner = DecipherRunner.__new__(DecipherRunner)
-    runner.timeout = 60
-    bogus_script = tmp_path / "absolutely_not_an_R_script.R"
-    with pytest.raises((FileNotFoundError, DecipherError)) as exc_info:
-        runner.run_decipher_assignment(
-            marker="teleo",
-            output_dir=fake_inputs["out"],
-            trained_classifier_path=fake_inputs["trained"],
-            query_fasta=fake_inputs["query"],
-            script_path=bogus_script,
-        )
-    msg = str(exc_info.value)
-    assert "seqtab_clean.rds" not in msg, (
-        f"Issue #2 not fixed for DECIPHER: error still mentions seqtab_clean.rds: {msg}"
-    )

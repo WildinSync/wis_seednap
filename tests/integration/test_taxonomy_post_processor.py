@@ -1,7 +1,7 @@
 """Integration test for the canonical taxonomy post-processor.
 
-`link_taxonomy_with_abundance` is the shared post-merge step used by ecotag,
-DECIPHER, and DADA2 RDP. It is responsible for keeping their outputs honest
+`link_taxonomy_with_abundance` is the shared post-merge step used by ecotag
+and DADA2 RDP. It is responsible for keeping their outputs honest
 in exactly the same way the BLAST + LCA path is honest:
 
 - LEFT-merge from abundance side -> every OTU survives.
@@ -11,7 +11,7 @@ in exactly the same way the BLAST + LCA path is honest:
 - Stable BLAST-compatible column order.
 
 These tests run against synthetic CSV fixtures with no external tools
-(no DECIPHER, no ecotag, no R), so they are fast and deterministic.
+(no ecotag, no R), so they are fast and deterministic.
 """
 
 from __future__ import annotations

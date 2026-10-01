@@ -223,6 +223,21 @@ def test_primer_config_rejects_invalid_bases() -> None:
         PrimerConfig(forward="ACACCXYZGTCACTCT", reverse="CTTCCGGTACACTTACCATG")
 
 
+def test_primer_config_converts_inosine_to_n(caplog, monkeypatch) -> None:
+    """Inosine (I), common in degenerate COI primers, is accepted as N with one [WARN],
+    even when the config is parsed more than once (validate, then load)."""
+    import seednap.config.models.input as input_mod
+
+    monkeypatch.setattr(input_mod, "_INOSINE_WARNED", set())
+    for _ in range(2):
+        p = PrimerConfig(forward="ATAGAYTTCGGGWTGGCCGA", reverse="taIACYTCIGGRTGICCRAARAAYCA")
+    assert p.forward == "ATAGAYTTCGGGWTGGCCGA"
+    assert p.reverse == "TANACYTCNGGRTGNCCRAARAAYCA"
+    warns = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert len(warns) == 1
+    assert "primers.reverse" in warns[0] and "inosine" in warns[0]
+
+
 # 8. merge_configs nested dicts ---------------------------------------------------------
 
 from seednap.config.loader import merge_configs

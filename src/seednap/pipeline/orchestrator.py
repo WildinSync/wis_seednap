@@ -18,7 +18,7 @@ The stages, in pipeline order, are:
    SWARM produces OTUs (Operational Taxonomic Units, clusters of similar
    sequences). Both remove chimeras (artefactual sequences made of two parents).
 4. Taxonomic assignment: label each ASV/OTU with a species/genus/family name
-   by comparing it to a reference database (BLAST, DADA2 RDP, DECIPHER, ecotag).
+   by comparing it to a reference database (BLAST, DADA2 RDP, ecotag).
 5. Cleaning (optional): subtract contamination seen in negative controls.
 6. Export: reshape the table into the GBIF / Darwin Core format for submission.
 7. Reporting: read-tracking table and a self-contained HTML run report.
@@ -28,6 +28,7 @@ Click CLI; it delegates the heavy lifting to the processors under
 ``src/seednap/steps/`` and tracks progress via ``pipeline/state.py``.
 """
 
+import shutil
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Union
 
@@ -166,7 +167,6 @@ class PipelineOrchestrator:
             "taxonomy": self.run_taxonomy,
             "clean": self.run_clean,
             "export": self.run_export,
-            "darwincore": self.run_darwincore,
             "report": self.run_report,
         }
         missing = set(VALID_STEPS) - set(self._step_methods)
@@ -379,11 +379,9 @@ class PipelineOrchestrator:
         forces ``trim`` to run before dada2/swarm, so that step is always present;
         the fall-back to raw_data is therefore only reached if trim is absent.
 
-        Note: this deliberately does NOT read the demultiplex step's ``trimmed_dir``
-        output. The ligation-demux path returns a ``trimmed_dir`` (see
-        _run_ligation_demux), but nothing consumes it: the ``trim`` step re-runs over
-        raw_data and produces the directory used here. The demux ``trimmed_dir`` is
-        effectively unused in the dada2/swarm data flow.
+        Note: this does not read the demultiplex step's output directly. When
+        demultiplex ran, the ``trim`` step reads its ``samples_dir`` (see
+        _trim_input_dir) and produces the directory used here.
 
         Args:
             None.
@@ -417,8 +415,9 @@ class PipelineOrchestrator:
 
         Returns:
             Dictionary of output paths. For the ligation protocol: ``demux_dir`` (the
-            per-sample output directory) and ``trimmed_dir`` (the trimmer's per-sample
-            result). On skip (already completed), the previously recorded outputs.
+            step's output root), ``samples_dir`` (the per-sample FASTQs trim reads),
+            ``logs_dir`` (the kept Cutadapt reports) and ``libraries``. On skip
+            (already completed), the previously recorded outputs.
 
         Raises:
             ValueError: If the configured ``demultiplex.protocol`` is unknown, or (for
@@ -448,24 +447,40 @@ class PipelineOrchestrator:
         return self._execute_step("demultiplex", body)
 
     def _run_ligation_demux(self) -> Dict[str, Path]:
-        """Demultiplex a ligation-protocol library and trim primers in one pass.
+        """Demultiplex every ligation-protocol library listed in the metadata CSV.
 
-        Ligation-protocol libraries carry the sample tag ligated onto the read; a
-        single multiplexed FASTQ is split into per-sample files using the
-        tag-to-sample mapping in the metadata CSV, and primers are trimmed at the
-        same time via LigationTrimmer. A sample failing to meet the configured
-        failure-rate threshold aborts the step (enforced inside the trimmer).
+        Ligation-protocol libraries carry the sample tag ligated onto the read; each
+        multiplexed library FASTQ pair is split into per-sample files using the
+        tag-to-sample mapping in the metadata CSV, and reads are primer-oriented at
+        the same time via LigationTrimmer. The libraries to process are the distinct
+        values of the metadata ``library`` column (each is also the raw-file prefix,
+        ``<library>*_R1.fastq.gz``), restricted to rows whose ``pcr_primer_forward``
+        matches this marker's forward primer when that column is present. The marker
+        name is NOT a library name and is not used to find raw files.
+
+        Layout under ``01_trim/<marker>/demux``::
+
+            cutadapt_tags/<library>.fasta   tag files, written once for all libraries
+            logs/                           cutadapt reports, kept for read tracking
+            work/<library>/                 temporary; deleted as each sample is done
+            samples/<sample>.R[12].fastq.gz per-sample reads, read by trim, then
+                                            deleted once trim completes
+
+        The whole ``demux`` directory is cleared first, so a re-run cannot mix in
+        stale samples or append to old cutadapt reports.
 
         Args:
             None.
 
         Returns:
-            Dictionary with ``demux_dir`` (the per-sample output directory under
-            ``01_trim/<marker>/demux``) and ``trimmed_dir`` (the trimmer's returned
-            per-sample result).
+            Dictionary with ``demux_dir`` (``01_trim/<marker>/demux``), ``samples_dir``
+            (the flat per-sample directory consumed by trim), ``logs_dir`` (the kept
+            cutadapt reports) and ``libraries`` (the library names processed).
 
         Raises:
-            ValueError: If ``demultiplex.metadata`` (the sample-tag CSV) is not set.
+            ValueError: If ``demultiplex.metadata`` (the sample-tag CSV) is not set, if
+                no library in it matches this marker, or if two libraries share a
+                sample name.
         """
         if self.config.demultiplex.metadata is None:
             raise ValueError(
@@ -484,22 +499,137 @@ class PipelineOrchestrator:
             error_rate=self.config.trimming.max_error_rate,
             min_length=self.config.trimming.min_length,
         )
-        output_dir = (
-            self.config.paths.output / "01_trim" / self.config.marker.name / "demux"
+        demux_dir = self._demux_dir()
+        samples_dir = demux_dir / "samples"
+        logs_dir = demux_dir / "logs"
+
+        metadata_csv = Path(self.config.demultiplex.metadata)
+        rows = self._marker_demux_rows(trimmer, metadata_csv)
+        libraries = sorted(rows["library"].dropna().astype(str).unique())
+        if not libraries:
+            raise ValueError(f"The 'library' column of {metadata_csv} is empty.")
+        logger.info(
+            f"Ligation demultiplex: {len(libraries)} library(ies) from "
+            f"{metadata_csv}: {libraries}"
+        )
+        # Every library writes straight into samples_dir, so a sample name listed
+        # twice for this marker must be rejected before any compute, not after an
+        # overwrite.
+        self._check_unique_demux_samples(rows, metadata_csv)
+
+        if demux_dir.exists():
+            shutil.rmtree(demux_dir)
+
+        # Only this marker's rows go into the tag files: another marker's samples in
+        # a shared library are left untagged (and discarded) instead of demultiplexed.
+        tag_files = trimmer.generate_tag_files(
+            metadata_csv=metadata_csv,
+            output_dir=demux_dir / "cutadapt_tags",
+            libraries=libraries,
+            primer_forward=self.config.marker.primers.forward,
         )
 
-        # Process library
-        outputs = trimmer.process_library(
-            raw_reads_dir=self.config.paths.raw_data,
-            library_name=self.config.marker.name,
-            metadata_csv=self.config.demultiplex.metadata,
-            output_base_dir=output_dir,
-            forward_primer=self.config.marker.primers.forward,
-            reverse_primer=self.config.marker.primers.reverse,
-            max_sample_failure_rate=self.config.demultiplex.max_sample_failure_rate,
-        )
+        n_samples = 0
+        for library in libraries:
+            written = trimmer.process_library(
+                raw_reads_dir=self.config.paths.raw_data,
+                library_name=library,
+                tag_file=trimmer.library_tag_file(
+                    tag_files, library, self.config.demultiplex.metadata
+                ),
+                output_dir=samples_dir,
+                work_dir=demux_dir / "work" / library,
+                log_dir=logs_dir,
+                forward_primer=self.config.marker.primers.forward,
+                reverse_primer=self.config.marker.primers.reverse,
+                max_sample_failure_rate=self.config.demultiplex.max_sample_failure_rate,
+            )
+            n_samples += len(written)
+        shutil.rmtree(demux_dir / "work", ignore_errors=True)
 
-        return {"demux_dir": output_dir, "trimmed_dir": outputs}
+        logger.info(
+            f"Ligation demultiplex: gathered {n_samples} sample(s) into {samples_dir}"
+        )
+        return {
+            "demux_dir": demux_dir,
+            "samples_dir": samples_dir,
+            "logs_dir": logs_dir,
+            "libraries": libraries,
+        }
+
+    def _demux_dir(self) -> Path:
+        """Root of the demultiplex step's outputs, ``<output>/01_trim/<marker>/demux``.
+
+        Returns:
+            The directory path (not created here).
+        """
+        return self.config.paths.output / "01_trim" / self.config.marker.name / "demux"
+
+    @staticmethod
+    def _check_unique_demux_samples(rows: Any, metadata_csv: Path) -> None:
+        """Reject a sample name (eventID) listed more than once for this marker.
+
+        Runs on this marker's rows only, so the same eventID may appear once per
+        marker (e.g. teleo in one library, mifish in the same or another library).
+
+        Args:
+            rows: This marker's metadata rows (from :meth:`_marker_demux_rows`).
+            metadata_csv: The sample-tag metadata CSV (for the error message).
+
+        Raises:
+            ValueError: If an eventID has more than one row for this marker.
+        """
+        if "eventID" not in rows.columns:
+            return  # the tag generator reports the missing column with full context
+        per_sample = rows.groupby(rows["eventID"].astype(str))["library"].apply(
+            lambda libs: sorted(libs.astype(str))
+        )
+        for sample, libs in per_sample.items():
+            if len(libs) > 1:
+                raise ValueError(
+                    f"Sample '{sample}' has {len(libs)} rows for this marker in "
+                    f"{metadata_csv} (libraries {libs}). Each eventID must appear once "
+                    f"per marker (add a PCR-replicate/library suffix to disambiguate)."
+                )
+
+    def _marker_demux_rows(self, trimmer: LigationTrimmer, metadata_csv: Path) -> Any:
+        """Return the rows of the demultiplex metadata that belong to this marker.
+
+        When the CSV has a ``pcr_primer_forward`` column, only rows matching this
+        marker's forward primer are kept, so a metadata file shared by several markers
+        (even within one library) only demultiplexes this marker's samples. Without
+        that column every row is used.
+
+        Args:
+            trimmer: The LigationTrimmer whose tag generator reads the metadata (reused
+                so the delimiter sniffing matches the tag-file generation).
+            metadata_csv: The sample-tag metadata CSV (``demultiplex.metadata``).
+
+        Returns:
+            The matching rows, as a pandas DataFrame.
+
+        Raises:
+            ValueError: If the CSV has no ``library`` column or no row matches.
+        """
+        df = trimmer.tag_generator._read_metadata(metadata_csv)
+        if "library" not in df.columns:
+            raise ValueError(
+                f"Metadata CSV {metadata_csv} has no 'library' column; ligation "
+                f"demultiplexing needs it to know which raw library files to split. "
+                f"Found columns: {list(df.columns)}."
+            )
+        if "pcr_primer_forward" in df.columns:
+            primer = self.config.marker.primers.forward.upper()
+            matching = df[df["pcr_primer_forward"].astype(str).str.upper() == primer]
+            if matching.empty:
+                raise ValueError(
+                    f"No row of {metadata_csv} has pcr_primer_forward equal to the "
+                    f"marker's forward primer ({primer}), so no library to demultiplex "
+                    f"for marker '{self.config.marker.name}'. Primers found: "
+                    f"{sorted(df['pcr_primer_forward'].astype(str).unique())[:10]}."
+                )
+            df = matching
+        return df
 
     def _run_standard_demux(self) -> Dict[str, Path]:
         """Run standard (tag-based) demultiplexing.
@@ -527,7 +657,8 @@ class PipelineOrchestrator:
         Every read still begins/ends with the PCR primer sequences used to amplify
         the marker; these are technical, not biological, and must be removed before
         denoising or clustering or they corrupt feature inference. This step locates
-        each sample's R1/R2 FASTQ pair under ``paths.raw_data`` and runs the
+        each sample's R1/R2 FASTQ pair under ``paths.raw_data`` (or, when the
+        demultiplex step ran, under its per-sample ``samples_dir``) and runs the
         StandardTrimmer (cutadapt) to strip the forward/reverse primers, writing the
         trimmed pairs under ``01_trim/<marker>``.
 
@@ -615,7 +746,34 @@ class PipelineOrchestrator:
                 "samples": trimmed_outputs,
             }
 
-        return self._execute_step("trim", body)
+        outputs = self._execute_step("trim", body)
+        self._drop_demux_samples()
+        return outputs
+
+    def _drop_demux_samples(self) -> None:
+        """Delete the demultiplexed per-sample FASTQs once trim has completed.
+
+        They are trim's input only; everything downstream reads the trimmed reads,
+        and read tracking takes the demux counts from the kept cutadapt reports. Done
+        only after the completed trim step is saved in the state, so a failed or
+        interrupted trim can still resume from them.
+
+        Returns:
+            None.
+        """
+        if not (
+            self.state.is_step_completed("demultiplex")
+            and self.state.is_step_completed("trim")
+        ):
+            return
+        samples_dir = self._trim_input_dir()
+        # Only ever delete inside the demux output tree (never raw_data, whatever an
+        # old state file recorded).
+        if self._demux_dir().resolve() not in samples_dir.resolve().parents:
+            return
+        if samples_dir.is_dir():
+            shutil.rmtree(samples_dir)
+            logger.info(f"Removed demultiplexed reads (trim completed): {samples_dir}")
 
     def _warn_on_heavy_trim_loss(self, logs_dir: Path) -> None:
         """Emit an early diagnostic ``[WARN]`` when primer trimming discards most reads.
@@ -796,14 +954,19 @@ class PipelineOrchestrator:
         )
 
     def _build_library_map(self) -> Optional[Path]:
-        """Write a ``sample,library`` CSV for DADA2-by-library, derived from the manifest's
-        seq_run_id grouping.
+        """Write a ``sample,library`` CSV for DADA2-by-library.
 
-        Grouping source precedence: report.sample_metadata (field CSV) is preferred over
-        demultiplex.metadata (lab CSV) as the primary manifest source (``src``). The lab CSV
-        is passed as the manifest's extra ``lab_csv`` only when it is distinct from ``src``
-        (i.e. when the field CSV was chosen as primary); if both point at the same file, no
-        extra lab CSV is supplied.
+        Grouping source precedence:
+
+        1. A ``library``/``seq_run_id`` column in report.sample_metadata (field CSV).
+        2. The ``library`` column of demultiplex.metadata (lab CSV), for samples the field
+           CSV does not group. When the lab CSV is the only metadata it is the primary source.
+        3. The per-library subdirectory layout of raw_data, used whenever neither CSV carries
+           a grouping (in particular when the field CSV is set for the report only).
+
+        Rows of either CSV are restricted to this marker's ``pcr_primer_forward`` when that
+        column exists, so a CSV shared by several markers cannot assign a sample another
+        marker's library.
 
         Returns the CSV path, or None when per_library is off or no grouping source exists
         (the R script then runs the standard single-batch path). A single-library grouping is
@@ -815,32 +978,36 @@ class PipelineOrchestrator:
         Returns:
             Path to the written ``library_map.csv`` (columns: ``sample``, ``library``)
             under ``02_dada2/<marker>``, or None when ``dada2.per_library`` is off, no
-            grouping source is configured, or building the map fails (a ``[WARN]`` is
-            logged in the latter two cases and DADA2 falls back to single-batch).
+            grouping source is found, or building the map fails (a ``[WARN]`` is logged in
+            the latter two cases and DADA2 falls back to single-batch).
         """
         if not self.config.dada2.per_library:
             return None
+        from seednap.config.manifest_migrate import has_run_grouping_column, migrate_to_manifest
+
         field_csv = self.config.report.sample_metadata
         lab_csv = self.config.demultiplex.metadata
         src = field_csv or lab_csv
-        if src is None:
-            # No metadata grouping configured. If raw_data is organized into per-library
-            # subdirectories (one folder per sequencing library/run of already-demultiplexed
-            # per-sample FASTQs), derive the sample->library map from the subfolder each
-            # sample's R1 file lives in -- no lab metadata needed.
+        try:
+            field_groups = field_csv is not None and has_run_grouping_column(Path(field_csv))
+        except Exception:  # noqa: BLE001 -- an unreadable CSV is reported by migrate below
+            field_groups = False
+        if lab_csv is None and not field_groups:
+            # No metadata grouping. If raw_data is organized into per-library subdirectories
+            # (one folder per sequencing library/run of already-demultiplexed per-sample
+            # FASTQs), derive the sample->library map from the subfolder each sample's R1
+            # file lives in. A field CSV set for the report only does not block this.
             subdir_map = self._library_map_from_subdirs()
             if subdir_map is not None:
                 return subdir_map
             logger.warning(
-                "[WARN] dada2 per_library: expected=report.sample_metadata or "
-                "demultiplex.metadata (or a per-library subdirectory layout under raw_data) "
-                "for the library grouping, got=none, fallback=standard single-batch DADA2"
+                "[WARN] dada2 per_library: expected=a 'library'/'seq_run_id' column in "
+                "report.sample_metadata, a demultiplex.metadata lab CSV, or >=2 per-library "
+                "subdirectories under raw_data, got=none, fallback=standard single-batch DADA2"
             )
             return None
         try:
             import pandas as pd
-
-            from seednap.config.manifest_migrate import migrate_to_manifest
 
             extra_lab = Path(lab_csv) if (lab_csv and str(lab_csv) != str(src)) else None
             manifest = migrate_to_manifest(
@@ -848,6 +1015,7 @@ class PipelineOrchestrator:
                 lab_csv=extra_lab,
                 project_csv=self.config.report.project_metadata,
                 target_gene=self.config.marker.name,
+                primer_forward=self.config.marker.primers.forward,
             )
             df = pd.DataFrame(
                 [{"sample": r.eventID, "library": r.seq_run_id} for r in manifest.rows]
@@ -972,29 +1140,13 @@ class PipelineOrchestrator:
 
             from seednap.steps.report import ReadTrackingBuilder
 
-            marker = self.config.marker.name
-            out = self.config.paths.output
             report_dir = self._report_dir()
-            kwargs: Dict[str, Any] = {
-                "marker": marker,
-                # Cutadapt per-sample logs are written by the trim step under
-                # <output>/01_trim/<marker>/logs (see trimming_pipeline.StandardTrimmer,
-                # log_dir = output_dir / "logs"). Read them from the same place so the
-                # report can recover raw/trimmed counts; otherwise % retained is NA.
-                "logs_dir": out / "01_trim" / marker / "logs",
-                "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
-                "warn_step_loss_pct": self.config.report.warn_step_loss_pct,
-            }
-            if method == "dada2":
-                kwargs["dada2_dir"] = out / "02_dada2" / marker
-            elif method == "swarm":
-                kwargs["swarm_otu_table"] = out / "02_swarm" / marker / "otu_table.csv"
-
-            builder = ReadTrackingBuilder(**kwargs)
+            builder = ReadTrackingBuilder(**self._read_tracking_kwargs(method))
             df = builder.build()
             builder.write(report_dir, df=df)
             # Run-level step summary: total reads + ASV/OTU count after each step.
             builder.write_step_summary(report_dir, summary_df=builder.step_summary(df))
+            builder.write_demux_summary(report_dir)
             warns = builder.warnings(df)
 
             # Persist a compact summary into the step state (resume-safe).
@@ -1030,6 +1182,52 @@ class PipelineOrchestrator:
                 f"[WARN] read_tracking report: expected=read-tracking table for "
                 f"'{method}', got=error ({exc}), fallback=skipped (pipeline unaffected)",
             )
+
+    def _read_tracking_kwargs(self, method: Optional[str]) -> Dict[str, Any]:
+        """Constructor arguments for :class:`ReadTrackingBuilder`, shared by every report.
+
+        Both the read-tracking table and the HTML report build their counts through this
+        one helper, so they read the same inputs and cannot disagree (the HTML report
+        once read ``<output>/logs``, found no Cutadapt logs, and showed raw and
+        % retained as NA while ``read_tracking.csv`` was correct).
+
+        Args:
+            method: The feature step, ``"dada2"`` or ``"swarm"``; ``None`` reports
+                raw/trimmed only.
+
+        Returns:
+            Keyword arguments for ``ReadTrackingBuilder``.
+        """
+        marker = self.config.marker.name
+        out = self.config.paths.output
+        kwargs: Dict[str, Any] = {
+            "marker": marker,
+            # Cutadapt per-sample logs are written by the trim step under
+            # <output>/01_trim/<marker>/logs (see trimming_pipeline.StandardTrimmer,
+            # log_dir = output_dir / "logs"). Read them from the same place so the
+            # report can recover raw/trimmed counts; otherwise % retained is NA.
+            "logs_dir": out / "01_trim" / marker / "logs",
+            "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
+            "warn_step_loss_pct": self.config.report.warn_step_loss_pct,
+        }
+        # Raw FASTQs the trim step read: lets the builder count raw reads directly for a
+        # sample whose Cutadapt log is missing.
+        try:
+            kwargs["raw_dir"] = self._trim_input_dir()
+        except ValueError as exc:
+            logger.warning(
+                f"[WARN] read_tracking: expected=raw FASTQ dir, got=error ({exc}), "
+                f"fallback=raw counts from Cutadapt logs only",
+            )
+        # Ligation demux reports: raw = reads assigned to each sample by its tag, then
+        # reads with primers found, before trimming.
+        if "demultiplex" in self.config.pipeline.steps:
+            kwargs["demux_logs_dir"] = self._demux_dir() / "logs"
+        if method == "dada2":
+            kwargs["dada2_dir"] = out / "02_dada2" / marker
+        elif method == "swarm":
+            kwargs["swarm_otu_table"] = out / "02_swarm" / marker / "otu_table.csv"
+        return kwargs
 
     def _validate_manifest_against_abundance(self, method: str) -> None:
         """Cross-check the FAIRe manifest's eventIDs against the abundance table.
@@ -1100,19 +1298,12 @@ class PipelineOrchestrator:
             marker = self.config.marker.name
             out = self.config.paths.output
             steps = set(self.config.pipeline.steps)
-            kwargs: Dict[str, Any] = {
-                "marker": marker, "logs_dir": out / "logs",
-                "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
-                "warn_step_loss_pct": self.config.report.warn_step_loss_pct,
-            }
+            method = "dada2" if "dada2" in steps else "swarm" if "swarm" in steps else None
             otu_full = None
-            if "dada2" in steps:
-                kwargs["dada2_dir"] = out / "02_dada2" / marker
-            elif "swarm" in steps:
-                kwargs["swarm_otu_table"] = out / "02_swarm" / marker / "otu_table.csv"
+            if method == "swarm":
                 otu_full = out / "02_swarm" / marker / "otu_table_full.csv"
 
-            builder = ReadTrackingBuilder(**kwargs)
+            builder = ReadTrackingBuilder(**self._read_tracking_kwargs(method))
             df = builder.build()
             warns = builder.warnings(df, log=False)
             step_summary_df = builder.step_summary(df)
@@ -1148,6 +1339,7 @@ class PipelineOrchestrator:
                 project_metadata_csv=self.config.report.project_metadata,
                 log_file=getattr(self, "_log_file", None),
                 step_summary_df=step_summary_df,
+                demux_summary_df=builder.demux_summary(),
                 summary={
                     "warn_below_retention_pct": self.config.report.warn_below_retention_pct,
                     "subtitle": f"{len(df)} samples · marker {marker}",
@@ -1170,7 +1362,7 @@ class PipelineOrchestrator:
         family, ...). This step picks up the query FASTA and count table from the
         completed feature step (DADA2 or SWARM), selects the method-specific
         parameters and reference database from the config (``blast``, ``dada2`` RDP,
-        ``ecotag``, or ``decipher``), and delegates to the TaxonomicAssigner, which
+        or ``ecotag``), and delegates to the TaxonomicAssigner, which
         writes a merged taxonomy+abundance table.
 
         Returns:
@@ -1269,13 +1461,6 @@ class PipelineOrchestrator:
                 kwargs = {
                     "taxonomy_db": db_config.tree,
                     "reference_db": db_config.fasta,
-                    "contaminants": self.config.taxonomy.contaminants,
-                }
-            elif self.config.taxonomy.method == "decipher":
-                kwargs = {
-                    "trained_classifier_path": db_config.trained,
-                    "threshold": db_config.threshold,
-                    "processors": db_config.processors,
                     "contaminants": self.config.taxonomy.contaminants,
                 }
 
@@ -1487,7 +1672,7 @@ class PipelineOrchestrator:
                     "Export cannot start: the completed taxonomy step recorded no "
                     "'final_table' output, so there is no merged taxonomy+abundance CSV "
                     "to format for GBIF. In a normal single-version run every method "
-                    "(blast/dada2/ecotag/decipher) writes final_table, so the usual "
+                    "(blast/dada2/ecotag) writes final_table, so the usual "
                     "cause is resuming export against a state JSON "
                     "(<paths.output>/.<marker>_state.json) written by an older seednap "
                     "that used a different output key. Fix: look for the merged table at "
@@ -1523,123 +1708,6 @@ class PipelineOrchestrator:
 
             gbif_table.to_csv(output_path, index=False)
             outputs = {"gbif_csv": output_path}
-
-            self.state.complete_step(step_name, outputs)
-            self._save_state()
-            log_pipeline_step(step_name, "complete", logger)
-            return outputs
-
-        except Exception as e:
-            self.state.fail_step(step_name, e)
-            self._save_state()
-            log_pipeline_step(step_name, "error", logger)
-            raise
-
-    def run_darwincore(self) -> Dict[str, Path]:
-        """DarwinCore occurrence export: build the GBIF-ready occurrence CSV in-pipeline.
-
-        Runs the DarwinCore builder as a pipeline step: it joins the long-format export output
-        (from the 'export' step) to the per-sample and per-project metadata
-        (``report.sample_metadata`` / ``report.project_metadata``), fills the DarwinCore fields,
-        removes control and non-target rows, and (unless ``export.darwincore.skip_enrichment``)
-        enriches the higher ranks from NCBI/WoRMS. Both metadata files are required: the step
-        fails fast with a clear error if either is unset, rather than emitting an occurrence
-        file with blank provenance.
-
-        Returns:
-            Dictionary with ``darwincore_csv`` (path to the DarwinCore occurrence CSV), or the
-            previously recorded outputs on a skip.
-
-        Raises:
-            ValueError: if the 'export' step did not complete or recorded no GBIF table, or if
-                ``report.sample_metadata`` / ``report.project_metadata`` is not configured.
-            Exception: re-raises any failure from the DarwinCore builder (recorded in state).
-        """
-        step_name = "darwincore"
-        if not self._should_run_step(step_name):
-            step = self.state.get_step(step_name)
-            return step.outputs if step else {}
-
-        log_pipeline_step(step_name, "start", logger)
-        self.state.start_step(step_name)
-        self._save_state()
-
-        try:
-            from seednap.steps.formatting.darwincore_builder import DarwinCoreBuilder
-
-            logger.info("Building DarwinCore occurrence file")
-            export_step = self.state.get_step("export")
-            gbif_csv = export_step.outputs.get("gbif_csv") if export_step else None
-            if gbif_csv is None:
-                raise ValueError(
-                    "Cannot build the DarwinCore file: the 'export' step did not complete or "
-                    "recorded no 'gbif_csv' (the long-format table the DarwinCore builder joins "
-                    "metadata onto). Ensure 'export' runs and completes before 'darwincore'."
-                )
-            sample_meta = self.config.report.sample_metadata
-            project_meta = self.config.report.project_metadata
-            missing = [
-                name for name, val in (
-                    ("report.sample_metadata", sample_meta),
-                    ("report.project_metadata", project_meta),
-                ) if val is None
-            ]
-            if missing:
-                raise ValueError(
-                    f"The 'darwincore' step needs per-sample and per-project metadata, but "
-                    f"{', '.join(missing)} is not set. Set both to this dataset's metadata CSVs "
-                    f"(they supply each occurrence's eventDate, coordinates, recorder, sequencing "
-                    f"method and reference database), or remove 'darwincore' from pipeline.steps "
-                    f"if you only need the long-format export."
-                )
-
-            # narrowed by the `missing` check above: both are non-None here
-            assert sample_meta is not None and project_meta is not None
-
-            # Auto-fill the reference-database and chimera-removal provenance from the run
-            # config (the single source of truth) so they need not be re-entered in the
-            # project metadata; a differing project value is reported by the builder.
-            otu_db = None
-            try:
-                db = self.config.taxonomy.get_database_config()
-                db_path = (
-                    getattr(db, "fasta", None)
-                    or getattr(db, "all", None)
-                    or getattr(db, "trained", None)
-                )
-                if db_path:
-                    otu_db = Path(db_path).name
-            except Exception:  # noqa: BLE001 -- provenance is best-effort; never fail the step
-                otu_db = None
-            chimera_check = None
-            if self.state.is_step_completed("dada2"):
-                method = getattr(self.config.dada2.chimera, "method", "consensus")
-                chimera_check = (
-                    "not performed" if method == "none"
-                    else f"removeBimeraDenovo (DADA2 {method})"
-                )
-            elif self.state.is_step_completed("swarm"):
-                chimera_check = "uchime_denovo (VSEARCH)"
-
-            output_path = (
-                self.config.paths.output
-                / f"{self.config.marker.name}_{self.config.taxonomy.method}_darwincore.csv"
-            )
-            builder = DarwinCoreBuilder(
-                taxonomy_results_path=Path(gbif_csv),
-                sample_metadata_path=Path(sample_meta),
-                project_metadata_path=Path(project_meta),
-                output_path=output_path,
-                summarise_pcr_replicates=self.config.export.darwincore.summarise_pcr_replicates,
-                skip_enrichment=self.config.export.darwincore.skip_enrichment,
-                otu_db=otu_db,
-                chimera_check=chimera_check,
-            )
-            builder.build()
-            outputs: Dict[str, Any] = {"darwincore_csv": output_path}
-            dropped = getattr(builder, "dropped_report_path", None)
-            if dropped is not None:
-                outputs["dropped_report"] = dropped
 
             self.state.complete_step(step_name, outputs)
             self._save_state()
@@ -1776,6 +1844,30 @@ class PipelineOrchestrator:
 
         return self.state
 
+    def _trim_input_dir(self) -> Path:
+        """Directory the trim step reads per-sample FASTQs from.
+
+        When the demultiplex step has completed, trim must read its per-sample
+        output, not ``paths.raw_data`` (which still holds the multiplexed library
+        files). Otherwise this is ``paths.raw_data``.
+
+        Returns:
+            The demultiplex step's ``samples_dir`` (or, for state files written before
+            that key existed, its ``trimmed_dir``) when demultiplex completed; else
+            ``paths.raw_data``.
+        """
+        if self.state.is_step_completed("demultiplex"):
+            step = self.state.get_step("demultiplex")
+            outputs = step.outputs if step else {}
+            demux_samples = outputs.get("samples_dir") or outputs.get("trimmed_dir")
+            if demux_samples is None:
+                raise ValueError(
+                    "Demultiplex step completed but recorded no samples_dir in its "
+                    "outputs (stale state file); re-run the demultiplex step."
+                )
+            return Path(demux_samples)
+        return self.config.paths.raw_data
+
     def _get_sample_list(self) -> List[str]:
         """
         Discover sample names by scanning the raw data directory for R1 FASTQs.
@@ -1795,7 +1887,7 @@ class PipelineOrchestrator:
         """
         import re
 
-        raw_dir = self.config.paths.raw_data
+        raw_dir = self._trim_input_dir()
         if not raw_dir.exists():
             raise FileNotFoundError(
                 f"Raw data directory not found: {raw_dir}. This is paths.raw_data in your config; "
@@ -1860,7 +1952,7 @@ class PipelineOrchestrator:
         Raises:
             FileNotFoundError: If read file not found
         """
-        raw_dir = self.config.paths.raw_data
+        raw_dir = self._trim_input_dir()
 
         # Try different file name patterns (support both _R1 and .R1 naming)
         patterns = [
