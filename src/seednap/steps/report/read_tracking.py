@@ -45,6 +45,30 @@ DEMUX_STEP = "primer_found"
 # Cutadapt summary lines (numbers carry thousands separators, e.g. 705,447).
 _RE_PROCESSED = RE_PAIRS_PROCESSED
 _RE_WRITTEN = RE_PAIRS_WRITTEN
+# Cutadapt prints this instead of the count lines when handed an empty FASTQ.
+_NO_READS_MARKER = "No reads processed!"
+
+
+def _log_reports_empty_input(path: Path) -> bool:
+    """True if a Cutadapt log reports an empty input (``No reads processed!``).
+
+    Cutadapt omits its usual ``Total read pairs processed:`` / ``Pairs written``
+    summary lines when the input FASTQ has no reads, printing ``No reads
+    processed!`` instead. That is a measured count of zero, not a missing
+    measurement, so callers treat it as 0 rather than an absent value (which
+    would otherwise surface as a misleading "not measured" warning and an NA).
+
+    Args:
+        path: Path to a per-sample Cutadapt log file.
+
+    Returns:
+        True if the log exists and reports an empty input; False otherwise
+        (including when the file cannot be read).
+    """
+    try:
+        return _NO_READS_MARKER in path.read_text()
+    except OSError:
+        return False
 
 
 def _parse_int(text: str) -> int:
@@ -235,12 +259,17 @@ class ReadTrackingBuilder:
             sample = pass1.name[: -len("_trim_pass1.txt")]
             pass2 = self.logs_dir / f"{sample}_trim_pass2.txt"
             raw = _first_match(pass1, _RE_PROCESSED)
+            if raw is None and _log_reports_empty_input(pass1):
+                raw = 0  # empty input FASTQ: a measured zero, not a missing count
             trimmed = _first_match(pass2, _RE_WRITTEN) if pass2.exists() else None
             if trimmed is None and pass2.exists():
-                logger.warning(
-                    f"[WARN] read_tracking: expected='Pairs written' in {pass2.name}, "
-                    f"got=not found, fallback=absent",
-                )
+                if _log_reports_empty_input(pass2):
+                    trimmed = 0
+                else:
+                    logger.warning(
+                        f"[WARN] read_tracking: expected='Pairs written' in {pass2.name}, "
+                        f"got=not found, fallback=absent",
+                    )
             counts[sample] = {"raw": raw, "trimmed": trimmed}
         return counts
 
@@ -294,15 +323,22 @@ class ReadTrackingBuilder:
         for round1 in sorted(self.demux_logs_dir.glob("*_primer_round1.txt")):
             sample = round1.name[: -len("_primer_round1.txt")]
             round2 = self.demux_logs_dir / f"{sample}_primer_round2.txt"
-            kept = [_first_match(round1, _RE_WRITTEN)]
-            kept.append(_first_match(round2, _RE_WRITTEN) if round2.exists() else None)
+            kept = []
+            for log in (round1, round2):
+                n = _first_match(log, _RE_WRITTEN) if log.exists() else None
+                if n is None and log.exists() and _log_reports_empty_input(log):
+                    n = 0  # empty input FASTQ: a measured zero, not a missing count
+                kept.append(n)
             found = None if None in kept else sum(cast(List[int], kept))
             if found is None:
                 logger.warning(
                     f"[WARN] read_tracking {sample}: expected='Pairs written' in both "
                     f"primer-detection reports, got=missing, fallback=primer_found NA",
                 )
-            counts[sample] = {"raw": _first_match(round1, _RE_PROCESSED), "primer_found": found}
+            raw = _first_match(round1, _RE_PROCESSED)
+            if raw is None and _log_reports_empty_input(round1):
+                raw = 0
+            counts[sample] = {"raw": raw, "primer_found": found}
         return counts
 
     def demux_summary(self) -> pd.DataFrame:
@@ -531,6 +567,11 @@ class ReadTrackingBuilder:
                     # DADA2 'input' == reads handed to filterAndTrim (the trimmed
                     # reads); use it only as a fallback if the trim log was absent.
                     if row["trimmed"] is None and "input" in d and pd.notna(d["input"]):
+                        logger.warning(
+                            f"[WARN] read_tracking {sample}: expected=trim-log "
+                            f"trimmed count, got=absent, fallback=DADA2 input "
+                            f"({int(d['input'])})"
+                        )
                         row["trimmed"] = int(d["input"])
                     for step in ("filtered", "denoised", "merged", "nonchim"):
                         row[step] = int(d[step]) if step in d and pd.notna(d[step]) else pd.NA

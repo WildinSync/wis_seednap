@@ -1178,7 +1178,19 @@ class HTMLReportBuilder:
             reads_c = '<span class="na">NA</span>' if pd.isna(reads) else f"{int(reads):,}"
             if rich is not None:
                 rv = rich.get(sample)
-                rich_c = '<span class="na">NA</span>' if rv is None else f"{int(rv):,}"
+                if rv is not None:
+                    rich_c = f"{int(rv):,}"
+                elif not pd.isna(reads) and int(reads) == 0:
+                    # Zero reads reached the final step, so the sample carries no
+                    # feature-table column: genuinely zero features, not a join miss.
+                    rich_c = "0"
+                else:
+                    logger.warning(
+                        f"[WARN] html_report: expected=per-sample richness for "
+                        f"{sample}, got=no matching feature-table column, "
+                        f"fallback=NA (read_tracking/richness sample-name join miss)"
+                    )
+                    rich_c = '<span class="na">NA</span>'
             else:
                 rich_c = '<span class="na">NA</span>'
             pr = r.get("pct_retained")
