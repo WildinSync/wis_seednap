@@ -1,5 +1,5 @@
-# SeeDNAP config for teleo (small). Anything not listed uses its built-in default;
-# run `seednap init complete` to see every parameter. Check with `seednap validate <this file>`.
+# SeeDNAP config for teleo (minimal). Anything not listed uses its built-in default;
+# run `seednap init --full` to see every parameter. Check with `seednap validate <this file>`.
 
 # Steps to run, in order. Use "swarm" instead of "dada2" for OTUs.
 # Available: demultiplex (before trim), trim, dada2 | swarm, taxonomy, clean, export, report

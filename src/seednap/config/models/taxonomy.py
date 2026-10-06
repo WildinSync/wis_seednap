@@ -313,7 +313,7 @@ class TaxonomicAssignmentConfig(StrictModel):
                     f"Invalid taxonomy.databases.{name} block:\n{bullets}\n"
                     f"The '{name}' database block must list its required path(s) ({required}) "
                     f"and use only recognised keys. For a fully-annotated reference template run: "
-                    f"seednap init complete. Note: SeeDNAP validates EVERY database block present, "
+                    f"seednap init --full. Note: SeeDNAP validates EVERY database block present, "
                     f"not just the one named by taxonomy.method, so a leftover block for an unused "
                     f"method ('{name}' here) must also be valid -- delete it if it is not needed."
                 ) from exc
@@ -324,7 +324,7 @@ class TaxonomicAssignmentConfig(StrictModel):
                     f"Invalid taxonomy.databases.{name}: expected a block of key/value settings, "
                     f"got {type(block).__name__}. Make taxonomy.databases.{name} a mapping that "
                     f"lists its required path(s) ({_REQUIRED_DB_PATHS.get(name, 'its paths')}); "
-                    f"run `seednap init complete` for a reference template."
+                    f"run `seednap init --full` for a reference template."
                 ) from exc
         return v
 

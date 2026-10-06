@@ -352,19 +352,19 @@ seednap manifest metadata/metadata_field_my_dataset.csv \
 Create a starter configuration file.
 
 ```
-seednap init [small|complete] [OPTIONS]
+seednap init [--minimal|--full] [OPTIONS]
 ```
 
 | Argument / option | Default | Description |
 |---|---|---|
-| `small` / `complete` | `small` | `small`: the fields you normally edit, everything else on built-in defaults. `complete`: every parameter with its default value and a short comment |
+| `--minimal` / `--full` | `--minimal` | `--minimal`: the fields you normally edit, everything else on built-in defaults. `--full`: every parameter with its default value and a short comment |
 | `-m, --marker TEXT` | `teleo` | Marker name. Its primers are filled in from the bundled primer list when listed there |
 | `-o, --output PATH` | `<marker>.yaml` | Output path |
 | `-f, --force` | off | Overwrite existing file |
 
 ```bash
-seednap init                      # small teleo.yaml
-seednap init complete -m mifish   # complete mifish.yaml
+seednap init                      # minimal teleo.yaml
+seednap init --full -m mifish     # full mifish.yaml
 ```
 
 ## ✅ `validate`

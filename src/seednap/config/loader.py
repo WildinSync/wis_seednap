@@ -50,7 +50,7 @@ def load_yaml(file_path: Path) -> Dict[str, Any]:
                 f"define marker.name, marker.primers.forward/reverse, taxonomy.method, "
                 f"and the selected method's databases.<method> block (you will also "
                 f"normally set paths.raw_data to your FASTQ directory). Generate a "
-                f"small starting template with: seednap init -o {file_path} --force"
+                f"minimal starting template with: seednap init -o {file_path} --force"
             )
 
         if not isinstance(config_dict, dict):
@@ -217,7 +217,7 @@ def validate_config_file(config_path: Path) -> tuple[bool, Optional[str]]:
         return False, f"Unexpected error: {e}"
 
 
-INIT_TEMPLATES = ("small", "complete")
+INIT_TEMPLATES = ("minimal", "full")
 
 # Used when the marker is not in the bundled primers_list.csv.
 _PLACEHOLDER_PRIMERS = ("ACACCGCCCGTCACTCT", "CTTCCGGTACACTTACCATG")
@@ -245,7 +245,7 @@ def _lookup_primers(marker: str) -> tuple[str, str, bool]:
 
 
 def create_example_config(
-    output_path: Path, marker: str = "teleo", template: str = "small"
+    output_path: Path, marker: str = "teleo", template: str = "minimal"
 ) -> None:
     """
     Create an example configuration file.
@@ -254,8 +254,8 @@ def create_example_config(
         output_path: Where to write the example config
         marker: Marker name for the example (default: 'teleo'). Its primers are filled in
             from the bundled primers_list.csv when the marker is listed there.
-        template: ``"small"`` (default) writes the fields you normally edit and leaves the
-            rest on built-in defaults; ``"complete"`` writes every parameter with its
+        template: ``"minimal"`` (default) writes the fields you normally edit and leaves the
+            rest on built-in defaults; ``"full"`` writes every parameter with its
             default value and a short comment.
 
     Raises:
@@ -269,9 +269,9 @@ def create_example_config(
     forward, reverse, found = _lookup_primers(marker)
     primer_note = "" if found else "   # placeholder: replace with your primer"
 
-    if template == "small":
-        example_config = f"""# SeeDNAP config for {marker} (small). Anything not listed uses its built-in default;
-# run `seednap init complete` to see every parameter. Check with `seednap validate <this file>`.
+    if template == "minimal":
+        example_config = f"""# SeeDNAP config for {marker} (minimal). Anything not listed uses its built-in default;
+# run `seednap init --full` to see every parameter. Check with `seednap validate <this file>`.
 
 # Steps to run, in order. Use "swarm" instead of "dada2" for OTUs.
 # Available: demultiplex (before trim), trim, dada2 | swarm, taxonomy, clean, export, report
@@ -308,7 +308,7 @@ taxonomy:
       fasta: "/path/to/{marker}_reference.fasta"
 """
     else:
-        example_config = f"""# SeeDNAP config for {marker} (complete). Every parameter is listed with its default value.
+        example_config = f"""# SeeDNAP config for {marker} (full). Every parameter is listed with its default value.
 # Only marker, primers, paths.raw_data, taxonomy.method and that method's database block are
 # required: any other line can be deleted and its default is used.
 # Check with `seednap validate <this file>`.

@@ -1,4 +1,4 @@
-# SeeDNAP config for teleo (complete). Every parameter is listed with its default value.
+# SeeDNAP config for teleo (full). Every parameter is listed with its default value.
 # Only marker, primers, paths.raw_data, taxonomy.method and that method's database block are
 # required: any other line can be deleted and its default is used.
 # Check with `seednap validate <this file>`.

@@ -15,13 +15,13 @@ A config at a glance, every top-level section in one view (the per-key reference
 `init` writes a config; `validate` checks it before you commit to a run.
 
 ```bash
-seednap init                        # small teleo.yaml: the fields you normally edit
-seednap init complete -m mifish     # complete mifish.yaml: every parameter with its default
+seednap init                        # minimal teleo.yaml: the fields you normally edit
+seednap init --full -m mifish       # full mifish.yaml: every parameter with its default
 
 seednap validate config/markers/teleo.yaml
 ```
 
-`init small` (the default) writes the fields you normally edit and leaves the rest on built-in defaults; `init complete` lists every parameter with its default value. The marker's primers are filled in from the bundled primer list when the marker is listed there. The file is written to `<marker>.yaml` in the current directory unless you pass `-o`. A standalone minimal example also lives at `config/markers/minimal.example.yaml`.
+`init --minimal` (the default) writes the fields you normally edit and leaves the rest on built-in defaults; `init --full` lists every parameter with its default value. The marker's primers are filled in from the bundled primer list when the marker is listed there. The file is written to `<marker>.yaml` in the current directory unless you pass `-o`. A standalone minimal example also lives at `config/markers/minimal.example.yaml`.
 
 `validate` checks YAML syntax, field types, and required values, reports which `taxonomy.databases.<method>` block is used, and runs a preflight that fails with a non-zero exit if any referenced database or `raw_data` path is missing on disk. A config that loads but points at missing inputs is caught here, not mid-run.
 
@@ -488,10 +488,10 @@ Example configs in [config/markers/](../config/markers/), generated with `seedna
 
 | File | Marker | Generated with | Notes |
 | --- | --- | --- | --- |
-| `teleo.yaml` | Teleo 12S fish | `seednap init complete -m teleo` | every parameter with its default; BLAST, DADA2 path |
-| `mifish.yaml` | MiFish-U 12S fish | `seednap init complete -m mifish` | same, MiFish primers |
-| `mam07.yaml` | MamP007 16S mammal | `seednap init complete -m mam07` | same, MamP007 primers |
-| `minimal.example.yaml` | Teleo 12S fish | `seednap init -m teleo` | small: the fields you normally edit |
+| `teleo.yaml` | Teleo 12S fish | `seednap init --full -m teleo` | every parameter with its default; BLAST, DADA2 path |
+| `mifish.yaml` | MiFish-U 12S fish | `seednap init --full -m mifish` | same, MiFish primers |
+| `mam07.yaml` | MamP007 16S mammal | `seednap init --full -m mam07` | same, MamP007 primers |
+| `minimal.example.yaml` | Teleo 12S fish | `seednap init --minimal -m teleo` | minimal: the fields you normally edit |
 
 ## 📖 See also
 

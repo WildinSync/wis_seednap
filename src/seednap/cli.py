@@ -25,7 +25,6 @@ from rich.table import Table
 
 from seednap.__version__ import __version__
 from seednap.config import ConfigError, create_example_config, load_config, validate_config_file
-from seednap.config.loader import INIT_TEMPLATES
 from seednap.utils.logging import get_logger, setup_logging
 
 console = Console()
@@ -388,7 +387,19 @@ def validate(ctx: click.Context, config_file: Path) -> None:
 
 
 @main.command()
-@click.argument("template", type=click.Choice(INIT_TEMPLATES), default="small")
+@click.option(
+    "--minimal",
+    "template",
+    flag_value="minimal",
+    default=True,
+    help="Write only the fields you normally edit (default)",
+)
+@click.option(
+    "--full",
+    "template",
+    flag_value="full",
+    help="Write every parameter with its default value and a short comment",
+)
 @click.option(
     "--marker",
     "-m",
@@ -411,17 +422,17 @@ def init(template: str, marker: str, output: Optional[Path], force: bool) -> Non
     """
     Create a starter configuration file.
 
-    TEMPLATE is "small" (default: the fields you normally edit, everything else on built-in
-    defaults) or "complete" (every parameter with its default value and a short comment).
+    --minimal (default) writes the fields you normally edit and leaves everything else on
+    built-in defaults; --full writes every parameter with its default value and a short comment.
 
     \b
     Examples:
-      seednap init                      # small teleo.yaml
-      seednap init complete -m mifish   # complete mifish.yaml
+      seednap init                      # minimal teleo.yaml
+      seednap init --full -m mifish     # full mifish.yaml
 
     \f
     Args:
-        template: ``"small"`` or ``"complete"``.
+        template: ``"minimal"`` (``--minimal``, default) or ``"full"`` (``--full``).
         marker: Marker name to seed the config with (e.g. ``teleo``). Its primers come from
             the bundled primers_list.csv when listed there.
         output: Path to write the config to. Defaults to ``<marker>.yaml`` in the current
