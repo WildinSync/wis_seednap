@@ -1462,6 +1462,8 @@ class PipelineOrchestrator:
                     "taxonomy_db": db_config.tree,
                     "reference_db": db_config.fasta,
                     "contaminants": self.config.taxonomy.contaminants,
+                    "threads": db_config.threads,
+                    "timeout": db_config.timeout,
                 }
 
             # Run assignment

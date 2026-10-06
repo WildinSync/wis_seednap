@@ -482,6 +482,15 @@ class GBIFFormatter:
         }
         df = df.rename(columns=rename_map)
 
+        # The pipeline's linked ecotag table uses the shared post-processor
+        # schema (capital-S `Sequence`, literal "Unassigned"); map it to the
+        # lowercase / NaN form the rank logic expects, as from_dada2_rdp does.
+        if "Sequence" in df.columns and "sequence" not in df.columns:
+            df = df.rename(columns={"Sequence": "sequence"})
+        for col in TAXONOMIC_RANKS:
+            if col in df.columns:
+                df[col] = df[col].replace("Unassigned", pd.NA)
+
         # Add placeholder columns for kingdom, phylum, class
         df["kingdom"] = pd.NA
         df["phylum"] = pd.NA

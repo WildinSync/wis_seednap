@@ -309,6 +309,8 @@ class TaxonomicAssigner:
         taxonomy_db: Optional[Union[str, Path]] = None,
         reference_db: Optional[Union[str, Path]] = None,
         contaminants: Optional[List[str]] = None,
+        threads: int = 8,
+        timeout: int = 14400,
         **kwargs: Any,
     ) -> Dict[str, Path]:
         """
@@ -320,6 +322,8 @@ class TaxonomicAssigner:
             taxonomy_db: Path to taxonomy database (NCBI format, required)
             reference_db: Path to reference sequence database (required)
             contaminants: Optional list of species to flag as contaminants
+            threads: Number of parallel ecotag processes (query split in chunks)
+            timeout: Per-process ecotag timeout in seconds
 
         Returns:
             Dictionary with 'ecotag_fasta', 'cleaned_fasta', 'taxonomy_tsv', and
@@ -338,7 +342,7 @@ class TaxonomicAssigner:
 
         logger.info("Running ecotag taxonomic assignment")
 
-        runner = EcotagRunner()
+        runner = EcotagRunner(timeout=timeout, threads=threads)
         outputs = runner.run_complete_workflow(
             query_fasta=query_fasta,
             taxonomy_db=taxonomy_db,

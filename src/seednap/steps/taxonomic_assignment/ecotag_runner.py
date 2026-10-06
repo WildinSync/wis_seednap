@@ -12,8 +12,11 @@ env by probing common install locations; users can override via the
 import logging
 import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, List, Optional, Union
+
+from Bio import SeqIO
 
 from seednap.utils.subprocess import run_subprocess
 
@@ -88,12 +91,21 @@ class EcotagRunner:
     - obitab: Convert FASTA to TSV table
     """
 
-    def __init__(self, timeout: int = 3600, bin_dir: Optional[Union[str, Path]] = None) -> None:
+    def __init__(
+        self,
+        timeout: int = 14400,
+        threads: int = 8,
+        bin_dir: Optional[Union[str, Path]] = None,
+    ) -> None:
         """
         Initialize ecotag runner.
 
         Args:
-            timeout: Command timeout in seconds (default: 3600 = 1 hour)
+            timeout: Per-process command timeout in seconds (default: 14400 =
+                4 hours). With threads > 1 it applies to each ecotag chunk.
+            threads: Number of ecotag processes run in parallel. OBITools v1
+                ecotag is single-threaded, so the query FASTA is split into
+                this many chunks (default: 8).
             bin_dir: Optional path to the directory containing the OBITools
                 binaries. If not provided, the runner auto-discovers from
                 PATH / SEEDNAP_OBITOOLS_BIN / well-known conda env paths.
@@ -103,6 +115,7 @@ class EcotagRunner:
                 usable OBITools bin directory can be discovered.
         """
         self.timeout = timeout
+        self.threads = threads
         self.bin_dir = self._resolve_bin_dir(bin_dir)
 
     @staticmethod
@@ -260,21 +273,55 @@ class EcotagRunner:
 
         output_fasta.parent.mkdir(parents=True, exist_ok=True)
 
-        cmd = [
-            self._tool("ecotag"),
-            "-t",
-            str(taxonomy_db),
-            "-R",
-            str(reference_db),
-            str(query_fasta),
-        ]
+        # ecotag (OBITools v1) is single-threaded and assigns each query
+        # independently, so split the query into up to `threads` chunks, run
+        # one ecotag per chunk in parallel, and concatenate in chunk order.
+        records = list(SeqIO.parse(str(query_fasta), "fasta"))
+        n_chunks = max(1, min(self.threads, len(records)))
+        chunk_dir = output_fasta.parent / f"{output_fasta.stem}_chunks"
+        if n_chunks == 1:
+            chunk_inputs = [query_fasta]
+        else:
+            chunk_dir.mkdir(parents=True, exist_ok=True)
+            chunk_inputs = []
+            for i in range(n_chunks):
+                chunk_path = chunk_dir / f"chunk_{i:03d}.fasta"
+                SeqIO.write(records[i::n_chunks], str(chunk_path), "fasta")
+                chunk_inputs.append(chunk_path)
 
-        logger.info(f"Running ecotag on {query_fasta}")
-        stdout = self._run_command(cmd, log_file)
+        def _run_chunk(chunk: Path) -> str:
+            cmd = [
+                self._tool("ecotag"),
+                "-t",
+                str(taxonomy_db),
+                "-R",
+                str(reference_db),
+                str(chunk),
+            ]
+            return self._run_command(cmd, log_file)
+
+        logger.info(
+            f"Running ecotag on {query_fasta} ({len(records)} sequences, "
+            f"{n_chunks} parallel process(es), timeout {self.timeout}s each)"
+        )
+        with ThreadPoolExecutor(max_workers=n_chunks) as pool:
+            stdouts = list(pool.map(_run_chunk, chunk_inputs))
 
         # ecotag writes to stdout, redirect to file
         with open(output_fasta, "w") as f:
-            f.write(stdout)
+            for stdout in stdouts:
+                f.write(stdout)
+
+        if n_chunks > 1:
+            shutil.rmtree(chunk_dir)
+
+        n_out = sum(1 for _ in SeqIO.parse(str(output_fasta), "fasta"))
+        if n_out != len(records):
+            raise EcotagError(
+                f"ecotag returned {n_out} sequences in {output_fasta} but the "
+                f"query {query_fasta} has {len(records)}. Refusing to continue: "
+                f"missing sequences would be silently marked 'Unassigned'."
+            )
 
         logger.info(f"Ecotag completed: {output_fasta}")
         return output_fasta
@@ -585,10 +632,17 @@ class EcotagRunner:
             if placeholder not in tax_df.columns:
                 tax_df[placeholder] = pd.NA
 
-        # Write the mapped taxonomy to a CSV next to the output, then link.
+        # obitab writes sequences in lowercase while the DADA2/SWARM abundance
+        # tables are uppercase; the join is on the sequence string, so
+        # normalise case or no OTU would match.
+        if sequence_col in tax_df.columns:
+            tax_df[sequence_col] = tax_df[sequence_col].astype(str).str.upper()
+
+        # Write the mapped taxonomy next to the ecotag intermediates
+        # (03_taxo/<marker>/), not into the shared output root, then link.
         output_csv = Path(output_csv)
         output_csv.parent.mkdir(parents=True, exist_ok=True)
-        mapped_csv = output_csv.parent / f"{taxonomy_tsv.stem}_mapped.csv"
+        mapped_csv = taxonomy_tsv.parent / f"{taxonomy_tsv.stem}_mapped.csv"
         tax_df.to_csv(mapped_csv, index=False)
 
         # rank_columns keeps the full BLAST-compatible 7-rank output schema;

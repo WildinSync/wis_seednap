@@ -115,6 +115,8 @@ taxonomy:
     # ecotag:
     #   tree: "/path/to/taxonomy_tree/"
     #   fasta: "/path/to/ecotag_db.fasta"
+    #   threads: 8                           # parallel ecotag processes (query split in chunks)
+    #   timeout: 14400                       # per-process timeout, seconds
 
 # Control decontamination: used if "clean" is in pipeline.steps (controls come from the manifest)
 cleaning:

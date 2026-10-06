@@ -141,3 +141,51 @@ def test_no_rank_name_column_raises(tmp_path: Path) -> None:
     runner = _make_runner(tmp_path)
     with pytest.raises(EcotagError, match="no rank-name column"):
         runner.link_with_abundance_table(tsv, abd, out)
+
+
+def test_lowercase_obitab_sequences_join_uppercase_abundance(tmp_path: Path) -> None:
+    """obitab writes lowercase sequences; SWARM/DADA2 tables are uppercase.
+    The join must still match (before the fix every OTU became Unassigned)."""
+    seqs = ["AAAAAAAA", "CCCCCCCC"]
+    tsv = tmp_path / "taxo" / "query_ecotag.tsv"
+    tsv.parent.mkdir()
+    abd = tmp_path / "abundance.csv"
+    out = tmp_path / "out" / "out.csv"
+    _write_obitab_tsv(tsv, [s.lower() for s in seqs])
+    _write_abundance(abd, seqs)
+
+    _make_runner(tmp_path).link_with_abundance_table(tsv, abd, out)
+
+    df = pd.read_csv(out)
+    assert list(df["family"]) == ["Percidae", "Hominidae"]
+    # The mapped intermediate stays next to the ecotag TSV, not the output root.
+    assert (tsv.parent / "query_ecotag_mapped.csv").exists()
+    assert not (out.parent / "query_ecotag_mapped.csv").exists()
+
+
+def test_zero_sequence_overlap_raises(tmp_path: Path) -> None:
+    """A taxonomy table that matches no OTU is an error, not all-Unassigned."""
+    tsv = tmp_path / "query_ecotag.tsv"
+    abd = tmp_path / "abundance.csv"
+    _write_obitab_tsv(tsv, ["GGGGGGGG", "TTTTTTTT"])
+    _write_abundance(abd, ["AAAAAAAA", "CCCCCCCC"])
+
+    with pytest.raises(ValueError, match="match a sequence"):
+        _make_runner(tmp_path).link_with_abundance_table(tsv, abd, tmp_path / "out.csv")
+
+
+def test_linked_ecotag_csv_formats_to_gbif(tmp_path: Path) -> None:
+    """The linked CSV (capital-S `Sequence`) is accepted by the ecotag GBIF path."""
+    from seednap.steps.formatting.gbif_formatter import GBIFFormatter
+
+    seqs = ["AAAAAAAA", "CCCCCCCC"]
+    tsv = tmp_path / "query_ecotag.tsv"
+    abd = tmp_path / "abundance.csv"
+    out = tmp_path / "out.csv"
+    _write_obitab_tsv(tsv, seqs)
+    _write_abundance(abd, seqs)
+    _make_runner(tmp_path).link_with_abundance_table(tsv, abd, out)
+
+    gbif = GBIFFormatter().from_method("ecotag", out)
+    assert set(gbif["species"]) == {"Perca_fluviatilis", "Homo_sapiens"}
+    assert set(gbif["sequence"]) == set(seqs)

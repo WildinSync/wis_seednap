@@ -217,6 +217,8 @@ def _assign_kwargs_from_config(config: Any, method: str) -> Dict[str, Any]:
             "taxonomy_db": db.tree,
             "reference_db": db.fasta,
             "contaminants": contaminants,
+            "threads": db.threads,
+            "timeout": db.timeout,
         }
     return {}
 

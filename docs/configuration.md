@@ -371,12 +371,16 @@ databases:
   ecotag:
     tree: "/path/to/taxonomy/"        # NCBI taxonomy tree dir (required)
     fasta: "/path/to/reference.fasta" # reference sequences (required)
+    threads: 8                        # parallel ecotag processes
+    timeout: 14400                    # per-process timeout, seconds
 ```
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
 | `tree` | path | required | NCBI taxonomy tree directory |
 | `fasta` | path | required | Reference FASTA database |
+| `threads` | int (>= 1) | `8` | ecotag is single-threaded, so the query FASTA is split into this many chunks, each run as its own ecotag process |
+| `timeout` | int (s) | `14400` | Timeout for each ecotag process; a process that runs longer is killed and the step fails |
 
 ## 📊 `export`
 

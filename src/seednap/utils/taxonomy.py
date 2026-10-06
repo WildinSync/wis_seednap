@@ -250,6 +250,14 @@ def link_taxonomy_with_abundance(
     # LEFT merge from abundance side -> every OTU survives (fix for I-1 / B1)
     n_with_taxo = int(taxo_df[sequence_col].isin(abundance_df[sequence_col]).sum())
     n_total = len(abundance_df)
+    if len(taxo_df) > 0 and n_with_taxo == 0:
+        raise ValueError(
+            f"None of the {len(taxo_df)} sequences in taxonomy file "
+            f"{taxonomy_path} match a sequence in abundance table "
+            f"{abundance_path}. Every OTU would be silently marked "
+            f"'{unassigned_label}'. Check that both files come from the same "
+            f"run and that sequences use the same case and trimming."
+        )
     if n_with_taxo < n_total:
         logger.warning(
             f"{n_total - n_with_taxo} of {n_total} OTUs had no taxonomy hit and "

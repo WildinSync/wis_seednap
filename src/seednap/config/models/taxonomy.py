@@ -206,10 +206,16 @@ class EcotagDatabaseConfig(StrictModel):
     Attributes:
         tree: Directory holding the NCBI taxonomy tree files.
         fasta: Reference FASTA database.
+        threads: Number of ecotag processes run in parallel on chunks of the query.
+        timeout: Per-process ecotag timeout in seconds.
     """
 
     tree: Path = Field(..., description="Path to NCBI taxonomy tree directory")
     fasta: Path = Field(..., description="Path to reference FASTA database")
+    # OBITools v1 ecotag is single-threaded; the query FASTA is split into this many
+    # chunks, each run as its own ecotag process.
+    threads: int = Field(default=8, ge=1, description="Parallel ecotag processes")
+    timeout: int = Field(default=14400, ge=1, description="Per-process ecotag timeout (s)")
 
     @field_validator("tree", "fasta")
     @classmethod
