@@ -51,7 +51,7 @@ flowchart LR
         ecotag[ecotag]:::alt
     end
 
-    export[Export<br/>GBIF / DarwinCore]:::pass
+    export[Export<br/>long format]:::pass
     final[Final CSV<br/>Taxonomy + Abundances]:::io
     report[Run report<br/>read tracking + HTML]:::pass
 
@@ -229,7 +229,7 @@ Versions are pinned in `environment.yml`; the Pipeline section above shows which
 | [pipeline-steps.md](docs/pipeline-steps.md) | Detailed description of each step |
 | [cli-reference.md](docs/cli-reference.md) | Full CLI command reference |
 | [taxonomy-methods.md](docs/taxonomy-methods.md) | Taxonomy methods compared |
-| [gbif-export.md](docs/gbif-export.md) | GBIF and DarwinCore export guide |
+| [export.md](docs/export.md) | Long-format export and GBIF / DarwinCore submission guide |
 | [reporting.md](docs/reporting.md) | Read tracking, warnings, and the HTML report |
 | [ecotag-setup.md](docs/ecotag-setup.md) | OBITools / ecotag installation |
 
@@ -248,7 +248,7 @@ seednap/
       swarm/                # VSEARCH + SWARM clustering
       taxonomic_assignment/ # BLAST, DADA2, ecotag
       cleaning/             # Control decontamination ('clean' step)
-      formatting/           # GBIF + DarwinCore export
+      formatting/           # long-format export + DarwinCore (GBIF) builder
       report/               # Read-tracking table + HTML run report
     errors/                 # Error codes + 'explain' / preflight machinery
     utils/                  # Subprocess, logging, sequence tools

@@ -3,7 +3,7 @@
 Covers the top-priority gaps identified by the test-coverage audit:
 
 - reverse_complement IUPAC roundtrip
-- GBIFFormatter rank determination ('/' -> genus) and taxon fallback
+- LongFormatter rank determination ('/' -> genus) and taxon fallback
 - NonTargetFilter with missing rank columns
 - PipelineState JSON round-trip with Path / datetime
 - TagFileGenerator reverse complement matches sequences util
@@ -56,14 +56,14 @@ def test_reverse_complement_lowercase_input_uppercased() -> None:
     assert reverse_complement("atcg") == "CGAT"
 
 
-# 2. GBIFFormatter rank + taxon ---------------------------------------------------------
+# 2. LongFormatter rank + taxon ---------------------------------------------------------
 
-from seednap.steps.formatting.gbif_formatter import GBIFFormatter
+from seednap.steps.formatting.long_formatter import LongFormatter
 
 
-def test_gbif_rank_species_with_slash_falls_to_genus() -> None:
+def test_long_rank_species_with_slash_falls_to_genus() -> None:
     """A species containing '/' indicates ambiguity at the genus level (DADA2 convention)."""
-    fmt = GBIFFormatter()
+    fmt = LongFormatter()
     df = pd.DataFrame({
         "kingdom": ["Metazoa"], "phylum": ["Chordata"], "class": ["Actinopteri"],
         "order": ["Perciformes"], "family": ["Percidae"],
@@ -74,8 +74,8 @@ def test_gbif_rank_species_with_slash_falls_to_genus() -> None:
     assert pd.isna(result.iloc[0]["species"])  # cleaned to NA when not species
 
 
-def test_gbif_rank_no_slash_is_species() -> None:
-    fmt = GBIFFormatter()
+def test_long_rank_no_slash_is_species() -> None:
+    fmt = LongFormatter()
     df = pd.DataFrame({
         "kingdom": ["Metazoa"], "phylum": ["Chordata"], "class": ["Actinopteri"],
         "order": ["Perciformes"], "family": ["Percidae"],
@@ -86,9 +86,9 @@ def test_gbif_rank_no_slash_is_species() -> None:
     assert result.iloc[0]["species"] == "Perca_fluviatilis"
 
 
-def test_gbif_taxon_fallback_chain() -> None:
+def test_long_taxon_fallback_chain() -> None:
     """When rank is 'higher', taxon falls back through order -> class -> phylum -> kingdom."""
-    fmt = GBIFFormatter()
+    fmt = LongFormatter()
     df = pd.DataFrame([
         # Has order: returns order
         {"rank": "higher", "kingdom": "Metazoa", "phylum": "Chordata",

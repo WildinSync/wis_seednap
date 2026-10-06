@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # headers, mamm07 3056). These placeholders are NOT taxa. They are normalized to None when the
 # header lineage is parsed (BlastOutputFormatter), so neither LCA resolver treats "NA" as a real
 # value -- which would (a) over-collapse a call when one in-band hit carries "NA" at a rank where
-# the others agree, and (b) leak a taxon literally named "NA" into the GBIF export. Matched
+# the others agree, and (b) leak a taxon literally named "NA" into the long-format export. Matched
 # case-insensitively after strip(); no real taxon is named "na"/"nan".
 # MISSING_RANK_SENTINELS is the canonical, case-insensitive sentinel set (re-exported under the
 # historical name for any importer); see seednap.utils.taxonomy.MISSING_TAXON_VALUES.
@@ -762,7 +762,7 @@ class BlastTaxonomicAssigner:
     Ties the BLAST building blocks together: it formats raw BLAST output into a
     lineage table, filters/collapses ambiguous hits to an LCA, and left-joins the
     resulting taxonomy onto the per-OTU abundance table so every OTU in the sample
-    reaches the final, GBIF-ready output (those without a usable hit are labelled
+    reaches the final output (those without a usable hit are labelled
     'Unassigned' rather than dropped).
     """
 
@@ -1016,7 +1016,7 @@ class BlastTaxonomicAssigner:
         # query FASTA. In the validated SWARM/DADA2 paths the two files are produced
         # together and match exactly, so nothing is dropped. If they ever diverge (e.g. a
         # mismatched file passed to the standalone `assign-taxonomy` CLI), OTUs would
-        # vanish from the GBIF export silently -- which contradicts the no-silent-drops
+        # vanish from the long-format export silently -- which contradicts the no-silent-drops
         # contract. Surface the mismatch loudly instead (the no-silent-fallbacks policy).
         n_dropped_counts = n_count_before - len(asv_count)
         n_dropped_fasta = n_fasta - len(asv_count)

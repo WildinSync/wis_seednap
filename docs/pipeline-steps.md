@@ -287,7 +287,7 @@ This is unrelated to `chimera.method: pooled`, which only changes how chimeras a
 
 Input: representative sequences (`query.fasta`) and an abundance table (`otu_table.csv` from SWARM, or `seqtab_clean_t.csv` from DADA2). Output: a taxonomy CSV in `outputs/03_taxo/{marker}/` and a final table `outputs/{marker}_{token}.csv`.
 
-The final-table token depends on the method: `blast`, `ecotag`, or `dada2RDP` for the DADA2 RDP classifier (for example `teleo_dada2RDP.csv`). The taxonomy table uses the token `dada2RDP` for the DADA2 method, but the cleaned and GBIF tables (sections 3b and 4) use the raw `taxonomy.method` enum value `dada2`. So the DADA2 cleaned table is `{marker}_dada2_cleaned.csv`, not `{marker}_dada2RDP_cleaned.csv`.
+The final-table token depends on the method: `blast`, `ecotag`, or `dada2RDP` for the DADA2 RDP classifier (for example `teleo_dada2RDP.csv`). The taxonomy table uses the token `dada2RDP` for the DADA2 method, but the cleaned and long-format tables (sections 3b and 4) use the raw `taxonomy.method` enum value `dada2`. So the DADA2 cleaned table is `{marker}_dada2_cleaned.csv`, not `{marker}_dada2RDP_cleaned.csv`.
 
 All three methods (BLAST, DADA2 RDP, ecotag) share a post-processor (`seednap.utils.taxonomy.link_taxonomy_with_abundance`), so the output schema is identical regardless of method: same columns, same cascade-null semantics for missing ranks, and the same `is_contaminant_candidate` column when `taxonomy.contaminants` is set. The DADA2 RDP path takes the query FASTA explicitly and works on either DADA2 ASVs or SWARM OTUs; they do not require a `seqtab_clean.rds`.
 
@@ -345,20 +345,20 @@ seednap clean {abundance_csv} {field_metadata_csv} {output_csv} \
   [--mode flag|subtract] [--project-metadata PATH] [--id-col COL] [--report PATH]
 ```
 
-## 📤 4. GBIF export
+## 📤 4. Long-format export
 
-Tool: built-in formatter. Input: the taxonomy CSV from step 3 (cleaned table preferred when section 3b produced one). Output: a long-format CSV `outputs/{marker}_{taxonomy.method}_gbif.csv`; downstream, a DarwinCore occurrence CSV via `seednap create-gbif`. DarwinCore is the GBIF (Global Biodiversity Information Facility) standard for biodiversity occurrence records: one row per "this taxon was observed at this place and time", with standardized column names (`occurrenceID`, `eventID`, `scientificName`, and so on).
+Tool: built-in formatter. Input: the taxonomy CSV from step 3 (cleaned table preferred when section 3b produced one). Output: a long-format CSV `outputs/{marker}_{taxonomy.method}_long.csv`; downstream, a DarwinCore occurrence CSV via `seednap create-gbif`. DarwinCore is the GBIF (Global Biodiversity Information Facility) standard for biodiversity occurrence records: one row per "this taxon was observed at this place and time", with standardized column names (`occurrenceID`, `eventID`, `scientificName`, and so on).
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `export.gbif.add_rank` | bool | `True` | Add a `rank` column (species/genus/family/higher). |
-| `export.gbif.add_taxon` | bool | `True` | Add a `taxon` column (lowest available name). |
+| `export.long.add_rank` | bool | `True` | Add a `rank` column (species/genus/family/higher). |
+| `export.long.add_taxon` | bool | `True` | Add a `taxon` column (lowest available name). |
 
-The `export` step transforms the wide-format taxonomy table (one row per OTU/ASV, one column per sample) into GBIF long format (one row per sample-feature observation), keyed by `eventID` (the per-sample identifier). Zero-count observations are dropped. The marker contaminant flag `is_contaminant_candidate` is carried through so the downstream DarwinCore output can surface it as `contamination_flag`.
+The `export` step transforms the wide-format taxonomy table (one row per OTU/ASV, one column per sample) into long format (one row per sample-feature observation), keyed by `eventID` (the per-sample identifier). Zero-count observations are dropped. The marker contaminant flag `is_contaminant_candidate` is carried through so the downstream DarwinCore output can surface it as `contamination_flag`.
 
 The DarwinCore occurrence CSV (the GBIF-ready file) is produced afterwards by the standalone `seednap create-gbif` command. It joins the long table to a per-sample metadata CSV (locations, dates, environment) on `eventID`. Because R's `make.names()` rewrites the dashed canonical eventID (`A-1-2`) into a dotted form (`A.1.2`) in some legacy tables, the join matches on a separator-normalized key so dot/dash differences still line up. If after normalization no occurrence eventID matches any metadata eventID, `create-gbif` raises (rather than silently writing rows with blank location, date, and `env_medium`); if only some fail to match, it emits a `[WARN]` naming the unmatched eventIDs.
 
-See [gbif-export.md](gbif-export.md) for the full DarwinCore publishing workflow.
+See [export.md](export.md) for the full DarwinCore publishing workflow.
 
 ## 📊 5. Run report
 
@@ -389,7 +389,7 @@ See [reporting.md](reporting.md) for full details.
   <img src="../media/output-tree.svg" width="100%" alt="SeeDNAP run output directory tree: per-step folders (01_trim, 02_swarm/02_dada2, 03_taxo, 04_report) and the final tables">
 </p>
 
-The final taxonomy table uses `dada2RDP` for the DADA2 method, but the `_cleaned.csv` and `_gbif.csv` tables use the raw `taxonomy.method` value `dada2` (see section 3).
+The final taxonomy table uses `dada2RDP` for the DADA2 method, but the `_cleaned.csv` and `_long.csv` tables use the raw `taxonomy.method` value `dada2` (see section 3).
 
 For a worked example of these outputs (read tracking, OTU table, taxonomy table, and the FAIRe sample manifest, with trimmed sample rows), see [example-outputs/](example-outputs/).
 
@@ -420,4 +420,4 @@ Each run is reconstructable from its outputs:
 - [cli-reference.md](cli-reference.md): every command and flag.
 - [taxonomy-methods.md](taxonomy-methods.md): taxonomy methods and thresholds.
 - [reporting.md](reporting.md): run report details.
-- [gbif-export.md](gbif-export.md): DarwinCore publishing workflow.
+- [export.md](export.md): DarwinCore publishing workflow.

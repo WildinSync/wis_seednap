@@ -43,8 +43,8 @@
   <text x="360" y="450" font-size="12" fill="#6e7681" xml:space="preserve">final taxonomy + abundance table</text>
   <text x="26" y="471" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">{marker}_{method}_cleaned.csv</tspan></text>
   <text x="360" y="471" font-size="12" fill="#6e7681" xml:space="preserve">decontaminated table (if clean step)</text>
-  <text x="26" y="492" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">{marker}_{method}_gbif.csv</tspan></text>
-  <text x="360" y="492" font-size="12" fill="#6e7681" xml:space="preserve">GBIF long table (if export step)</text>
+  <text x="26" y="492" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">{marker}_{method}_long.csv</tspan></text>
+  <text x="360" y="492" font-size="12" fill="#6e7681" xml:space="preserve">long table (if export step)</text>
   <text x="26" y="513" font-size="13" xml:space="preserve"><tspan fill="#484f58">├── </tspan><tspan fill="#e6edf3">.{marker}_state.json</tspan></text>
   <text x="360" y="513" font-size="12" fill="#6e7681" xml:space="preserve">pipeline state, drives --resume</text>
   <text x="26" y="534" font-size="13" xml:space="preserve"><tspan fill="#484f58">└── </tspan><tspan fill="#e6edf3">.{marker}_config.snapshot.yaml</tspan></text>

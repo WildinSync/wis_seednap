@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 # --- canonical taxonomy schema (single source of truth) --------------------
 # The 7-rank lineage, ordered coarse-to-fine. Every module that needs the rank
-# list (BLAST formatter/LCA resolvers, GBIF formatter, DarwinCore builder, HTML
+# list (BLAST formatter/LCA resolvers, long formatter, DarwinCore builder, HTML
 # report) imports this rather than re-declaring its own literal, so the schema
 # can never drift between methods.
 TAXONOMIC_RANKS: Tuple[str, ...] = (
@@ -127,7 +127,7 @@ def link_taxonomy_with_abundance(
     """Merge a taxonomy table with a DADA2/SWARM abundance table on sequence.
 
     Used by ecotag (TSV taxonomy) and DADA2 RDP (CSV taxonomy). Produces a CSV
-    with the same schema as BLAST output so downstream consumers (GBIF export,
+    with the same schema as BLAST output so downstream consumers (long-format export,
     plotting, reporting) see one shape.
 
     Args:
@@ -209,7 +209,7 @@ def link_taxonomy_with_abundance(
 
     # Generate feature IDs from row order. The values are OTU_-prefixed, but the
     # column is deliberately named ASV_ID: BLAST output uses an ASV_ID column for
-    # both ASV_- and OTU_-prefixed IDs, and downstream consumers (GBIF export,
+    # both ASV_- and OTU_-prefixed IDs, and downstream consumers (long-format export,
     # plotting, reporting) key on that one column name. Do not rename the column
     # to "OTU_ID" to match the prefix; that would break the shared cross-method
     # schema even though it looks more consistent.

@@ -1,13 +1,13 @@
-"""GBIFFormatter must carry is_contaminant_candidate through to the GBIF output.
+"""LongFormatter must carry is_contaminant_candidate through to the long-format output.
 
 Regression: the column was previously dropped at the final column selection, so create-gbif's
 contamination_flag was always False end-to-end. The taxonomy step sets is_contaminant_candidate
-from taxonomy.contaminants; it must survive format-gbif so create-gbif can surface it.
+from taxonomy.contaminants; it must survive format-long so create-gbif can surface it.
 """
 
 import pandas as pd
 
-from seednap.steps.formatting.gbif_formatter import GBIFFormatter
+from seednap.steps.formatting.long_formatter import LongFormatter
 
 
 def _wide_table() -> pd.DataFrame:
@@ -31,7 +31,7 @@ def _wide_table() -> pd.DataFrame:
 def test_from_dada2_rdp_preserves_contaminant_flag(tmp_path):
     inp = tmp_path / "tax.csv"
     _wide_table().to_csv(inp, index=False)
-    out = GBIFFormatter().from_dada2_rdp(inp)
+    out = LongFormatter().from_dada2_rdp(inp)
     assert "is_contaminant_candidate" in out.columns
     homo = out[out["species"] == "Homo sapiens"]
     assert bool(homo["is_contaminant_candidate"].iloc[0]) is True
@@ -41,7 +41,7 @@ def test_from_dada2_rdp_without_contaminant_column_does_not_crash(tmp_path):
     """When taxonomy.contaminants is unset the column is absent; output omits it, no crash."""
     inp = tmp_path / "tax.csv"
     _wide_table().drop(columns=["is_contaminant_candidate"]).to_csv(inp, index=False)
-    out = GBIFFormatter().from_dada2_rdp(inp)
+    out = LongFormatter().from_dada2_rdp(inp)
     assert "is_contaminant_candidate" not in out.columns
     assert len(out) > 0
 
@@ -64,7 +64,7 @@ def _ecotag_table() -> pd.DataFrame:
 def test_from_ecotag_preserves_contaminant_flag(tmp_path):
     inp = tmp_path / "ecotag.csv"
     _ecotag_table().to_csv(inp, index=False)
-    out = GBIFFormatter().from_ecotag(inp)
+    out = LongFormatter().from_ecotag(inp)
     assert "is_contaminant_candidate" in out.columns
     homo = out[out["species"] == "Homo sapiens"]
     assert bool(homo["is_contaminant_candidate"].iloc[0]) is True
@@ -73,6 +73,6 @@ def test_from_ecotag_preserves_contaminant_flag(tmp_path):
 def test_from_ecotag_without_contaminant_column_does_not_crash(tmp_path):
     inp = tmp_path / "ecotag.csv"
     _ecotag_table().drop(columns=["is_contaminant_candidate"]).to_csv(inp, index=False)
-    out = GBIFFormatter().from_ecotag(inp)
+    out = LongFormatter().from_ecotag(inp)
     assert "is_contaminant_candidate" not in out.columns
     assert len(out) > 0

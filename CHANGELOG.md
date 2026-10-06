@@ -30,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Breaking:** the long-format export is no longer called "GBIF". It is a
+  plain wide-to-long reshape, not a GBIF submission file. The `export` step now
+  writes `<marker>_<method>_long.csv` (was `_gbif.csv`), the config key is
+  `export.long` (was `export.gbif`; an old key fails at load with a message
+  naming the new one), and the manual command is `format-long` (was
+  `format-gbif`, default suffix `_long.csv`). The DarwinCore/GBIF submission
+  builder `create-gbif` is unchanged and stays a standalone command.
 - `seednap init` templates (`--minimal`, default, and `--full`) are rewritten:
   both match the current parameters, primers are
   filled in from the bundled primer list for known markers, and the default

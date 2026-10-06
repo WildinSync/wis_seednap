@@ -1,15 +1,16 @@
-"""GBIF formatter for converting taxonomic assignments to GBIF-compatible format.
+"""Long formatter: reshape wide taxonomy+abundance tables to long format.
 
-First step of the formatting stage, run by the ``format-gbif`` command. Each
+Run by the ``export`` step and the ``format-long`` command. Each
 taxonomic-assignment method (DADA2 RDP, ecotag, BLAST) writes its
 result as a wide table: one row per OTU/ASV (the clustered or denoised sequence
 variant standing in for a taxon) with the taxonomy columns plus one numeric
 column per sample holding that OTU's read count. This module normalises the
-differing column names into one schema and reshapes the table to GBIF's long
+differing column names into one schema and reshapes the table to a long
 "occurrence" layout: one row per (OTU, sample) pair with a single ``nb_reads``
 count, dropping the zero counts that a wide table necessarily contains. It also
 derives the lowest confidently assigned rank and the matching taxon name for
-each row. The long table it produces is the input to ``DarwinCoreBuilder``.
+each row. The long table it produces is also the input to ``DarwinCoreBuilder``
+(``create-gbif``).
 """
 
 import logging
@@ -23,17 +24,17 @@ from seednap.utils.taxonomy import TAXONOMIC_RANKS
 logger = logging.getLogger(__name__)
 
 
-class GBIFFormatter:
+class LongFormatter:
     """
-    Format taxonomic assignment outputs to GBIF-compatible format.
+    Reshape taxonomic assignment outputs to long format.
 
-    This class converts outputs from different taxonomic assignment methods
-    (DADA2, ecotag, BLAST) into a standardized GBIF format suitable
-    for biodiversity databases.
+    This class converts the wide outputs of the different taxonomic assignment
+    methods (DADA2, ecotag, BLAST) into one standardized long table (one row per
+    OTU x sample with reads).
     """
 
     def __init__(self) -> None:
-        """Initialize GBIF formatter with the standard taxonomic rank list."""
+        """Initialize the long formatter with the standard taxonomic rank list."""
         self.taxonomic_ranks = list(TAXONOMIC_RANKS)
 
     def _add_rank(self, df: pd.DataFrame) -> pd.DataFrame:
@@ -160,8 +161,7 @@ class GBIFFormatter:
 
         Reshapes the OTU-by-sample read-count matrix into one row per
         (OTU, sample) pair: each sample's numeric column becomes an ``eventID``
-        value and its count a ``nb_reads`` value, which is GBIF's expected
-        occurrence layout. Sample columns are detected as the numeric columns
+        value and its count a ``nb_reads`` value (one occurrence per row). Sample columns are detected as the numeric columns
         that are neither taxonomy nor per-OTU annotation columns. Per-OTU
         annotations (``ASV_ID``, ``pident``, ``is_contaminant_candidate``) are
         carried onto every resulting sample row, and rows with zero reads are
@@ -204,8 +204,8 @@ class GBIFFormatter:
                 and not pd.api.types.is_numeric_dtype(df[col])
             ]
             raise ValueError(
-                "No per-sample read-count columns found in the input table. GBIF "
-                "export expects a wide-format CSV where each sample is its own "
+                "No per-sample read-count columns found in the input table. The "
+                "long-format export expects a wide-format CSV where each sample is its own "
                 "numeric column (one column per eventID, holding integer read "
                 "counts) alongside the taxonomy columns (kingdom, phylum, class, "
                 "order, family, genus, species, sequence). After excluding the "
@@ -249,12 +249,12 @@ class GBIFFormatter:
         Args:
             method: Taxonomy method ('dada2', 'ecotag', 'blast').
             input_path: Path to taxonomy CSV file.
-            output_path: Optional path to output GBIF CSV file.
+            output_path: Optional path to output long-format CSV file.
             add_rank: Whether to add 'rank' column (default: True).
             add_taxon: Whether to add 'taxon' column (default: True).
 
         Returns:
-            DataFrame in GBIF-compatible long format.
+            DataFrame in long format.
 
         Raises:
             ValueError: If method is not recognised.
@@ -281,7 +281,7 @@ class GBIFFormatter:
         _source_format: str = "dada2",
     ) -> pd.DataFrame:
         """
-        Convert DADA2 RDP taxonomic assignment output to GBIF format.
+        Convert DADA2 RDP taxonomic assignment output to long format.
 
         This method:
         1. Reads DADA2 output CSV (wide format with sample columns)
@@ -294,7 +294,7 @@ class GBIFFormatter:
 
         Args:
             input_path: Path to DADA2 output CSV file
-            output_path: Optional path to output GBIF CSV file
+            output_path: Optional path to output long-format CSV file
             add_rank: Whether to add 'rank' column (default: True)
             add_taxon: Whether to add 'taxon' column (default: True)
             _source_format: Internal label naming the actual source format
@@ -303,7 +303,7 @@ class GBIFFormatter:
                 about which method produced the input.
 
         Returns:
-            DataFrame in GBIF-compatible long format
+            DataFrame in long format
 
         Raises:
             FileNotFoundError: If input file does not exist
@@ -321,7 +321,7 @@ class GBIFFormatter:
                 f"--input at the existing taxonomy CSV."
             )
 
-        logger.info(f"Converting {_source_format} output to GBIF format: {input_path}")
+        logger.info(f"Converting {_source_format} output to long format: {input_path}")
 
         # Read CSV
         try:
@@ -357,7 +357,7 @@ class GBIFFormatter:
         if missing_cols:
             raise ValueError(
                 f"Taxonomy CSV '{input_path}' is missing required columns: "
-                f"{missing_cols}. GBIF formatting needs all of: kingdom, phylum, "
+                f"{missing_cols}. Long formatting needs all of: kingdom, phylum, "
                 f"class, order, family, genus, species, sequence (a capital-S "
                 f"'Sequence' is auto-mapped to 'sequence'). The usual cause is "
                 f"pointing at the wrong file (e.g. the raw ASV count table instead "
@@ -398,7 +398,7 @@ class GBIFFormatter:
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             df_out.to_csv(output_path, index=False)
-            logger.info(f"Wrote GBIF output to {output_path}")
+            logger.info(f"Wrote long-format output to {output_path}")
 
         return df_out
 
@@ -410,7 +410,7 @@ class GBIFFormatter:
         add_taxon: bool = True,
     ) -> pd.DataFrame:
         """
-        Convert ecotag (OBITools) output to GBIF format.
+        Convert ecotag (OBITools) output to long format.
 
         Ecotag output has different column names:
         - family_name → family
@@ -431,12 +431,12 @@ class GBIFFormatter:
 
         Args:
             input_path: Path to ecotag output CSV file
-            output_path: Optional path to output GBIF CSV file
+            output_path: Optional path to output long-format CSV file
             add_rank: Whether to add 'rank' column (default: True)
             add_taxon: Whether to add 'taxon' column (default: True)
 
         Returns:
-            DataFrame in GBIF-compatible long format
+            DataFrame in long format
 
         Raises:
             FileNotFoundError: If input file does not exist
@@ -454,7 +454,7 @@ class GBIFFormatter:
                 f"point --input at the existing ecotag CSV."
             )
 
-        logger.info(f"Converting ecotag output to GBIF format: {input_path}")
+        logger.info(f"Converting ecotag output to long format: {input_path}")
 
         # Read CSV
         try:
@@ -503,7 +503,7 @@ class GBIFFormatter:
         missing_cols = [col for col in taxonomic_cols if col not in df.columns]
         if missing_cols:
             raise ValueError(
-                f"Ecotag CSV '{input_path}' is missing required GBIF columns after "
+                f"Ecotag CSV '{input_path}' is missing required long-format columns after "
                 f"renaming: {missing_cols}. from_ecotag maps "
                 f"family_name/genus_name/species_name/order_name to "
                 f"family/genus/species/order and auto-adds kingdom/phylum/class, so "
@@ -571,7 +571,7 @@ class GBIFFormatter:
             output_path = Path(output_path)
             output_path.parent.mkdir(parents=True, exist_ok=True)
             df_out.to_csv(output_path, index=False)
-            logger.info(f"Wrote GBIF output to {output_path}")
+            logger.info(f"Wrote long-format output to {output_path}")
 
         return df_out
 
@@ -583,7 +583,7 @@ class GBIFFormatter:
         add_taxon: bool = True,
     ) -> pd.DataFrame:
         """
-        Convert BLAST output to GBIF format.
+        Convert BLAST output to long format.
 
         BLAST taxonomy output already shares the DADA2 wide-table schema (the
         post-processor emits the same columns), so this simply delegates to
@@ -591,12 +591,12 @@ class GBIFFormatter:
 
         Args:
             input_path: Path to BLAST output CSV file
-            output_path: Optional path to output GBIF CSV file
+            output_path: Optional path to output long-format CSV file
             add_rank: Whether to add 'rank' column (default: True)
             add_taxon: Whether to add 'taxon' column (default: True)
 
         Returns:
-            DataFrame in GBIF-compatible long format
+            DataFrame in long format
 
         Raises:
             FileNotFoundError: If the input file does not exist.

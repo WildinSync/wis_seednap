@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 232" width="100%" font-family="'SFMono-Regular','SF Mono','Menlo','Consolas','Liberation Mono','DejaVu Sans Mono',monospace">
   <rect x="0.5" y="0.5" width="859" height="231" rx="12" fill="#0D1117" stroke="#30363d" stroke-width="1"/>
-  <text x="24" y="28" font-size="12.5" fill="#7d8590" letter-spacing="1">format-gbif: reshape wide to long</text>
+  <text x="24" y="28" font-size="12.5" fill="#7d8590" letter-spacing="1">format-long: reshape wide to long</text>
   <text x="40" y="58" font-size="12" font-weight="bold" fill="#7ee787">wide taxonomy table</text>
   <text x="40" y="82" text-anchor="start" font-size="12.5" font-weight="bold" fill="#3fb950"></text>
   <text x="210" y="82" text-anchor="end" font-size="12.5" font-weight="bold" fill="#3fb950">S1</text>

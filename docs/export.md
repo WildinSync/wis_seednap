@@ -1,41 +1,42 @@
-# GBIF and DarwinCore Export
+# Long-format Export and GBIF Submission
 
 <img src="../media/divider.svg" width="100%" alt="">
 
-How to turn a taxonomy table into a DarwinCore-compliant occurrence CSV for GBIF publishing.
+How to reshape a taxonomy table into long format, and how to turn that long table into a DarwinCore-compliant occurrence CSV for GBIF publishing.
 
-GBIF (the Global Biodiversity Information Facility) is the public repository the lab submits occurrence records to. DarwinCore is the standardised biodiversity data vocabulary GBIF ingests: a fixed set of column names (`eventID`, `scientificName`, `decimalLatitude`, and so on) that make records comparable across datasets. The two commands here convert one of the pipeline's taxonomy tables into that vocabulary.
+There are two separate stages:
 
-Export is a two-stage process: reshape the wide taxonomy table into long format (`format-gbif`), then merge it with sample and project metadata into a full DarwinCore occurrence table (`create-gbif`). The first stage also runs automatically as the pipeline `export` step.
+1. **Long-format export** (`export` pipeline step, or `format-long` by hand): reshape the wide taxonomy table (one column per sample) into a long table (one row per OTU/ASV x sample with reads). This is a plain reshape for analysis; it is not a GBIF submission file.
+2. **GBIF submission** (`create-gbif`, standalone command only): merge the long table with sample and project metadata into a DarwinCore occurrence table. GBIF (the Global Biodiversity Information Facility) is the public repository the lab submits occurrence records to; DarwinCore is the standardised vocabulary it ingests (`eventID`, `scientificName`, `decimalLatitude`, and so on). This stage is not a pipeline step and has no YAML key.
 
 <p align="center">
-  <img src="../media/export-flow.svg" width="100%" alt="export flow: wide taxonomy table to format-gbif to long table to create-gbif (joined with sample and project metadata on eventID) to the DarwinCore occurrence CSV">
+  <img src="../media/export-flow.svg" width="100%" alt="export flow: wide taxonomy table to format-long to long table to create-gbif (joined with sample and project metadata on eventID) to the DarwinCore occurrence CSV">
 </p>
 
 <details>
 <summary><b>Running export automatically as the pipeline <code>export</code> step</b></summary>
 
-The pipeline runs the same long-format conversion automatically when `export` is in `pipeline.steps`. It writes `<paths.output>/<marker>_<method>_gbif.csv` and honours the `export.gbif.add_rank` / `export.gbif.add_taxon` config keys (both default `true`). If a `clean` step ran before `export` (decontamination against the blank/negative-control samples) and produced a cleaned table, the export step uses that decontaminated table instead of the raw taxonomy table. The `format-gbif` and `create-gbif` commands are the manual equivalents for working from existing files. See [configuration.md](configuration.md) for the `export` block and [pipeline-steps.md](pipeline-steps.md) for the step model.
+The pipeline runs the same long-format conversion automatically when `export` is in `pipeline.steps`. It writes `<paths.output>/<marker>_<method>_long.csv` and honours the `export.long.add_rank` / `export.long.add_taxon` config keys (both default `true`). If a `clean` step ran before `export` (decontamination against the blank/negative-control samples) and produced a cleaned table, the export step uses that decontaminated table instead of the raw taxonomy table. The `format-long` command is the manual equivalent for working from existing files. See [configuration.md](configuration.md) for the `export` block and [pipeline-steps.md](pipeline-steps.md) for the step model.
 
 </details>
 
-## 🔄 Step 1: Format for GBIF (`format-gbif`)
+## 🔄 Step 1: Long format (`export` step / `format-long`)
 
-Converts the wide taxonomy table into GBIF long format. A wide taxonomy table has one row per OTU or ASV (an OTU is a cluster of similar sequences; an ASV is a single denoised sequence variant; both stand in for a taxon) and one numeric column per sample holding that sequence's read count. Long format has one row per sample-OTU observation, with a single `nb_reads` count.
+Converts the wide taxonomy table into long format. A wide taxonomy table has one row per OTU or ASV (an OTU is a cluster of similar sequences; an ASV is a single denoised sequence variant; both stand in for a taxon) and one numeric column per sample holding that sequence's read count. Long format has one row per sample-OTU observation, with a single `nb_reads` count.
 
 <p align="center">
-  <img src="../media/reshape.svg" width="100%" alt="format-gbif reshape: a wide OTU-by-sample table melted into a long table with one row per non-zero observation, eventID = sample and nb_reads = count">
+  <img src="../media/reshape.svg" width="100%" alt="format-long reshape: a wide OTU-by-sample table melted into a long table with one row per non-zero observation, eventID = sample and nb_reads = count">
 </p>
 
 ```bash
-seednap format-gbif outputs/teleo_blast.csv -f blast -o outputs/teleo_gbif.csv
+seednap format-long outputs/teleo_blast.csv -f blast -o outputs/teleo_blast_long.csv
 ```
 
 | Flag | Type | Default | Meaning |
 |---|---|---|---|
 | `INPUT_FILE` (arg) | path | required | Wide taxonomy CSV from the taxonomy step |
 | `-f` / `--format` | choice | required | Input parser: `dada2`, `ecotag`, or `blast` |
-| `-o` / `--output` | path | `<input_stem>_gbif_input.csv` | Output path |
+| `-o` / `--output` | path | `<input_stem>_long.csv` | Output path |
 
 `blast` is parsed identically to `dada2` (same wide-table schema). `ecotag` differs: it renames `*_name` columns and drops ecotag metadata columns before reshaping.
 
@@ -47,7 +48,7 @@ seednap format-gbif outputs/teleo_blast.csv -f blast -o outputs/teleo_gbif.csv
 4. Adds a `rank` column (`species`, `genus`, `family`, or `higher`) when `add_rank` is set: the finest rank that is confidently assigned. A species name containing `/` is an ambiguous tie between species and is treated as resolved only to genus.
 5. Adds a `taxon` column (the lowest available taxonomic name) when `add_taxon` is set; this becomes `scientificName` in the final DarwinCore output.
 
-On the manual `format-gbif` command, `rank` and `taxon` are always added. On the pipeline `export` step they are controlled by `export.gbif.add_rank` and `export.gbif.add_taxon` (both default `true`).
+On the manual `format-long` command, `rank` and `taxon` are always added. On the pipeline `export` step they are controlled by `export.long.add_rank` and `export.long.add_taxon` (both default `true`).
 
 ### Output columns
 
@@ -55,17 +56,17 @@ On the manual `format-gbif` command, `rank` and `taxon` are always added. On the
 
 The `is_contaminant_candidate` column is also appended when the upstream taxonomy table carried it (that is, when `taxonomy.contaminants` was set). `create-gbif` reads this column to populate `contamination_flag`.
 
-## 🌍 Step 2: DarwinCore Publishing (`create-gbif`)
+## 🌍 Step 2: GBIF / DarwinCore submission (`create-gbif`)
 
-Merges the long-format taxonomy table with sample and project metadata to produce a full DarwinCore occurrence CSV.
+Standalone command, not a pipeline step. Merges the long-format taxonomy table with sample and project metadata to produce a full DarwinCore occurrence CSV.
 
 ```bash
-seednap create-gbif taxonomy_gbif.csv sample_metadata.csv project_metadata.csv output.csv
+seednap create-gbif outputs/teleo_blast_long.csv sample_metadata.csv project_metadata.csv output.csv
 ```
 
 | Argument / flag | Type | Default | Meaning |
 |---|---|---|---|
-| `TAXONOMY_RESULTS` (arg) | path | required | Long-format output from `format-gbif` |
+| `TAXONOMY_RESULTS` (arg) | path | required | Long-format table from the `export` step or `format-long` |
 | `SAMPLE_METADATA` (arg) | path | required | Per-sample metadata CSV |
 | `PROJECT_METADATA` (arg) | path | required | Single-row project metadata CSV |
 | `OUTPUT` (arg) | path | required | Destination DarwinCore CSV |

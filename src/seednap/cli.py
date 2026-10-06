@@ -4,7 +4,7 @@ This is the single Click entrypoint a user types at the shell. It exposes the wh
 pipeline as a set of subcommands: the end-to-end ``run-pipeline`` plus per-step
 commands (``trim``, ``demultiplex``, ``dada2``, ``swarm``, ``assign-taxonomy``),
 config helpers (``init``, ``validate``, ``explain``), and post-processing commands
-(``format-gbif``, ``create-gbif``, ``report``, ``manifest``, ``clean``, ``monitor``).
+(``format-long``, ``create-gbif``, ``report``, ``manifest``, ``clean``, ``monitor``).
 
 In pipeline terms this module is the thin user-facing shell. Each command parses
 options, sets up logging, then delegates the actual biology (primer trimming, ASV
@@ -39,7 +39,7 @@ logger = get_logger(__name__)
 # Python traceback only when the user asked for verbose output; otherwise the actionable
 # message (often the external tool's own stderr) is what they see, not a buried stack trace.
 # Newer commands call _maybe_traceback() (which reads this global); older command handlers
-# (format-gbif, create-gbif, blast, manifest, clean) inline the same traceback dump but read
+# (format-long, create-gbif, blast, manifest, clean) inline the same traceback dump but read
 # ctx.obj["verbose"] instead. Both carry the same flag, set together in main().
 _VERBOSE = False
 
@@ -480,23 +480,21 @@ def init(template: str, marker: str, output: Optional[Path], force: bool) -> Non
     "--output",
     "-o",
     type=click.Path(path_type=Path),
-    help="Output file path (default: input_file with _gbif_input suffix)",
+    help="Output file path (default: input_file with _long suffix)",
 )
 @click.pass_context
-def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: Optional[Path]) -> None:
+def format_long(ctx: click.Context, input_file: Path, format_type: str, output: Optional[Path]) -> None:
     """
-    Convert taxonomic assignment results to GBIF format.
+    Convert a wide taxonomic assignment table to long format.
 
     INPUT_FILE: Path to the taxonomic assignment CSV file.
 
-    Transforms the wide-format table to long-format GBIF-compatible output.
-    Adds 'rank' and 'taxon' columns, filters zero counts, and renames columns
-    to match GBIF standards (eventID instead of filter_code).
+    Transforms the wide table (one column per sample) to a long table with one
+    row per feature x sample, keeping only non-zero read counts. Adds 'rank' and
+    'taxon' columns; the sample name goes in 'eventID'.
 
-    GBIF is the Global Biodiversity Information Facility, the public repository the lab's
-    occurrence records are submitted to. This is the first of the two export steps: it
-    reshapes one method's taxonomy+counts table into the long, per-observation form GBIF
-    expects (one row per taxon per sample), keeping only non-zero read counts.
+    This is the standalone equivalent of the pipeline's 'export' step. Its output is
+    also the input of ``create-gbif``, which builds the DarwinCore/GBIF submission file.
 
     Args:
         ctx: The Click context (carries the global verbose flag, read for traceback depth).
@@ -505,8 +503,8 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
         format_type: Which producing method wrote ``input_file``: one of ``"dada2"``,
             ``"ecotag"``, or ``"blast"``. Selects the matching reshape
             logic and must match the method that generated the file.
-        output: Path for the long-format GBIF CSV. If ``None``, defaults to the input
-            file's directory with a ``_gbif_input`` suffix.
+        output: Path for the long-format CSV. If ``None``, defaults to the input
+            file's directory with a ``_long`` suffix.
 
     Returns:
         None. Writes the reshaped CSV and prints record/eventID counts and a rank
@@ -516,23 +514,23 @@ def format_gbif(ctx: click.Context, input_file: Path, format_type: str, output: 
         SystemExit: Code 1 if the input file is not found, if its columns do not match the
             chosen ``format_type``, or on any other conversion failure.
     """
-    from seednap.steps.formatting.gbif_formatter import GBIFFormatter
+    from seednap.steps.formatting.long_formatter import LongFormatter
 
-    _add_command_log_file(output.parent if output is not None else input_file.parent, "format_gbif")
+    _add_command_log_file(output.parent if output is not None else input_file.parent, "format_long")
 
-    console.print(f"\n[bold]Converting to GBIF format:[/bold] {input_file}")
+    console.print(f"\n[bold]Converting to long format:[/bold] {input_file}")
     console.print(f"Input format: {format_type}\n")
 
     try:
         # Determine output path if not provided
         if output is None:
-            output = input_file.parent / f"{input_file.stem}_gbif_input.csv"
+            output = input_file.parent / f"{input_file.stem}_long.csv"
 
-        formatter = GBIFFormatter()
+        formatter = LongFormatter()
         df_out = formatter.from_method(format_type, input_file, output)
 
         # Print success message with stats
-        print_success("Converted to GBIF format!")
+        print_success("Converted to long format!")
         console.print(f"\nOutput file: [cyan]{output}[/cyan]")
         console.print(f"Total records: [green]{len(df_out)}[/green]")
         console.print(f"Unique eventIDs: [green]{df_out['eventID'].nunique()}[/green]")
@@ -599,7 +597,7 @@ def create_gbif(
     required columns populated.
 
     \b
-    TAXONOMY_RESULTS: Taxonomy CSV from format-gbif step (long format with
+    TAXONOMY_RESULTS: Long-format taxonomy CSV from format-long or the export step (with
                       class, order, family, genus, species, taxon, rank,
                       sequence, nb_reads, eventID columns).
     SAMPLE_METADATA:  Per-sample metadata CSV (eventID, lat/lon, eventDate,
@@ -621,7 +619,7 @@ def create_gbif(
 
     Args:
         ctx: The Click context (carries the global verbose flag, read for traceback depth).
-        taxonomy_results: Long-format taxonomy CSV from the ``format-gbif`` step (columns
+        taxonomy_results: Long-format taxonomy CSV from ``format-long`` or the export step (columns
             class, order, family, genus, species, taxon, rank, sequence, nb_reads,
             eventID). Must exist.
         sample_metadata: Per-sample (field) metadata CSV keyed by eventID, with lat/lon,
@@ -1868,7 +1866,7 @@ def run_pipeline(
     2. Primer trimming with cutadapt
     3. DADA2 processing (filtering, denoising, merging, chimera removal)
     4. Taxonomic assignment (DADA2/BLAST/ecotag)
-    5. Export to GBIF format
+    5. Export to long format
 
     CONFIG: Path to pipeline configuration YAML file
 

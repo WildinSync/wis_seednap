@@ -66,7 +66,7 @@ Your YAML is merged over the model defaults: any field with a default may be omi
 | `<output>/04_report/<marker>/` | `report` (override with `report.output_dir`) |
 | `<output>/<marker>_<method>.csv` | merged taxonomy + abundance table |
 | `<output>/<marker>_<method>_cleaned.csv` | `clean` (the cleaned/annotated abundance table) |
-| `<output>/<marker>_<method>_gbif.csv` | `export` (GBIF/DarwinCore table) |
+| `<output>/<marker>_<method>_long.csv` | `export` (long-format table) |
 
 For the merged table, `<method>` is the `taxonomy.method` value, except the DADA2 RDP classifier writes `<marker>_dada2RDP.csv` (the others are `<marker>_blast.csv`, `<marker>_ecotag.csv`).
 
@@ -384,23 +384,23 @@ databases:
 
 ## 📊 `export`
 
-Runs only if `export` is listed in `pipeline.steps` (after `taxonomy`). Writes `<output>/<marker>_<method>_gbif.csv`: a long-format occurrence table in the DarwinCore vocabulary (the standard column terms GBIF, the Global Biodiversity Information Facility, uses for biodiversity records), one row per detected taxon per sample.
+Runs only if `export` is listed in `pipeline.steps` (after `taxonomy`). Writes `<output>/<marker>_<method>_long.csv`: the wide taxonomy table reshaped to long format, one row per detected feature per sample (`eventID` = sample, `nb_reads` = count). It is not a GBIF submission file; build that from this table with the standalone `create-gbif` command.
 
 ```yaml
 export:
-  gbif:                            # the `export` step (long-format table)
+  long:                            # the `export` step (long-format table)
     add_rank: true                 # add taxonomic rank column
     add_taxon: true                # add lowest taxon column
 ```
 
 | Key | Type | Default | Meaning |
 | --- | --- | --- | --- |
-| `gbif.add_rank` | bool | `true` | Add a taxonomic rank column |
-| `gbif.add_taxon` | bool | `true` | Add a lowest-available-taxon column |
+| `long.add_rank` | bool | `true` | Add a taxonomic rank column |
+| `long.add_taxon` | bool | `true` | Add a lowest-available-taxon column |
 
 ASV summary stats are collected by the DADA2 step via `dada2.collect_metrics`. There is no separate `metrics` section.
 
-See [gbif-export.md](gbif-export.md) for the full export guide, including building the DarwinCore occurrence file with `create-gbif`.
+See [export.md](export.md) for the full export guide, including building the DarwinCore occurrence file with `create-gbif`.
 
 ## 📝 `report`
 
@@ -505,6 +505,6 @@ Example configs in [config/markers/](../config/markers/), generated with `seedna
 | [pipeline-steps.md](pipeline-steps.md) | What each stage does |
 | [taxonomy-methods.md](taxonomy-methods.md) | LCA algorithms and threshold rationale |
 | [reporting.md](reporting.md) | The report step and HTML output |
-| [gbif-export.md](gbif-export.md) | GBIF/DarwinCore export |
+| [export.md](export.md) | Long-format export and GBIF/DarwinCore submission |
 </content>
 </invoke>

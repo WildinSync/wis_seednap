@@ -42,7 +42,7 @@ from seednap.config.models.operational import (
 )
 from seednap.config.models.outputs import (
     ExportConfig,
-    GbifExportConfig,
+    LongExportConfig,
     ReportConfig,
 )
 from seednap.config.models.pipeline import PipelineConfig
@@ -80,7 +80,7 @@ __all__ = [
     "BlastDatabaseConfig",
     "EcotagDatabaseConfig",
     "TaxonomicAssignmentConfig",
-    "GbifExportConfig",
+    "LongExportConfig",
     "ExportConfig",
     "ReportConfig",
     "CleaningConfig",

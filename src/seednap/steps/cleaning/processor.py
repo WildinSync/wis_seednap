@@ -44,7 +44,7 @@ CONTROL_FLAG_COL = "in_negative_control"
 # or BLAST table interleaves these with the numeric sample columns; some (pident,
 # the boolean is_contaminant_candidate) are numeric and would otherwise be mistaken
 # for samples. This mirrors the sample-detection set used by
-# gbif_formatter._transform_to_long_format and utils.taxonomy (a sample column is
+# long_formatter._transform_to_long_format and utils.taxonomy (a sample column is
 # numeric and not in this known non-sample set). The rank list comes from the
 # single source of truth (TAXONOMIC_RANKS) so the schema cannot drift.
 _NON_SAMPLE_COLUMNS = frozenset(TAXONOMIC_RANKS) | {
@@ -168,7 +168,7 @@ class CleaningProcessor:
             # per-OTU annotation columns. A taxonomy/BLAST table interleaves numeric
             # non-sample columns (pident, the boolean is_contaminant_candidate) with
             # the sample columns; excluding _NON_SAMPLE_COLUMNS keeps them out of the
-            # sample set (mirrors gbif_formatter / utils.taxonomy sample detection),
+            # sample set (mirrors long_formatter / utils.taxonomy sample detection),
             # so standalone `clean` on a taxonomy table no longer corrupts results.
             sample_cols = [
                 c for c in df.columns

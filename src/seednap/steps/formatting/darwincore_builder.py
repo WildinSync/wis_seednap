@@ -1,7 +1,8 @@
 """Build DarwinCore-compliant GBIF occurrence CSVs from eDNA pipeline outputs.
 
 Final step of the formatting stage, run by the ``create-gbif`` command. It joins
-the long-format taxonomy table from ``format-gbif`` with the field sample
+the long-format taxonomy table (``<marker>_<method>_long.csv`` from the
+``export`` step or ``format-long``) with the field sample
 metadata (date, coordinates, environment medium) and the project metadata
 (marker, recorder, references) into a single table that follows the GBIF
 DarwinCore eDNA-Occurrence schema, ready for submission to GBIF. Along the way it
@@ -148,7 +149,7 @@ class DarwinCoreBuilder:
         self._validate_sample_metadata(sample_meta, self.sample_metadata_path)
         self._validate_project_metadata(project_meta, self.project_metadata_path)
 
-        # The taxonomy results table (format-gbif output) must carry the long-format columns we
+        # The taxonomy results table (export / format-long output) must carry the long-format columns we
         # read directly below; validate up-front so a missing one is a clear error rather than a
         # raw pandas KeyError mid-build.
         results_required = ("eventID", "taxon", "nb_reads")
@@ -157,8 +158,8 @@ class DarwinCoreBuilder:
             raise ValueError(
                 f"Taxonomy results table (TAXONOMY_RESULTS) is missing required column(s) "
                 f"{missing_results}. create-gbif expects the long-format output of "
-                f"`seednap format-gbif` (eventID, taxon, nb_reads, plus class/order/family/"
-                f"genus/species). Run format-gbif first and pass its output here."
+                f"`seednap format-long` or the export step (eventID, taxon, nb_reads, plus class/order/family/"
+                f"genus/species). Run format-long first and pass its output here."
             )
 
         # PCR replicate summarisation
@@ -276,7 +277,7 @@ class DarwinCoreBuilder:
             raise ValueError(
                 f"Taxonomy results CSV '{self.taxonomy_results_path}' has no 'sequence' "
                 f"column, which is required to fill the DarwinCore 'DNA_sequence' field. "
-                f"Provide the long-format taxonomy table from the 'format-gbif' step, which "
+                f"Provide the long-format taxonomy table from the export step or 'format-long', which "
                 f"always emits a lowercase 'sequence' column (it renames a capital-S "
                 f"'Sequence' if needed); a table that lacks it cannot be turned into a GBIF "
                 f"occurrence record."

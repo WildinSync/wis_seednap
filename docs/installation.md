@@ -100,7 +100,7 @@ Defined in `pyproject.toml`:
 | `matplotlib` | >= 3.5 | Charts for the optional HTML run report |
 | `python-dotenv` | >= 1.0 | Loads `.env` (NCBI Entrez key for GBIF enrichment) |
 
-The NCBI Entrez API key in `.env` is only needed for taxonomy enrichment in the `create-gbif` command: copy `.env.example` to `.env` and fill in `NCBI_API_KEY` before running that command. No key is required for the core pipeline or for BLAST assignment. See [gbif-export.md](gbif-export.md).
+The NCBI Entrez API key in `.env` is only needed for taxonomy enrichment in the `create-gbif` command: copy `.env.example` to `.env` and fill in `NCBI_API_KEY` before running that command. No key is required for the core pipeline or for BLAST assignment. See [export.md](export.md).
 
 ### External tools
 
@@ -165,4 +165,4 @@ Add new tests under `tests/unit/` or `tests/integration/` when you change load-b
 | [cli-reference.md](cli-reference.md) | All commands and options |
 | [configuration.md](configuration.md) | YAML config reference |
 | [ecotag-setup.md](ecotag-setup.md) | Installing OBITools for the `ecotag` method |
-| [gbif-export.md](gbif-export.md) | `create-gbif` and the NCBI Entrez key |
+| [export.md](export.md) | `create-gbif` and the NCBI Entrez key |

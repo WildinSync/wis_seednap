@@ -18,7 +18,7 @@ from seednap.steps.formatting.darwincore_builder import DarwinCoreBuilder
 
 
 def _write_taxonomy(path: Path, with_contaminant: bool = False) -> None:
-    """Synthetic post-format-gbif taxonomy CSV (long format, one row per OTU/sample)."""
+    """Synthetic post-format-long taxonomy CSV (long format, one row per OTU/sample)."""
     rows = [
         {
             "kingdom": "Metazoa", "phylum": "Chordata", "class": "Actinopteri",

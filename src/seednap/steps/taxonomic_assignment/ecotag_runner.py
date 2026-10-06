@@ -567,7 +567,7 @@ class EcotagRunner:
         # kingdom/phylum/class columns, and its order/family/genus/species
         # columns hold numeric NCBI taxids -- the scientific names live in
         # order_name/family_name/genus_name/species_name. Map the obitab schema
-        # to the shared schema first (mirroring gbif_formatter.from_ecotag);
+        # to the shared schema first (mirroring long_formatter.from_ecotag);
         # otherwise the post-processor would see no usable rank columns and
         # silently mark every ecotag OTU 'Unassigned'.
         taxonomy_tsv = Path(taxonomy_tsv)
@@ -622,8 +622,8 @@ class EcotagRunner:
             )
 
         # Add coarse-rank placeholders absent from obitab output, mirroring
-        # gbif_formatter.from_ecotag. They are kept in the output schema (the
-        # GBIF formatter's from_blast path requires kingdom/phylum/class/order/
+        # long_formatter.from_ecotag. They are kept in the output schema (the
+        # long formatter's from_blast path requires kingdom/phylum/class/order/
         # family/genus/species to all be present) but are excluded from the
         # cascade below so an absent coarse rank does NOT force the resolved
         # finer ranks to Unassigned. DarwinCore enriches kingdom/phylum/class

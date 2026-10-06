@@ -54,6 +54,14 @@ def test_humanizer_removed_key_gives_migration_hint(tmp_path):
     assert "removed" in msg and "pipeline.steps" in msg
 
 
+def test_humanizer_export_gbif_points_to_long(tmp_path):
+    d = _base(tmp_path)
+    d["export"] = {"gbif": {"add_rank": True}}
+    msg = _humanize(d)
+    assert "export.gbif" in msg
+    assert "export.long" in msg
+
+
 def test_humanizer_bad_literal_lists_allowed(tmp_path):
     d = _base(tmp_path)
     d["taxonomy"]["method"] = "blastn"

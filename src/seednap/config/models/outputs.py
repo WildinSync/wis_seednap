@@ -1,4 +1,4 @@
-"""Outputs config: GBIF/DarwinCore export, metrics, run reporting."""
+"""Outputs config: long-format export, metrics, run reporting."""
 
 from pathlib import Path
 from typing import Optional
@@ -9,15 +9,15 @@ from seednap.config.models.base import StrictModel
 
 
 # ===========================================================================
-# OUTPUTS: GBIF/DarwinCore export, metrics, run reporting
+# OUTPUTS: long-format export, metrics, run reporting
 # ===========================================================================
 
 
-class GbifExportConfig(StrictModel):
-    """GBIF / DarwinCore export options (the 'export' step runs iff listed in pipeline.steps).
+class LongExportConfig(StrictModel):
+    """Long-format export options (the 'export' step runs iff listed in pipeline.steps).
 
-    GBIF (the Global Biodiversity Information Facility) is where these occurrence datasets are
-    published; export reshapes the taxonomy-annotated table into a DarwinCore-aligned form.
+    Export reshapes the wide taxonomy-annotated table (one column per sample) into a long table
+    with one row per feature x sample with reads.
 
     Attributes:
         add_rank: Add a column naming the lowest taxonomic rank that was resolved per feature.
@@ -32,11 +32,11 @@ class ExportConfig(StrictModel):
     """Export step configuration.
 
     Attributes:
-        gbif: GBIF / DarwinCore export options.
+        long: Long-format export options.
     """
 
-    gbif: GbifExportConfig = Field(
-        default_factory=GbifExportConfig, description="GBIF export settings"
+    long: LongExportConfig = Field(
+        default_factory=LongExportConfig, description="Long-format export settings"
     )
 
 

@@ -43,9 +43,9 @@
   <text x="84" y="362" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">blast</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> {fasta: /path/to/reference.fasta}</tspan></text>
   <text x="30" y="383" text-anchor="end" font-size="11" fill="#484f58">16</text>
   <text x="52" y="383" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="bold">export</tspan><tspan fill="#8b949e">:</tspan></text>
-  <text x="300" y="383" font-size="12" fill="#6e7681" xml:space="preserve"># GBIF long-format table</text>
+  <text x="300" y="383" font-size="12" fill="#6e7681" xml:space="preserve"># long-format table</text>
   <text x="30" y="404" text-anchor="end" font-size="11" fill="#484f58">17</text>
-  <text x="68" y="404" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">gbif</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> {add_rank: true, add_taxon: true}</tspan></text>
+  <text x="68" y="404" font-size="13" xml:space="preserve"><tspan fill="#79c0ff">long</tspan><tspan fill="#8b949e">:</tspan><tspan fill="#e3b341"> {add_rank: true, add_taxon: true}</tspan></text>
   <text x="30" y="425" text-anchor="end" font-size="11" fill="#484f58">18</text>
   <text x="52" y="425" font-size="13" xml:space="preserve"><tspan fill="#7ee787" font-weight="bold">report</tspan><tspan fill="#8b949e">:</tspan></text>
   <text x="300" y="425" font-size="12" fill="#6e7681" xml:space="preserve"># read tracking and the HTML report</text>

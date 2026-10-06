@@ -432,9 +432,9 @@ taxonomy:
 cleaning:
   mode: "flag"                               # flag (annotate only) | subtract (remove control reads)
 
-# GBIF table: used if "export" is in pipeline.steps
+# Long-format table (one row per feature x sample): used if "export" is in pipeline.steps
 export:
-  gbif:
+  long:
     add_rank: true
     add_taxon: true
 

@@ -20,7 +20,7 @@ The stages, in pipeline order, are:
 4. Taxonomic assignment: label each ASV/OTU with a species/genus/family name
    by comparing it to a reference database (BLAST, DADA2 RDP, ecotag).
 5. Cleaning (optional): subtract contamination seen in negative controls.
-6. Export: reshape the table into the GBIF / Darwin Core format for submission.
+6. Export: reshape the wide table into a long table (one row per feature x sample).
 7. Reporting: read-tracking table and a self-contained HTML run report.
 
 This file sits at ``src/seednap/pipeline/orchestrator.py`` and is driven by the
@@ -40,7 +40,7 @@ from seednap.config.models import PipelineConfig
 from seednap.config.models.operational import VALID_STEPS
 from seednap.pipeline.state import PipelineState
 from seednap.steps.dada2.processor import Dada2Processor
-from seednap.steps.formatting.gbif_formatter import GBIFFormatter
+from seednap.steps.formatting.long_formatter import LongFormatter
 from seednap.steps.swarm.processor import SwarmProcessor
 from seednap.steps.taxonomic_assignment.assigner import TaxonomicAssigner
 from seednap.steps.trimming.trimming_pipeline import LigationTrimmer, StandardTrimmer
@@ -1579,8 +1579,8 @@ class PipelineOrchestrator:
         On --resume a clean step that was SKIPPED in run 1 (transient error) can
         re-run and now COMPLETE, writing a fresh cleaned table. But if export was
         already COMPLETED against the uncleaned table, _should_run_step('export')
-        returns False and export is not re-run, so the GBIF CSV silently stays
-        stale. Surface this per the no-silent-fallbacks policy; the user must
+        returns False and export is not re-run, so the long-format CSV silently
+        stays stale. Surface this per the no-silent-fallbacks policy; the user must
         re-run export to pick up the cleaned table.
 
         Args:
@@ -1602,34 +1602,34 @@ class PipelineOrchestrator:
             and clean_step.completed_at > export_step.completed_at
         ):
             logger.warning(
-                "[WARN] export: expected=GBIF CSV reflecting the decontaminated "
+                "[WARN] export: expected=long-format CSV reflecting the decontaminated "
                 f"table (clean completed {clean_step.completed_at.isoformat()}), "
                 f"got=stale export completed earlier ({export_step.completed_at.isoformat()}) "
                 "against the uncleaned table, fallback=existing export left as-is. "
                 "Re-run the 'export' step (e.g. delete the 'export' entry from the "
-                "state JSON, or use the standalone export command) so the GBIF CSV "
+                "state JSON, or use the standalone export command) so the long-format CSV "
                 "reflects the cleaned table."
             )
 
     def run_export(self) -> Dict[str, Path]:
         """
-        Run the export step: reshape the final table into GBIF / Darwin Core format.
+        Run the export step: reshape the final wide table into long format.
 
-        GBIF (the Global Biodiversity Information Facility) and the Darwin Core
-        standard define how occurrence records must be structured for submission and
-        sharing. This step reads the merged taxonomy+abundance table from the
-        taxonomy step (preferring the decontaminated table if the clean step produced
-        one) and writes a GBIF-formatted CSV, optionally adding rank/taxon columns.
+        Reads the merged taxonomy+abundance table from the taxonomy step (preferring
+        the decontaminated table if the clean step produced one) and writes a long
+        CSV with one row per feature x sample with reads, optionally adding
+        rank/taxon columns. The DarwinCore/GBIF submission file is built from this
+        table separately, with the standalone ``create-gbif`` command.
 
         Returns:
-            Dictionary with ``gbif_csv`` (path to the GBIF-formatted output CSV). On
+            Dictionary with ``long_csv`` (path to the long-format output CSV). On
             skip, the previously recorded outputs (with a staleness warning if a
             later clean step has since produced a cleaned table).
 
         Raises:
             ValueError: If the taxonomy step did not complete, is missing from the
                 state, or recorded no ``final_table`` to format.
-            Exception: Re-raises any failure from the GBIF formatter (recorded in the
+            Exception: Re-raises any failure from the long formatter (recorded in the
                 state before propagation).
         """
         step_name = "export"
@@ -1637,7 +1637,7 @@ class PipelineOrchestrator:
         if not self._should_run_step(step_name):
             step = self.state.get_step(step_name)
             # Export-staleness guard on --resume after a clean retry: if the clean
-            # step completed AFTER this already-completed export, the GBIF CSV still
+            # step completed AFTER this already-completed export, the long-format CSV still
             # reflects the pre-clean (uncleaned) table and is silently stale.
             self._warn_if_export_predates_clean(step)
             return step.outputs if step else {}
@@ -1647,12 +1647,12 @@ class PipelineOrchestrator:
         self._save_state()
 
         try:
-            logger.info("Running export to GBIF format")
+            logger.info("Running export to long format")
 
             # Get taxonomy outputs
             if not self.state.is_step_completed("taxonomy"):
                 raise ValueError(
-                    "Cannot run export: GBIF formatting needs the assigned-taxonomy "
+                    "Cannot run export: long-format export needs the assigned-taxonomy "
                     "table, but the 'taxonomy' step did not complete in this run (it "
                     "failed earlier and the run continued past it under "
                     "--continue-on-error). Fix the taxonomy failure first: read its "
@@ -1673,7 +1673,7 @@ class PipelineOrchestrator:
                 raise ValueError(
                     "Export cannot start: the completed taxonomy step recorded no "
                     "'final_table' output, so there is no merged taxonomy+abundance CSV "
-                    "to format for GBIF. In a normal single-version run every method "
+                    "to reshape to long format. In a normal single-version run every method "
                     "(blast/dada2/ecotag) writes final_table, so the usual "
                     "cause is resuming export against a state JSON "
                     "(<paths.output>/.<marker>_state.json) written by an older seednap "
@@ -1694,22 +1694,22 @@ class PipelineOrchestrator:
                     logger.info(f"Export using cleaned taxonomy table: {cleaned}")
                     taxonomy_csv = cleaned
 
-            # Format for GBIF
-            formatter = GBIFFormatter()
+            # Reshape to long format
+            formatter = LongFormatter()
             output_path = (
                 self.config.paths.output
-                / f"{self.config.marker.name}_{self.config.taxonomy.method}_gbif.csv"
+                / f"{self.config.marker.name}_{self.config.taxonomy.method}_long.csv"
             )
 
-            gbif_table = formatter.from_method(
+            long_table = formatter.from_method(
                 method=self.config.taxonomy.method,
                 input_path=taxonomy_csv,
-                add_rank=self.config.export.gbif.add_rank,
-                add_taxon=self.config.export.gbif.add_taxon,
+                add_rank=self.config.export.long.add_rank,
+                add_taxon=self.config.export.long.add_taxon,
             )
 
-            gbif_table.to_csv(output_path, index=False)
-            outputs = {"gbif_csv": output_path}
+            long_table.to_csv(output_path, index=False)
+            outputs = {"long_csv": output_path}
 
             self.state.complete_step(step_name, outputs)
             self._save_state()

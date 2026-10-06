@@ -11,7 +11,7 @@ A few terms recur below. An **ASV** (amplicon sequence variant) is an exact deno
 The full command surface, grouped by purpose:
 
 <p align="center">
-  <img src="../media/cli.svg" width="100%" alt="seednap commands grouped by purpose: run, individual stages, GBIF export, prepare data, inspect a run">
+  <img src="../media/cli.svg" width="100%" alt="seednap commands grouped by purpose: run, individual stages, export, prepare data, inspect a run">
 </p>
 
 How a command reads, global options before the command, the argument and `--options` after:
@@ -28,7 +28,7 @@ How a command reads, global options before the command, the argument and `--opti
   <img src="../media/output-tree.svg" width="100%" alt="run-pipeline output tree: per-step folders (01_trim, 02_swarm/02_dada2, 03_taxo, 04_report) and the final tables under paths.output">
 </p>
 
-`<method>` is the `taxonomy.method` token, except the DADA2 taxonomy table uses `dada2RDP` (so `<marker>_dada2RDP.csv`; the GBIF and cleaned files still use the plain `dada2` token). The standalone commands write where you point `-o`/`--output`; the example paths below assume the default tree.
+`<method>` is the `taxonomy.method` token, except the DADA2 taxonomy table uses `dada2RDP` (so `<marker>_dada2RDP.csv`; the long-format and cleaned files still use the plain `dada2` token). The standalone commands write where you point `-o`/`--output`; the example paths below assume the default tree.
 
 Every `run-pipeline` run is reproducible from its own outputs. The effective merged config (your YAML plus all defaults that were filled in) is snapshotted to `<output>/.<marker>_config.snapshot.yaml`, and the running SeeDNAP version is stamped into the state JSON. On `--resume`, a version mismatch between the recorded and running version emits a `[WARN]` rather than silently mixing outputs from two versions.
 
@@ -256,21 +256,21 @@ Unlike the standalone `blast` command, the `assign-taxonomy` BLAST path does NOT
 
 When you pass `--config`, the config's `taxonomy.method` must equal the positional METHOD argument. Asking for one method with a config written for another is rejected with an error rather than silently applying the wrong parameter set.
 
-## 📊 `format-gbif`
+## 📊 `format-long`
 
-Convert taxonomy results to GBIF long format.
+Convert a wide taxonomy table to long format (one row per feature x sample with reads). Standalone equivalent of the `export` step.
 
 ```
-seednap format-gbif INPUT_FILE [OPTIONS]
+seednap format-long INPUT_FILE [OPTIONS]
 ```
 
 | Option | Required | Description |
 |---|---|---|
 | `-f, --format {dada2\|ecotag\|blast}` | Yes | Input format type |
-| `-o, --output PATH` | No | Output path (default: `<input>_gbif_input.csv`) |
+| `-o, --output PATH` | No | Output path (default: `<input>_long.csv`) |
 
 ```bash
-seednap format-gbif outputs/teleo_blast.csv -f blast -o outputs/teleo_gbif.csv
+seednap format-long outputs/teleo_blast.csv -f blast -o outputs/teleo_blast_long.csv
 ```
 
 ## 🌍 `create-gbif`
@@ -287,7 +287,7 @@ seednap create-gbif TAXONOMY_RESULTS SAMPLE_METADATA PROJECT_METADATA OUTPUT [OP
 | `--skip-enrichment` | off | Skip NCBI/WORMS taxonomy enrichment (kingdom/phylum lookup) |
 
 ```bash
-seednap create-gbif outputs/teleo_gbif.csv metadata/samples.csv metadata/project.csv outputs/teleo_darwincore.csv
+seednap create-gbif outputs/teleo_blast_long.csv metadata/samples.csv metadata/project.csv outputs/teleo_darwincore.csv
 ```
 
 Sample metadata is joined onto the occurrences by `eventID`, on a normalized key so that a taxonomy table whose eventIDs were rewritten by R's `make.names()` (dots for dashes) still matches the canonical dashed eventIDs in the metadata; the output carries the canonical form. If some eventIDs do not match, a `[WARN]` names them and they get blank location/date fields. If ZERO eventIDs match, the build raises rather than emit a file with every coordinate and date blank.
@@ -295,7 +295,7 @@ Sample metadata is joined onto the occurrences by `eventID`, on a normalized key
 > [!WARNING]
 > Enrichment needs `NCBI_API_KEY` in `.env` (see `.env.example`). Without a key, NCBI throttles the step heavily; pass `--skip-enrichment` to skip it entirely.
 
-See [gbif-export.md](gbif-export.md) for the metadata column requirements.
+See [export.md](export.md) for the metadata column requirements.
 
 ## 🔀 `demultiplex`
 
@@ -450,7 +450,7 @@ seednap version
 | [configuration.md](configuration.md) | Every config key with type, default, and meaning |
 | [pipeline-steps.md](pipeline-steps.md) | Per-stage behavior and algorithms |
 | [taxonomy-methods.md](taxonomy-methods.md) | BLAST/DADA2/ecotag details |
-| [gbif-export.md](gbif-export.md) | DarwinCore export and metadata columns |
+| [export.md](export.md) | Long-format export, DarwinCore submission and metadata columns |
 | [reporting.md](reporting.md) | Read tracking and the HTML run report |
 </content>
 </invoke>

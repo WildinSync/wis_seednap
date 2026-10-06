@@ -10,7 +10,7 @@ The input to this stage is one representative DNA sequence per detected variant:
 
 SeeDNAP supports four taxonomic assignment methods, selected via the `taxonomy.method` field in the YAML config. The sections below cover each method's algorithm, reference database format, and configuration keys. For per-key config tables across the whole pipeline see [configuration.md](configuration.md).
 
-The taxonomy stage runs only if `taxonomy` appears in `pipeline.steps` (a stage runs iff listed). Setting `taxonomy.method` alone does not trigger it. When it runs, it writes the final merged taxonomy+abundance table to `<paths.output>/<marker>_<method>.csv` and, if `export` is also listed, the GBIF table to `<paths.output>/<marker>_<method>_gbif.csv`.
+The taxonomy stage runs only if `taxonomy` appears in `pipeline.steps` (a stage runs iff listed). Setting `taxonomy.method` alone does not trigger it. When it runs, it writes the final merged taxonomy+abundance table to `<paths.output>/<marker>_<method>.csv` and, if `export` is also listed, the long-format table to `<paths.output>/<marker>_<method>_long.csv`.
 
 All three methods produce the same output schema: identical column names, identical null/cascade semantics, and an `is_contaminant_candidate` column in the same position. Downstream tooling never branches on the method.
 
@@ -122,7 +122,7 @@ taxonomy:
 
 Taxonomy is **left-joined** onto the OTU/ASV abundance table so that OTUs without any BLAST hit surface as `Unassigned` rows rather than being silently dropped.
 
-If `taxonomy.contaminants` is set, every row whose `species` matches one of the listed names gets `is_contaminant_candidate=True`. Rows are **never** deleted; the flag propagates through the GBIF formatter into the DarwinCore output as `contamination_flag` for downstream review. (DarwinCore is the GBIF biodiversity-record standard SeeDNAP exports to; see the export docs.) The default is an empty list, so omitting `contaminants` flags nothing.
+If `taxonomy.contaminants` is set, every row whose `species` matches one of the listed names gets `is_contaminant_candidate=True`. Rows are **never** deleted; the flag propagates through the long-format export into the DarwinCore output as `contamination_flag` for downstream review. (DarwinCore is the GBIF biodiversity-record standard SeeDNAP exports to; see the export docs.) The default is an empty list, so omitting `contaminants` flags nothing.
 
 This is name-based flagging of usual-suspect taxa (human, livestock, pets; see Whitmore et al. 2023), not blank/negative-control decontamination. Removing OTUs that also appear in extraction or PCR blanks (laboratory no-template controls run to catch reagent and cross-sample contamination) is a separate `clean` pipeline step, documented elsewhere.
 

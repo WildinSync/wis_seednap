@@ -54,9 +54,9 @@ def test_canonical_rank_list_is_the_seven_ranks() -> None:
 
 
 def test_every_module_uses_the_canonical_rank_list() -> None:
-    """blast_runner, gbif_formatter, and html_report all resolve to the same ranks."""
+    """blast_runner, long_formatter, and html_report all resolve to the same ranks."""
     from seednap.steps.report import html_report
-    from seednap.steps.formatting.gbif_formatter import GBIFFormatter
+    from seednap.steps.formatting.long_formatter import LongFormatter
     from seednap.steps.taxonomic_assignment.blast_runner import (
         BlastLCAResolver,
         BlastOutputFormatter,
@@ -67,7 +67,7 @@ def test_every_module_uses_the_canonical_rank_list() -> None:
     assert BlastOutputFormatter.TAXONOMIC_RANKS == canonical
     assert BlastLCAResolver.TAXONOMIC_RANKS == canonical
     assert CollapsedTaxonomyLCAResolver.TAXONOMIC_RANKS == canonical
-    assert GBIFFormatter().taxonomic_ranks == canonical
+    assert LongFormatter().taxonomic_ranks == canonical
     assert html_report._RANKS == canonical
 
 

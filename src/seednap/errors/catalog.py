@@ -22,8 +22,9 @@ REMOVED_KEYS: Dict[str, str] = {
     "metrics.plot_format": "removed; the HTML report figures are produced by the `report` step.",
     "cleaning.enabled": "removed in the steps-model migration; cleaning runs only if `clean` is "
     "listed in `pipeline.steps`. Remove this key and add/remove `clean` from steps.",
-    "export.gbif.enabled": "removed in the steps-model migration; GBIF export runs only if "
-    "`export` is listed in `pipeline.steps`. Remove this key and add/remove `export` from steps.",
+    "export.gbif": "renamed to `export.long` (the table is a plain long-format reshape, not a "
+    "GBIF submission file); `add_rank`/`add_taxon` are unchanged. An old `export.gbif.enabled` "
+    "key is gone: export runs only if `export` is listed in `pipeline.steps`.",
     "demultiplex.enabled": "removed in the steps-model migration; demultiplexing runs only if "
     "`demultiplex` is listed in `pipeline.steps` (before `trim`).",
     "demultiplex.skip": "removed; for pre-demultiplexed inputs just omit `demultiplex` from "

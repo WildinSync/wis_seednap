@@ -3,7 +3,7 @@
 If run 1 leaves `clean` SKIPPED (transient error, no cleaned_table) and `export`
 COMPLETED against the uncleaned table, a run-2 --resume can re-run clean and now
 COMPLETE it (writing a fresh cleaned_table). But export is already COMPLETED, so
-_should_run_step('export') returns False and export is NOT re-run -- the GBIF CSV
+_should_run_step('export') returns False and export is NOT re-run -- the long CSV
 silently stays stale. The orchestrator must emit a [WARN] when clean completed
 AFTER the already-completed export.
 
@@ -28,7 +28,7 @@ def _state_with_clean_after_export(*, cleaned_table: bool) -> PipelineState:
     export = state.add_step("export")
     export.status = StepStatus.COMPLETED
     export.completed_at = base
-    export.outputs = {"gbif_csv": "/tmp/teleo_blast_gbif.csv"}
+    export.outputs = {"long_csv": "/tmp/teleo_blast_long.csv"}
 
     clean = state.add_step("clean")
     clean.status = StepStatus.COMPLETED
@@ -64,7 +64,7 @@ def test_no_warn_when_clean_has_no_cleaned_table(caplog) -> None:
 
 
 def test_no_warn_when_export_postdates_clean(caplog) -> None:
-    # Normal ordering: export completed after clean -> the GBIF CSV is current.
+    # Normal ordering: export completed after clean -> the long CSV is current.
     state = PipelineState(marker="teleo")
     base = datetime(2026, 1, 1, 12, 0, 0)
     clean = state.add_step("clean")

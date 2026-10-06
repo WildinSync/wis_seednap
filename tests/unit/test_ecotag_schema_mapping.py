@@ -174,9 +174,9 @@ def test_zero_sequence_overlap_raises(tmp_path: Path) -> None:
         _make_runner(tmp_path).link_with_abundance_table(tsv, abd, tmp_path / "out.csv")
 
 
-def test_linked_ecotag_csv_formats_to_gbif(tmp_path: Path) -> None:
-    """The linked CSV (capital-S `Sequence`) is accepted by the ecotag GBIF path."""
-    from seednap.steps.formatting.gbif_formatter import GBIFFormatter
+def test_linked_ecotag_csv_formats_to_long(tmp_path: Path) -> None:
+    """The linked CSV (capital-S `Sequence`) is accepted by the ecotag long-format path."""
+    from seednap.steps.formatting.long_formatter import LongFormatter
 
     seqs = ["AAAAAAAA", "CCCCCCCC"]
     tsv = tmp_path / "query_ecotag.tsv"
@@ -186,6 +186,6 @@ def test_linked_ecotag_csv_formats_to_gbif(tmp_path: Path) -> None:
     _write_abundance(abd, seqs)
     _make_runner(tmp_path).link_with_abundance_table(tsv, abd, out)
 
-    gbif = GBIFFormatter().from_method("ecotag", out)
-    assert set(gbif["species"]) == {"Perca_fluviatilis", "Homo_sapiens"}
-    assert set(gbif["sequence"]) == set(seqs)
+    long_df = LongFormatter().from_method("ecotag", out)
+    assert set(long_df["species"]) == {"Perca_fluviatilis", "Homo_sapiens"}
+    assert set(long_df["sequence"]) == set(seqs)

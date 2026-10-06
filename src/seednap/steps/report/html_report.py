@@ -491,7 +491,7 @@ class HTMLReportBuilder:
             src = otu
         if not cols:
             return None
-        # Require a numeric dtype as a second guard (mirroring gbif_formatter):
+        # Require a numeric dtype as a second guard (mirroring long_formatter):
         # an unanticipated string metadata column not in `meta` must never be
         # counted as a sample.
         numeric = src[cols].apply(pd.to_numeric, errors="coerce")

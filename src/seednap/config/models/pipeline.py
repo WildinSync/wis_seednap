@@ -45,7 +45,7 @@ class PipelineConfig(StrictModel):
         dada2: DADA2 (ASV) clustering path config.
         swarm: SWARM (OTU) clustering path config.
         taxonomy: Taxonomic assignment method and databases (required).
-        export: GBIF / DarwinCore export config.
+        export: Long-format export config.
         report: Run-reporting config.
         cleaning: Control-decontamination config.
         logging: Run logging config.

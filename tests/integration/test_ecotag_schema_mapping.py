@@ -89,7 +89,7 @@ def test_obitab_schema_mapped_not_all_unassigned(
     assert set(result["genus"]) == {"Perca", "Homo"}
     # No row collapsed to fully Unassigned (order is the coarsest mapped rank).
     assert (result["order"] != "Unassigned").all()
-    # The full BLAST-compatible 7-rank schema is kept (GBIF formatting needs it),
+    # The full BLAST-compatible 7-rank schema is kept (long-format export needs it),
     # but obitab does not resolve kingdom/phylum/class, so they are Unassigned
     # placeholders. The key correctness property: the absent coarse ranks must
     # NOT cascade-null the resolved order..species ranks (the pre-fix bug).
